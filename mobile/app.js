@@ -14,6 +14,7 @@ import {
   persistentMultipleTabManager,
   collection,
   doc,
+  getDoc,
   getDocs,
   setDoc,
   query,
@@ -111,6 +112,8 @@ const state = {
   products: [],
   sales: [],
   movements: [],
+  cashBalance: null,
+  cashWithdrawals: [],
   saleOpenModelId: null,
   saleQuantities: new Map(),
   operation: null,
@@ -180,11 +183,57 @@ function modelSalePrice(modelId) {
   const catalogModel = state.catalog.find((item) => item.id === modelId);
   return Number(catalogModel?.price || modelById(modelId)?.price || 0);
 }
+function selectedModelQuantity(modelId) {
+  return state.products.reduce((sum, product) => product.modelId === modelId
+    ? sum + Number(state.saleQuantities.get(product.id) || 0)
+    : sum, 0);
+}
+function salePriceForQuantity(modelId, quantity) {
+  if (modelId !== "HOLI") return modelSalePrice(modelId);
+  if (quantity > 2000) return 650;
+  if (quantity >= 500) return 850;
+  return modelSalePrice(modelId);
+}
 function unassignedForModel(modelId) { return state.products.find((item) => item.modelId === modelId && item.legacyUnassigned && Number(item.stock || 0) > 0); }
 function visibleInventory() { return state.products.filter((item) => item.active !== false && !item.modelOnly); }
 function totalUnits() { return visibleInventory().reduce((sum, item) => sum + Number(item.stock || 0), 0); }
 function stockValue() { return visibleInventory().reduce((sum, item) => sum + Number(item.stock || 0) * modelSalePrice(item.modelId || item.id), 0); }
+function historicalCashBalance() {
+  const revenue = state.sales.filter((sale) => sale.status !== "cancelled").reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+  const withdrawn = state.cashWithdrawals.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  return revenue - withdrawn;
+}
+function availableCash() { return state.cashBalance == null ? historicalCashBalance() : Number(state.cashBalance || 0); }
 function colorDot(product) { return product.colorHex ? `<span class="color-dot" style="background:${escapeHtml(product.colorHex)}"></span>` : ""; }
+
+async function ensureCashBalance() {
+  const cashRef = doc(state.db, "finance", "cash");
+  const current = await getDoc(cashRef);
+  if (current.exists()) return Number(current.data().balance || 0);
+
+  const [ordersSnap, withdrawalsSnap] = await Promise.all([
+    getDocs(collection(state.db, "orders")),
+    getDocs(collection(state.db, "cashWithdrawals"))
+  ]);
+  const revenue = ordersSnap.docs.reduce((sum, item) => item.data().status === "cancelled" ? sum : sum + Number(item.data().total || 0), 0);
+  const withdrawn = withdrawalsSnap.docs.reduce((sum, item) => sum + Number(item.data().amount || 0), 0);
+  const initialBalance = revenue - withdrawn;
+  const employee = currentEmployeeName();
+
+  await runTransaction(state.db, async (tx) => {
+    const snap = await tx.get(cashRef);
+    if (snap.exists()) return;
+    tx.set(cashRef, {
+      balance: initialBalance,
+      initializedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      updatedBy: state.user.uid,
+      updatedByEmail: state.user.email || "",
+      updatedByName: employee
+    });
+  });
+  return initialBalance;
+}
 
 async function migrateLegacyModel(model) {
   const legacyRef = doc(state.db, "products", model.id);
@@ -285,7 +334,7 @@ function stopRealtime() {
 
 function startRealtime(onInitialData) {
   stopRealtime();
-  const initialCollections = new Set(["catalog", "products", "orders", "movements"]);
+  const initialCollections = new Set(["catalog", "products", "orders", "movements", "cash", "withdrawals"]);
   let initialDataDelivered = false;
   const markInitialCollection = (name) => {
     initialCollections.delete(name);
@@ -324,6 +373,18 @@ function startRealtime(onInitialData) {
     renderDashboard();
     markInitialCollection("movements");
   }, (error) => { toast(`Журнал: ${error.message}`); markInitialCollection("movements"); }));
+
+  state.unsubs.push(onSnapshot(doc(state.db, "finance", "cash"), (snap) => {
+    state.cashBalance = snap.exists() ? Number(snap.data().balance || 0) : null;
+    renderCash();
+    markInitialCollection("cash");
+  }, (error) => { toast(`Касса: ${error.message}`); markInitialCollection("cash"); }));
+
+  state.unsubs.push(onSnapshot(query(collection(state.db, "cashWithdrawals"), orderBy("createdAt", "desc"), limit(100)), (snap) => {
+    state.cashWithdrawals = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+    renderCash();
+    markInitialCollection("withdrawals");
+  }, (error) => { toast(`Выводы: ${error.message}`); markInitialCollection("withdrawals"); }));
 }
 
 function modelTotal(modelId) {
@@ -355,11 +416,77 @@ function renderDashboard() {
 
   $("#metric-stock-value").textContent = KZT.format(value);
   $("#metric-sales").textContent = KZT.format(todayRevenue);
+  renderCash();
   renderInventoryOverview();
 
   const recent = state.sales.slice(0, 4);
   $("#dashboard-sales").innerHTML = recent.length ? recent.map(saleCard).join("") : `<div class="empty">Продаж пока нет.</div>`;
   bindSaleActions($("#dashboard-sales"));
+}
+
+function renderCash() {
+  const balance = availableCash();
+  if ($("#metric-cash")) $("#metric-cash").textContent = KZT.format(balance);
+  if ($("#cash-dialog-balance")) $("#cash-dialog-balance").textContent = KZT.format(balance);
+  const history = $("#cash-withdrawal-history");
+  if (!history) return;
+  history.innerHTML = state.cashWithdrawals.length
+    ? state.cashWithdrawals.slice(0, 10).map((item) => `<div class="cash-history-row"><div><b>${escapeHtml(item.createdByName || "Сотрудник")}</b><small>${formatDate(dateOf(item))}${item.comment ? ` · ${escapeHtml(item.comment)}` : ""}</small></div><strong>−${KZT.format(Number(item.amount || 0))}</strong></div>`).join("")
+    : `<div class="empty">Выводов пока нет.</div>`;
+}
+
+function openCashDialog() {
+  $("#cash-withdrawal-form").reset();
+  $("#cash-withdrawal-error").textContent = "";
+  $("#cash-withdrawal-amount").max = String(Math.max(0, Math.floor(availableCash())));
+  renderCash();
+  $("#cash-dialog").showModal();
+}
+
+async function withdrawCash(event) {
+  event.preventDefault();
+  const errorNode = $("#cash-withdrawal-error");
+  const amount = Math.trunc(Number($("#cash-withdrawal-amount").value || 0));
+  const comment = $("#cash-withdrawal-comment").value.trim();
+  const submit = event.submitter;
+  errorNode.textContent = "";
+  if (amount <= 0) { errorNode.textContent = "Укажите сумму вывода больше нуля."; return; }
+  submit.disabled = true;
+
+  try {
+    await ensureCashBalance();
+    const cashRef = doc(state.db, "finance", "cash");
+    const withdrawalRef = doc(collection(state.db, "cashWithdrawals"));
+    const employee = currentEmployeeName();
+    await runTransaction(state.db, async (tx) => {
+      const cashSnap = await tx.get(cashRef);
+      if (!cashSnap.exists()) throw new Error("Баланс кассы ещё не создан. Обновите страницу.");
+      const before = Number(cashSnap.data().balance || 0);
+      if (amount > before) throw new Error(`В кассе доступно только ${KZT.format(before)}.`);
+      const after = before - amount;
+      tx.update(cashRef, {
+        balance: after,
+        updatedAt: serverTimestamp(),
+        updatedBy: state.user.uid,
+        updatedByEmail: state.user.email || "",
+        updatedByName: employee
+      });
+      tx.set(withdrawalRef, {
+        amount,
+        before,
+        after,
+        comment,
+        createdAt: serverTimestamp(),
+        createdAtClient: new Date().toISOString(),
+        createdBy: state.user.uid,
+        createdByEmail: state.user.email || "",
+        createdByName: employee
+      });
+    });
+    $("#cash-dialog").close();
+    toast(`Вывод ${KZT.format(amount)} зафиксирован · ${employee}`);
+  } catch (error) { errorNode.textContent = error.message; }
+  finally { submit.disabled = false; }
 }
 
 function saleItemLabel(item) {
@@ -423,19 +550,21 @@ function renderProducts() {
     if (!variants.length) continue;
     const isOpen = state.saleOpenModelId === model.id;
     const totalStock = variants.reduce((sum, item) => sum + Number(item.stock || 0), 0);
-    const selectedQty = variants.reduce((sum, item) => sum + Number(state.saleQuantities.get(item.id) || 0), 0);
-    const selectedTotal = selectedQty * modelSalePrice(model.id);
+    const selectedQty = selectedModelQuantity(model.id);
+    const selectedUnitPrice = salePriceForQuantity(model.id, selectedQty);
+    const selectedTotal = selectedQty * selectedUnitPrice;
+    const tierHint = model.id === "HOLI" ? `<small class="sale-tier-hint">500–2000 шт. — 850 ₸ · от 2001 шт. — 650 ₸</small>` : "";
     html += `<section class="sale-model-card${isOpen ? " active" : ""}">
       <button class="sale-model-toggle" type="button" data-sale-model="${model.id}" aria-expanded="${isOpen}" aria-controls="sale-model-${model.id}">
-        <span class="sale-model-title"><b>${escapeHtml(model.name)}</b><small>${variants.length} цветов · ${totalStock} ед. на складе</small></span>
-        <span class="sale-model-price"><b>${KZT.format(modelSalePrice(model.id))}</b><small data-sale-model-selected="${model.id}">${selectedQty ? `${selectedQty} ед. · ${KZT.format(selectedTotal)}` : "Выбрать цвет"}</small></span>
+        <span class="sale-model-title"><b>${escapeHtml(model.name)}</b><small>${variants.length} цветов · ${totalStock} ед. на складе</small>${tierHint}</span>
+        <span class="sale-model-price"><b data-sale-model-price="${model.id}">${KZT.format(selectedUnitPrice)}</b><small data-sale-model-selected="${model.id}">${selectedQty ? `${selectedQty} ед. · ${KZT.format(selectedUnitPrice)}/шт. · ${KZT.format(selectedTotal)}` : "Выбрать цвет"}</small></span>
         <span class="sale-model-arrow" aria-hidden="true">${isOpen ? "−" : "+"}</span>
       </button>`;
     if (isOpen) html += `<div class="sale-model-variants" id="sale-model-${model.id}">${variants.map((product) => {
       const stock = Number(product.stock || 0);
       const qty = Number(state.saleQuantities.get(product.id) || 0);
       return `<div class="sale-product">
-      <div class="sale-product-name"><b>${colorDot(product)}${escapeHtml(product.colorName)}</b><small>${KZT.format(modelSalePrice(model.id))} · остаток ${Number(product.stock || 0)}</small></div>
+      <div class="sale-product-name"><b>${colorDot(product)}${escapeHtml(product.colorName)}</b><small>${model.id === "HOLI" ? "Цена по общему количеству" : KZT.format(modelSalePrice(model.id))} · остаток ${Number(product.stock || 0)}</small></div>
       <div class="qty-control">
         <button type="button" data-qty-minus="${product.id}"${stock ? "" : " disabled"}>−</button>
         <input type="number" min="0" max="${stock}" value="${qty}" inputmode="numeric" data-qty="${product.id}" aria-label="Количество: ${escapeHtml(product.colorName)}"${stock ? "" : " disabled"}>
@@ -478,10 +607,11 @@ function selectedItems() {
   return state.products.map((product) => {
     const qty = Number(state.saleQuantities.get(product.id) || 0);
     if (qty <= 0) return null;
-    const price = modelSalePrice(product.modelId || product.id);
+    const modelId = product.modelId || product.id;
+    const price = salePriceForQuantity(modelId, selectedModelQuantity(modelId));
     return {
       inventoryId: product.id,
-      productId: product.modelId || product.id,
+      productId: modelId,
       name: product.name,
       colorId: product.colorId || "",
       colorName: product.colorName || "",
@@ -502,8 +632,11 @@ function updateSaleTotal() {
     const modelItems = items.filter((item) => item.productId === model.id);
     const qty = modelItems.reduce((sum, item) => sum + item.qty, 0);
     const subtotal = modelItems.reduce((sum, item) => sum + item.lineTotal, 0);
+    const unitPrice = salePriceForQuantity(model.id, qty);
+    const priceNode = document.querySelector(`[data-sale-model-price="${model.id}"]`);
     const summary = document.querySelector(`[data-sale-model-selected="${model.id}"]`);
-    if (summary) summary.textContent = qty ? `${qty} ед. · ${KZT.format(subtotal)}` : "Выбрать цвет";
+    if (priceNode) priceNode.textContent = KZT.format(unitPrice);
+    if (summary) summary.textContent = qty ? `${qty} ед. · ${KZT.format(unitPrice)}/шт. · ${KZT.format(subtotal)}` : "Выбрать цвет";
   }
 }
 
@@ -521,13 +654,17 @@ async function createSale(event) {
   submit.disabled = true;
 
   try {
+    await ensureCashBalance();
     const productRefs = items.map((item) => doc(state.db, "products", item.inventoryId));
     const movementRefs = items.map(() => doc(collection(state.db, "stockMovements")));
     const saleRef = doc(collection(state.db, "orders"));
+    const cashRef = doc(state.db, "finance", "cash");
 
     await runTransaction(state.db, async (tx) => {
       const snaps = [];
       for (const ref of productRefs) snaps.push(await tx.get(ref));
+      const cashSnap = await tx.get(cashRef);
+      if (!cashSnap.exists()) throw new Error("Баланс кассы ещё не создан. Повторите сохранение.");
       snaps.forEach((snap, index) => {
         if (!snap.exists()) throw new Error(`${items[index].name}: товар не найден`);
         const stock = Number(snap.data().stock || 0);
@@ -574,6 +711,13 @@ async function createSale(event) {
         createdByEmail: state.user.email || "",
         createdByName: employee
       });
+      tx.update(cashRef, {
+        balance: Number(cashSnap.data().balance || 0) + total,
+        updatedAt: serverTimestamp(),
+        updatedBy: state.user.uid,
+        updatedByEmail: state.user.email || "",
+        updatedByName: employee
+      });
     });
 
     event.target.reset();
@@ -595,6 +739,8 @@ function inventoryIdForSaleItem(item) {
 async function cancelSale(saleId) {
   const employee = currentEmployeeName();
   const saleRef = doc(state.db, "orders", saleId);
+  await ensureCashBalance();
+  const cashRef = doc(state.db, "finance", "cash");
   await runTransaction(state.db, async (tx) => {
     const saleSnap = await tx.get(saleRef);
     if (!saleSnap.exists()) throw new Error("Продажа не найдена");
@@ -607,6 +753,8 @@ async function cancelSale(saleId) {
     const productRefs = inventoryIds.map((id) => doc(state.db, "products", id));
     const productSnaps = [];
     for (const ref of productRefs) productSnaps.push(await tx.get(ref));
+    const cashSnap = await tx.get(cashRef);
+    if (!cashSnap.exists()) throw new Error("Баланс кассы ещё не создан. Повторите отмену.");
     const movementRefs = items.map(() => doc(collection(state.db, "stockMovements")));
 
     productSnaps.forEach((snap, index) => { if (!snap.exists()) throw new Error(`${items[index].name || items[index].productId}: товар не найден`); });
@@ -646,6 +794,13 @@ async function cancelSale(saleId) {
       cancelledBy: state.user.uid,
       cancelledByEmail: state.user.email || "",
       cancelledByName: employee
+    });
+    tx.update(cashRef, {
+      balance: Number(cashSnap.data().balance || 0) - Number(sale.total || 0),
+      updatedAt: serverTimestamp(),
+      updatedBy: state.user.uid,
+      updatedByEmail: state.user.email || "",
+      updatedByName: employee
     });
   });
 }
@@ -876,6 +1031,9 @@ function wireUi() {
   $("#model-dialog-close").addEventListener("click", () => $("#model-dialog").close());
   $("#stock-operation-form").addEventListener("submit", applyStockOperation);
   $("#stock-dialog-close").addEventListener("click", () => $("#stock-dialog").close());
+  $("#open-cash-dialog").addEventListener("click", openCashDialog);
+  $("#cash-withdrawal-form").addEventListener("submit", withdrawCash);
+  $("#cash-dialog-close").addEventListener("click", () => $("#cash-dialog").close());
 
   $("#login-form").addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -945,6 +1103,7 @@ async function boot() {
         navigate("dashboard");
         hideBoot();
       });
+      ensureCashBalance().catch((error) => toast(`Касса: ${error.message}`));
       ensureProducts().catch((error) => toast(`Товары: ${error.message}`));
     });
   } catch (error) {

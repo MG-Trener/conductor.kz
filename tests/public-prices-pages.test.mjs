@@ -52,9 +52,9 @@ test("the warehouse model card renders the saved Firestore price", async () => {
   assert.match(app, /Number\(item\.stock \|\| 0\) \* modelSalePrice/);
   assert.doesNotMatch(app, /stockValue\(\).*avgCost/);
   assert.match(html, /Потенциальная стоимость/);
-  assert.match(html, /app\.js\?v=21/);
-  assert.match(worker, /conductor-mobile-v30/);
-  assert.match(worker, /app\.js\?v=21/);
+  assert.match(html, /app\.js\?v=22/);
+  assert.match(worker, /conductor-mobile-v31/);
+  assert.match(worker, /app\.js\?v=22/);
 });
 
 test("Firestore is initialized once before any asynchronous auth setup", async () => {
@@ -120,7 +120,7 @@ test("the warehouse header has one logout button wired to Firebase sign-out", as
   assert.match(html, /<button id="logout" class="site-btn logout-btn"[^>]*>Выйти<\/button>/);
   assert.equal((html.match(/id="logout"/g) || []).length, 1);
   assert.match(app, /\$\("#logout"\)\.addEventListener\("click", \(\) => signOut\(state\.auth\)\)/);
-  assert.match(worker, /warehouse\.css\?v=19/);
+  assert.match(worker, /warehouse\.css\?v=20/);
 });
 
 test("warehouse stays behind the boot screen until initial live data is ready", async () => {
@@ -129,7 +129,7 @@ test("warehouse stays behind the boot screen until initial live data is ready", 
     readFile(mobileHtml, "utf8")
   ]);
 
-  assert.match(app, /const initialCollections = new Set\(\["catalog", "products", "orders", "movements"\]\)/);
+  assert.match(app, /const initialCollections = new Set\(\["catalog", "products", "orders", "movements", "cash", "withdrawals"\]\)/);
   assert.match(app, /if \(!initialCollections\.size && !initialDataDelivered\)/);
   assert.match(app, /initialDataDelivered = true/);
   assert.match(app, /startRealtime\(\(\) => \{/);
@@ -155,4 +155,43 @@ test("new sale groups variants by model and keeps the selected total visible", a
   assert.match(app, /\$\("#sale-header-total"\).*textContent = formatted/);
   assert.match(css, /\.sale-sticky-head\{top:70px/);
   assert.match(css, /\.sale-model-toggle\{/);
+});
+
+test("Holi sale pricing uses the total quantity across all selected colors", async () => {
+  const app = await readFile(mobileApp, "utf8");
+
+  assert.match(app, /function selectedModelQuantity\(modelId\)/);
+  assert.match(app, /if \(quantity > 2000\) return 650/);
+  assert.match(app, /if \(quantity >= 500\) return 850/);
+  assert.match(app, /salePriceForQuantity\(modelId, selectedModelQuantity\(modelId\)\)/);
+  assert.match(app, /500–2000 шт\. — 850 ₸ · от 2001 шт\. — 650 ₸/);
+});
+
+test("dashboard cash balance is updated by sales, cancellations and withdrawals", async () => {
+  const [app, html, css] = await Promise.all([
+    readFile(mobileApp, "utf8"),
+    readFile(mobileHtml, "utf8"),
+    readFile(warehouseCss, "utf8")
+  ]);
+
+  assert.match(html, /id="open-cash-dialog"/);
+  assert.match(html, /id="metric-cash"/);
+  assert.match(html, /id="cash-withdrawal-form"/);
+  assert.match(app, /function availableCash\(\)/);
+  assert.match(app, /async function ensureCashBalance\(\)/);
+  assert.match(app, /balance: Number\(cashSnap\.data\(\)\.balance \|\| 0\) \+ total/);
+  assert.match(app, /balance: Number\(cashSnap\.data\(\)\.balance \|\| 0\) - Number\(sale\.total \|\| 0\)/);
+  assert.match(app, /if \(amount > before\)/);
+  assert.match(app, /tx\.set\(withdrawalRef/);
+  assert.match(css, /\.cash-metric\{/);
+});
+
+test("smoke product orders use the requested WhatsApp number", async () => {
+  const [home, smoke] = await Promise.all([readFile(pages.home, "utf8"), readFile(pages.smoke, "utf8")]);
+  for (const html of [home, smoke]) {
+    for (const modelId of ["DM30", "DM60", "DM90"]) {
+      assert.match(html, new RegExp(`https://wa\\.me/77756511100\\?text=[^\"']*${modelId}`));
+      assert.doesNotMatch(html, new RegExp(`https://wa\\.me/77018709384\\?text=[^\"']*${modelId}`));
+    }
+  }
 });

@@ -16,7 +16,7 @@ function normalizeErrorNode(node) {
   node.textContent = friendly;
 }
 
-const watchedSelectors = ["#model-balance-error", "#stock-operation-error", "#sale-error", "#login-error"];
+const watchedSelectors = ["#model-balance-error", "#stock-operation-error", "#sale-error", "#cash-withdrawal-error", "#login-error"];
 
 function watchNode(node) {
   if (!node) return;

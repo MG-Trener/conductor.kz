@@ -314,6 +314,68 @@ test("movement journal rejects writes that do not match the resulting product st
   await assertFails(setDoc(doc(staffDb(), "stockMovements", "fake-movement"), movement()));
 });
 
+test("staff can create the cash balance and atomically record a valid withdrawal", async () => {
+  const db = staffDb();
+  const cashRef = doc(db, "finance", "cash");
+  await assertSucceeds(setDoc(cashRef, {
+    balance: 5000,
+    initializedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    updatedBy: staffUid,
+    updatedByEmail: staffEmail,
+    updatedByName: "Сотрудник"
+  }));
+
+  await assertSucceeds(runTransaction(db, async (transaction) => {
+    await transaction.get(cashRef);
+    transaction.update(cashRef, {
+      balance: 3000,
+      updatedAt: serverTimestamp(),
+      updatedBy: staffUid,
+      updatedByEmail: staffEmail,
+      updatedByName: "Сотрудник"
+    });
+    transaction.set(doc(db, "cashWithdrawals", "withdrawal-1"), {
+      amount: 2000,
+      before: 5000,
+      after: 3000,
+      comment: "Передано в кассу офиса",
+      createdAt: serverTimestamp(),
+      createdAtClient: "2026-09-01T10:00:00.000Z",
+      createdBy: staffUid,
+      createdByEmail: staffEmail,
+      createdByName: "Сотрудник"
+    });
+  }));
+  assert.equal((await getDoc(cashRef)).data().balance, 3000);
+});
+
+test("cash withdrawals cannot exceed or diverge from the resulting cash balance", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "finance", "cash"), {
+      balance: 1000,
+      initializedAt: new Date("2026-09-01T00:00:00Z"),
+      updatedAt: new Date("2026-09-01T00:00:00Z"),
+      updatedBy: staffUid,
+      updatedByEmail: staffEmail,
+      updatedByName: "Сотрудник"
+    });
+  });
+  const db = staffDb();
+  await assertFails(setDoc(doc(db, "cashWithdrawals", "invalid-withdrawal"), {
+    amount: 1200,
+    before: 1000,
+    after: -200,
+    comment: "Слишком большая сумма",
+    createdAt: serverTimestamp(),
+    createdAtClient: "2026-09-01T10:00:00.000Z",
+    createdBy: staffUid,
+    createdByEmail: staffEmail,
+    createdByName: "Сотрудник"
+  }));
+  await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), "finance", "cash")));
+});
+
 test("movement journal is immutable and unrelated collections stay closed", async () => {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), "stockMovements", "existing"), {

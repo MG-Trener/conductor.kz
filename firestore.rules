@@ -170,6 +170,69 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // One internal cash balance. Sales add revenue, cancellations subtract it,
+    // and explicit withdrawals are recorded in the immutable journal below.
+    function validCashAudit(data) {
+      return data.balance is int
+        && data.updatedAt == request.time
+        && data.updatedBy == request.auth.uid
+        && data.updatedByEmail == request.auth.token.email
+        && data.updatedByName is string
+        && data.updatedByName.size() <= 80;
+    }
+
+    match /finance/{financeId} {
+      allow read: if isStaff() && financeId == 'cash';
+      allow create: if isStaff()
+        && financeId == 'cash'
+        && request.resource.data.keys().hasAll([
+          'balance', 'initializedAt', 'updatedAt', 'updatedBy',
+          'updatedByEmail', 'updatedByName'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'balance', 'initializedAt', 'updatedAt', 'updatedBy',
+          'updatedByEmail', 'updatedByName'
+        ])
+        && request.resource.data.initializedAt == request.time
+        && validCashAudit(request.resource.data);
+      allow update: if isStaff()
+        && financeId == 'cash'
+        && validCashAudit(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'balance', 'updatedAt', 'updatedBy', 'updatedByEmail', 'updatedByName'
+        ]);
+      allow delete: if false;
+    }
+
+    match /cashWithdrawals/{withdrawalId} {
+      allow read: if isStaff();
+      allow create: if isStaff()
+        && request.resource.data.keys().hasAll([
+          'amount', 'before', 'after', 'comment', 'createdAt',
+          'createdAtClient', 'createdBy', 'createdByEmail', 'createdByName'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'amount', 'before', 'after', 'comment', 'createdAt',
+          'createdAtClient', 'createdBy', 'createdByEmail', 'createdByName'
+        ])
+        && request.resource.data.amount is int
+        && request.resource.data.amount > 0
+        && request.resource.data.before is int
+        && request.resource.data.after is int
+        && request.resource.data.after == request.resource.data.before - request.resource.data.amount
+        && request.resource.data.after >= 0
+        && request.resource.data.comment is string
+        && request.resource.data.comment.size() <= 300
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.createdAtClient is string
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdByEmail == request.auth.token.email
+        && request.resource.data.createdByName is string
+        && request.resource.data.createdByName.size() <= 80
+        && getAfter(/databases/$(database)/documents/finance/cash).data.balance == request.resource.data.after;
+      allow update, delete: if false;
+    }
+
     // Obsolete CRM data and every unlisted path remain completely closed.
     match /leads/{leadId} {
       allow read, write: if false;

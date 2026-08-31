@@ -13,11 +13,11 @@
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js" crossorigin>
-  <link rel="modulepreload" href="./app.js?v=21">
+  <link rel="modulepreload" href="./app.js?v=22">
   <link rel="manifest" href="./manifest.webmanifest?v=15">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css?v=15">
-  <link rel="stylesheet" href="./warehouse.css?v=19">
+  <link rel="stylesheet" href="./warehouse.css?v=20">
 </head>
 <body>
   <div id="boot" class="boot">
@@ -63,6 +63,7 @@
         <div class="metric-grid">
           <article class="metric"><span>Стоимость склада</span><b id="metric-stock-value">0 ₸</b></article>
           <article class="metric"><span>Продажи сегодня</span><b id="metric-sales">0 ₸</b></article>
+          <button id="open-cash-dialog" class="metric cash-metric" type="button"><span>Доступно в кассе</span><b id="metric-cash">0 ₸</b><small>Нажмите, чтобы вывести средства</small></button>
         </div>
 
         <div class="section-head"><h2>Картина склада</h2><button class="link-btn" data-nav="stock">Открыть склад</button></div>
@@ -166,6 +167,22 @@
     </form>
   </dialog>
 
+  <dialog id="cash-dialog" class="stock-dialog cash-dialog">
+    <form id="cash-withdrawal-form" method="dialog" class="stock-dialog-card">
+      <div class="dialog-head">
+        <div><div class="eyebrow">Касса</div><h2>Вывод средств</h2></div>
+        <button id="cash-dialog-close" class="dialog-close" type="button" aria-label="Закрыть">×</button>
+      </div>
+      <div class="cash-available"><span>Доступно</span><b id="cash-dialog-balance">0 ₸</b></div>
+      <label>Сумма вывода<input id="cash-withdrawal-amount" type="number" min="1" step="1" inputmode="numeric" required placeholder="0"></label>
+      <label>Комментарий<textarea id="cash-withdrawal-comment" rows="3" maxlength="300" placeholder="Назначение вывода"></textarea></label>
+      <button class="btn primary full" type="submit">Зафиксировать вывод</button>
+      <p id="cash-withdrawal-error" class="error"></p>
+      <div class="section-label">Последние выводы</div>
+      <div id="cash-withdrawal-history" class="cash-history"></div>
+    </form>
+  </dialog>
+
   <div id="toast" class="toast"></div>
   <script>
     window.setTimeout(() => {
@@ -176,7 +193,7 @@
     }, 2500);
   </script>
   <script src="./firebase-config.js?v=21"></script>
-  <script type="module" src="./app.js?v=21"></script>
-  <script type="module" src="./firestore-error-help.js?v=16"></script>
+  <script type="module" src="./app.js?v=22"></script>
+  <script type="module" src="./firestore-error-help.js?v=17"></script>
 </body>
 </html>
