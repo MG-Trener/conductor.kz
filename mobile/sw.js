@@ -1,5 +1,5 @@
-const CACHE = "conductor-mobile-v10";
-const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./leads.js", "./lead-to-sale.js", "./customers.js", "./inventory.js", "./order-inventory.js", "./auth-config-fix.js", "./auth-tools.js", "./firebase-config.js", "./manifest.webmanifest", "./icon.svg"];
+const CACHE = "conductor-mobile-v11";
+const APP_SHELL = ["./", "./index.html", "./styles.css", "./warehouse.css", "./app.js", "./firebase-config.js", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
@@ -16,7 +16,6 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
-
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
