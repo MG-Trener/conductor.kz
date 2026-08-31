@@ -1,32 +1,30 @@
 import { getApps } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+import { getAuth } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import {
   getFirestore,
   collection,
   doc,
-  getDocs,
   onSnapshot,
   query,
   limit,
   runTransaction,
-  serverTimestamp,
-  setDoc
+  serverTimestamp
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 const KZT = new Intl.NumberFormat("ru-KZ", { style: "currency", currency: "KZT", maximumFractionDigits: 0 });
 const DEFAULT_PRICES = { DM30: 2500, DM60: 3000, DM90: 3500, HOLI: 1000 };
 
 let products = [];
+let catalog = [];
 let movements = [];
 let db = null;
 let formBound = false;
 let documentBound = false;
-let publicPriceSyncPromise = null;
 
 function employeeNameFromEmail(email = "") {
   const normalized = String(email).trim().toLowerCase();
   if (normalized === "mihagavr@gmail.com") return "Михаил";
-  if (normalized) return "Алексей";
+  if (normalized === "a.kalashin@gmail.com") return "Алексей";
   return "Сотрудник";
 }
 
@@ -53,38 +51,8 @@ function modelProducts(modelId) {
 }
 
 function currentModelPrice(modelId) {
-  const variant = modelProducts(modelId).find((item) => Number(item.price) > 0);
-  return Number(variant?.price || DEFAULT_PRICES[modelId] || 0);
-}
-
-async function syncMissingPublicPrices() {
-  if (publicPriceSyncPromise || !products.length || !db) return publicPriceSyncPromise;
-  const app = getApps()[0];
-  const user = app ? getAuth(app).currentUser : null;
-  if (!user) return;
-
-  publicPriceSyncPromise = (async () => {
-    const snapshot = await getDocs(collection(db, "publicProducts"));
-    const published = new Map(snapshot.docs.map((item) => [item.id, Number(item.data().price || 0)]));
-    const employee = employeeNameFromEmail(user.email || "");
-    await Promise.all(Object.keys(DEFAULT_PRICES).map(async (modelId) => {
-      const price = currentModelPrice(modelId);
-      if (!price || published.get(modelId) === price) return;
-      const name = document.querySelector(`#stock-list [data-open-model="${modelId}"]`)?.closest(".stock-card")?.querySelector(".stock-name b")?.textContent?.trim() || modelId;
-      await setDoc(doc(db, "publicProducts", modelId), {
-        modelId,
-        name,
-        price,
-        updatedAt: serverTimestamp(),
-        updatedBy: user.uid,
-        updatedByName: employee
-      });
-    }));
-  })();
-
-  try { await publicPriceSyncPromise; }
-  catch { /* The next auth/product event retries the sync. */ }
-  finally { publicPriceSyncPromise = null; }
+  const model = catalog.find((item) => item.id === modelId);
+  return Number(model?.price || DEFAULT_PRICES[modelId] || 0);
 }
 
 function setText(node, value) {
@@ -263,7 +231,6 @@ async function saveModelInventory(event) {
   }
 
   const byId = new Map(products.map((item) => [item.id, item]));
-  const variants = modelProducts(modelId);
   const stockChanged = entered.filter((item) => Number(byId.get(item.id)?.stock || 0) !== item.stock);
 
   const submit = event.submitter || event.target.querySelector('button[type="submit"]');
@@ -273,10 +240,10 @@ async function saveModelInventory(event) {
 
   try {
     const enteredMap = new Map(entered.map((item) => [item.id, item]));
-    const refIds = [...new Set([...variants.map((item) => item.id), ...entered.map((item) => item.id)])];
+    const refIds = [...new Set(entered.map((item) => item.id))];
     const refs = refIds.map((id) => doc(db, "products", id));
     const movementRefs = new Map(stockChanged.map((item) => [item.id, doc(collection(db, "stockMovements"))]));
-    const publicProductRef = doc(db, "publicProducts", modelId);
+    const catalogRef = doc(db, "catalog", modelId);
 
     await runTransaction(db, async (tx) => {
       const snaps = [];
@@ -294,13 +261,6 @@ async function saveModelInventory(event) {
           updatedByName: employee
         };
 
-        if (!data.legacyUnassigned && data.modelId === modelId) {
-          update.price = price;
-          update.priceUpdatedAt = serverTimestamp();
-          update.priceUpdatedBy = user.uid;
-          update.priceUpdatedByName = employee;
-        }
-
         if (desired) {
           const before = Number(data.stock || 0);
           const after = desired.stock;
@@ -313,7 +273,6 @@ async function saveModelInventory(event) {
           if (data.legacyUnassigned) update.active = after > 0;
 
           if (before !== after) {
-            const unitCost = Number(data.avgCost || data.lastCost || 0);
             tx.set(movementRefs.get(id), {
               type: "adjustment",
               inventoryId: id,
@@ -324,8 +283,8 @@ async function saveModelInventory(event) {
               qtyDelta: after - before,
               before,
               after,
-              unitCost,
-              totalCost: Math.abs(after - before) * unitCost,
+              unitCost: 0,
+              totalCost: 0,
               reason,
               createdAt: serverTimestamp(),
               createdAtClient: new Date().toISOString(),
@@ -339,14 +298,14 @@ async function saveModelInventory(event) {
         tx.update(doc(db, "products", id), update);
       }
 
-      tx.set(publicProductRef, {
+      tx.set(catalogRef, {
         modelId,
         name: document.getElementById("model-dialog-title")?.textContent?.trim() || modelId,
         price,
         updatedAt: serverTimestamp(),
         updatedBy: user.uid,
         updatedByName: employee
-      });
+      }, { merge: true });
     });
 
     document.getElementById("model-dialog")?.close();
@@ -401,17 +360,18 @@ async function start() {
   if (!getApps().length) return;
 
   db = getFirestore(getApps()[0]);
-  onAuthStateChanged(getAuth(getApps()[0]), (user) => {
-    if (user) syncMissingPublicPrices();
-  });
   bindUi();
   scheduleApply();
+
+  onSnapshot(collection(db, "catalog"), (snap) => {
+    catalog = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+    scheduleApply();
+  });
 
   onSnapshot(collection(db, "products"), (snap) => {
     products = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
     bindUi();
     scheduleApply();
-    syncMissingPublicPrices();
   });
 
   onSnapshot(query(collection(db, "stockMovements"), limit(500)), (snap) => {

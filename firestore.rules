@@ -1,12 +1,15 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Employee accounts are provisioned in Firebase Authentication. The app has
-    // no public sign-up, and anonymous/non-email identities are not warehouse users.
+    // Only the two explicitly approved Firebase Authentication accounts can
+    // access warehouse data. There is no public sign-up in the application.
     function isStaff() {
       return request.auth != null
         && request.auth.token.keys().hasAll(['email'])
-        && request.auth.token.email is string;
+        && request.auth.token.email in [
+          'mihagavr@gmail.com',
+          'a.kalashin@gmail.com'
+        ];
     }
 
     function isModel(modelId) {
@@ -18,19 +21,13 @@ service cloud.firestore {
     }
 
     function validProductState(data, productId) {
-      return data.keys().hasAll(['name', 'price', 'stock'])
+      return data.keys().hasAll(['name', 'stock'])
         && isModel(data.get('modelId', productId))
         && data.name is string
         && data.name.size() > 0
         && data.name.size() <= 120
-        && data.price is number
-        && data.price > 0
         && data.stock is int
-        && data.stock >= 0
-        && data.get('avgCost', 0) is number
-        && data.get('avgCost', 0) >= 0
-        && data.get('lastCost', 0) is number
-        && data.get('lastCost', 0) >= 0;
+        && data.stock >= 0;
     }
 
     function validProductAuthor(data) {
@@ -52,28 +49,22 @@ service cloud.firestore {
         && validProductAuthor(request.resource.data)
         && request.resource.data.keys().hasOnly([
           'id', 'modelId', 'colorId', 'colorName', 'colorHex', 'name',
-          'price', 'stock', 'lowStock', 'sort', 'active', 'avgCost',
-          'lastCost', 'legacyUnassigned', 'createdAt', 'createdBy',
+          'stock', 'lowStock', 'sort', 'active',
+          'legacyUnassigned', 'createdAt', 'createdBy',
           'createdByName', 'updatedAt', 'updatedBy', 'updatedByName'
         ]);
 
-      // Inventory operations can alter balances, cost, model sale price and
-      // their audit markers, but cannot rewrite catalogue identity fields.
+      // Inventory operations can alter balances and their audit markers, but
+      // cannot rewrite catalogue identity fields or model prices.
       allow update: if isStaff()
         && validProductState(request.resource.data, productId)
         && validProductAuthor(request.resource.data)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'stock', 'price', 'avgCost', 'lastCost', 'active', 'modelOnly',
+          'stock', 'active', 'modelOnly',
           'variantMigrationV2', 'stockInitialized', 'inventoryInitialized',
           'lastInventoryAt', 'lastInventoryBy', 'lastInventoryByName',
-          'priceUpdatedAt', 'priceUpdatedBy', 'priceUpdatedByName',
           'updatedAt', 'updatedBy', 'updatedByName'
         ])
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny([
-          'price', 'priceUpdatedAt', 'priceUpdatedBy', 'priceUpdatedByName'
-        ])
-          || (request.resource.data.priceUpdatedAt == request.time
-            && request.resource.data.priceUpdatedBy == request.auth.uid))
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'stockInitialized', 'inventoryInitialized', 'lastInventoryAt',
           'lastInventoryBy', 'lastInventoryByName'
@@ -84,9 +75,8 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Public website price catalogue. No stock, cost or internal audit history
-    // is exposed through this collection.
-    match /publicProducts/{modelId} {
+    // One authoritative model document supplies both warehouse and public SEO prices.
+    match /catalog/{modelId} {
       allow read: if true;
       allow create, update: if isStaff()
         && isModel(modelId)
@@ -107,6 +97,11 @@ service cloud.firestore {
         && request.resource.data.updatedByName is string
         && request.resource.data.updatedByName.size() <= 80;
       allow delete: if false;
+    }
+
+    // Deprecated duplicated price collection. New clients use /catalog only.
+    match /publicProducts/{modelId} {
+      allow read, write: if false;
     }
 
     match /orders/{orderId} {

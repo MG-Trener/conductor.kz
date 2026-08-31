@@ -13,11 +13,11 @@
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js" crossorigin>
-  <link rel="modulepreload" href="./app.js?v=17">
+  <link rel="modulepreload" href="./app.js?v=18">
   <link rel="manifest" href="./manifest.webmanifest?v=15">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css?v=15">
-  <link rel="stylesheet" href="./warehouse.css?v=15">
+  <link rel="stylesheet" href="./warehouse.css?v=16">
 </head>
 <body>
   <div id="boot" class="boot">
@@ -54,7 +54,7 @@
           <small id="current-user-email"></small>
         </div>
         <a class="site-btn" href="https://conductor.kz/" target="_blank" rel="noopener">↗ Сайт</a>
-        <button id="sync-button" class="icon-btn" aria-label="Состояние синхронизации">↻</button>
+        <button id="logout" class="site-btn logout-btn" type="button">Выйти</button>
       </div>
     </header>
 
@@ -64,7 +64,7 @@
           <div>
             <div class="eyebrow">Остаток на складе</div>
             <div id="stock-units-hero" class="hero-number">0 ед.</div>
-            <div id="stock-value-hero" class="hero-note">0 ₸ по себестоимости</div>
+            <div id="stock-value-hero" class="hero-note">Потенциальная стоимость товаров</div>
           </div>
           <div class="pulse-dot"></div>
         </div>
@@ -113,7 +113,7 @@
         <div class="panel stock-summary">
           <div><span>Моделей</span><b id="stock-sku-count">0</b></div>
           <div><span>Единиц</span><b id="stock-units">0</b></div>
-          <div><span>Себестоимость</span><b id="stock-value">0 ₸</b></div>
+          <div><span>Потенциальная стоимость</span><b id="stock-value">0 ₸</b></div>
         </div>
         <div id="stock-list" class="stock-list"></div>
 
@@ -135,7 +135,6 @@
           <p class="muted">В разделе «Склад» откройте нужную модель. В модальном окне сразу доступны все её цвета и фактические остатки. Можно изменить несколько цветов и сохранить одной инвентаризацией.</p>
         </div>
         <button id="reset-password" class="btn full">Отправить письмо для смены пароля</button>
-        <button id="logout" class="btn danger full">Выйти</button>
       </section>
     </main>
 
@@ -170,7 +169,6 @@
       </div>
       <div id="stock-current" class="dialog-current"></div>
       <label id="stock-qty-label">Количество<input id="stock-operation-qty" type="number" min="0" step="1" inputmode="numeric" required></label>
-      <label id="stock-cost-row">Закупочная цена за единицу, ₸<input id="stock-operation-cost" type="number" min="0" step="1" inputmode="numeric"></label>
       <label>Комментарий<textarea id="stock-operation-reason" rows="3" maxlength="300" placeholder="Необязательно"></textarea></label>
       <button id="stock-operation-submit" class="btn primary full" type="submit">Сохранить</button>
       <p id="stock-operation-error" class="error"></p>
@@ -187,8 +185,8 @@
       window.setTimeout(() => boot.remove(), 280);
     }, 1000);
   </script>
-  <script src="./firebase-config.js?v=19"></script>
-  <script type="module" src="./app.js?v=17"></script>
+  <script src="./firebase-config.js?v=20"></script>
+  <script type="module" src="./app.js?v=18"></script>
   <script type="module" src="./firestore-error-help.js?v=16"></script>
 </body>
 </html>

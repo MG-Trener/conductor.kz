@@ -17,7 +17,8 @@ import {
 
 const projectId = "conductor-rules-test";
 const staffUid = "employee-1";
-const staffEmail = "staff@conductor.test";
+const staffEmail = "mihagavr@gmail.com";
+const secondStaffEmail = "a.kalashin@gmail.com";
 let testEnv;
 
 const product = {
@@ -27,13 +28,10 @@ const product = {
   colorName: "Синий",
   colorHex: "#258cff",
   name: "DM30 · Синий",
-  price: 2500,
   stock: 4,
   lowStock: 2,
   sort: 11,
   active: true,
-  avgCost: 1000,
-  lastCost: 1000,
   createdAt: new Date("2026-01-01T00:00:00Z"),
   createdBy: staffUid,
   createdByName: "Сотрудник",
@@ -44,6 +42,10 @@ const product = {
 
 function staffDb() {
   return testEnv.authenticatedContext(staffUid, { email: staffEmail }).firestore();
+}
+
+function secondStaffDb() {
+  return testEnv.authenticatedContext("employee-2", { email: secondStaffEmail }).firestore();
 }
 
 function movement(overrides = {}) {
@@ -87,9 +89,11 @@ after(async () => {
   await testEnv?.cleanup();
 });
 
-test("email-authenticated staff can read warehouse products", async () => {
+test("only the two approved email accounts can read warehouse products", async () => {
   const snapshot = await assertSucceeds(getDoc(doc(staffDb(), "products", "DM30_BLUE")));
   assert.equal(snapshot.data().stock, 4);
+  await assertSucceeds(getDoc(doc(secondStaffDb(), "products", "DM30_BLUE")));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext("outsider", { email: "other@example.com" }).firestore(), "products", "DM30_BLUE")));
 });
 
 test("unauthenticated and non-email identities cannot access warehouse data", async () => {
@@ -97,8 +101,8 @@ test("unauthenticated and non-email identities cannot access warehouse data", as
   await assertFails(getDoc(doc(testEnv.authenticatedContext("anonymous-user").firestore(), "products", "DM30_BLUE")));
 });
 
-test("public visitors can read prices but only staff can publish the restricted price shape", async () => {
-  const publicRef = doc(staffDb(), "publicProducts", "DM30");
+test("public visitors can read the single catalog price but only approved staff can publish it", async () => {
+  const publicRef = doc(staffDb(), "catalog", "DM30");
   await assertSucceeds(setDoc(publicRef, {
     modelId: "DM30",
     name: "Цветной дым DM30",
@@ -109,14 +113,15 @@ test("public visitors can read prices but only staff can publish the restricted 
   }));
 
   const publicDb = testEnv.unauthenticatedContext().firestore();
-  const snapshot = await assertSucceeds(getDoc(doc(publicDb, "publicProducts", "DM30")));
+  const snapshot = await assertSucceeds(getDoc(doc(publicDb, "catalog", "DM30")));
   assert.equal(snapshot.data().price, 2700);
-  await assertFails(setDoc(doc(publicDb, "publicProducts", "DM60"), {
+  await assertFails(getDoc(doc(publicDb, "publicProducts", "DM30")));
+  await assertFails(setDoc(doc(publicDb, "catalog", "DM60"), {
     modelId: "DM60",
     name: "Цветной дым DM60",
     price: 3100
   }));
-  await assertFails(setDoc(doc(staffDb(), "publicProducts", "DM90"), {
+  await assertFails(setDoc(doc(staffDb(), "catalog", "DM90"), {
     modelId: "DM90",
     name: "Цветной дым DM90",
     price: 3600,
@@ -127,28 +132,24 @@ test("public visitors can read prices but only staff can publish the restricted 
   }));
 });
 
-test("staff can atomically save model price, actual stock and its movement", async () => {
+test("staff can atomically save the catalog price, actual stock and its movement", async () => {
   const db = staffDb();
   await assertSucceeds(runTransaction(db, async (transaction) => {
     const productRef = doc(db, "products", "DM30_BLUE");
     const movementRef = doc(db, "stockMovements", "movement-1");
     transaction.update(productRef, {
-      price: 2750,
       stock: 6,
       stockInitialized: true,
       inventoryInitialized: true,
       lastInventoryAt: serverTimestamp(),
       lastInventoryBy: staffUid,
       lastInventoryByName: "Сотрудник",
-      priceUpdatedAt: serverTimestamp(),
-      priceUpdatedBy: staffUid,
-      priceUpdatedByName: "Сотрудник",
       updatedAt: serverTimestamp(),
       updatedBy: staffUid,
       updatedByName: "Сотрудник"
     });
     transaction.set(movementRef, movement());
-    transaction.set(doc(db, "publicProducts", "DM30"), {
+    transaction.set(doc(db, "catalog", "DM30"), {
       modelId: "DM30",
       name: "Цветной дым DM30",
       price: 2750,
@@ -182,13 +183,10 @@ test("staff can seed a fixed catalogue variant but not an arbitrary product", as
     colorName: "Красный",
     colorHex: "#ff0000",
     name: "HOLI · Красный",
-    price: 1000,
     stock: 0,
     lowStock: 10,
     sort: 41,
     active: true,
-    avgCost: 0,
-    lastCost: 0,
     createdAt: serverTimestamp(),
     createdBy: staffUid,
     createdByName: "Сотрудник",
@@ -210,13 +208,11 @@ test("staff can seed a fixed catalogue variant but not an arbitrary product", as
   }));
 });
 
-test("receipt transaction can update cost and append an immutable movement", async () => {
+test("receipt transaction updates stock without tracking purchase cost", async () => {
   const db = staffDb();
   await assertSucceeds(runTransaction(db, async (transaction) => {
     transaction.update(doc(db, "products", "DM30_BLUE"), {
       stock: 7,
-      avgCost: 1100,
-      lastCost: 1233,
       updatedAt: serverTimestamp(),
       updatedBy: staffUid,
       updatedByName: "Сотрудник"
@@ -225,8 +221,8 @@ test("receipt transaction can update cost and append an immutable movement", asy
       type: "receipt",
       qtyDelta: 3,
       after: 7,
-      unitCost: 1233,
-      totalCost: 3699,
+      unitCost: 0,
+      totalCost: 0,
       reason: "Поставка"
     }));
   }));
@@ -305,6 +301,12 @@ test("catalogue identity and forged audit identity cannot be changed", async () 
     updatedAt: serverTimestamp(),
     updatedBy: "another-user",
     updatedByName: "Другой"
+  }));
+  await assertFails(updateDoc(ref, {
+    price: 9999,
+    updatedAt: serverTimestamp(),
+    updatedBy: staffUid,
+    updatedByName: "Сотрудник"
   }));
 });
 

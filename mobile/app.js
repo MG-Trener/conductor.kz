@@ -27,6 +27,10 @@ import {
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const KZT = new Intl.NumberFormat("ru-KZ", { style: "currency", currency: "KZT", maximumFractionDigits: 0 });
+const STAFF_NAMES = new Map([
+  ["mihagavr@gmail.com", "Михаил"],
+  ["a.kalashin@gmail.com", "Алексей"]
+]);
 
 const MODELS = [
   {
@@ -103,6 +107,7 @@ const state = {
   auth: null,
   db: null,
   user: null,
+  catalog: [],
   products: [],
   sales: [],
   movements: [],
@@ -115,10 +120,10 @@ function config() { return window.CONDUCTOR_FIREBASE_CONFIG || null; }
 
 function employeeNameFromEmail(email = "") {
   const normalized = String(email).trim().toLowerCase();
-  if (normalized === "mihagavr@gmail.com") return "Михаил";
-  if (normalized) return "Алексей";
-  return "Сотрудник";
+  return STAFF_NAMES.get(normalized) || "Сотрудник";
 }
+
+function isAllowedStaffEmail(email = "") { return STAFF_NAMES.has(String(email).trim().toLowerCase()); }
 
 function currentEmployeeName() {
   return employeeNameFromEmail(state.user?.email || "");
@@ -170,13 +175,13 @@ function modelById(modelId) { return MODELS.find((model) => model.id === modelId
 function variantDefaults(modelId) { return defaults.filter((item) => item.modelId === modelId); }
 function modelVariants(modelId) { return state.products.filter((item) => item.modelId === modelId && !item.legacyUnassigned && item.active !== false).sort((a, b) => Number(a.sort || 0) - Number(b.sort || 0)); }
 function modelSalePrice(modelId) {
-  const savedVariant = modelVariants(modelId).find((item) => Number(item.price) > 0);
-  return Number(savedVariant?.price || modelById(modelId)?.price || 0);
+  const catalogModel = state.catalog.find((item) => item.id === modelId);
+  return Number(catalogModel?.price || modelById(modelId)?.price || 0);
 }
 function unassignedForModel(modelId) { return state.products.find((item) => item.modelId === modelId && item.legacyUnassigned && Number(item.stock || 0) > 0); }
 function visibleInventory() { return state.products.filter((item) => item.active !== false && !item.modelOnly); }
 function totalUnits() { return visibleInventory().reduce((sum, item) => sum + Number(item.stock || 0), 0); }
-function stockValue() { return visibleInventory().reduce((sum, item) => sum + Number(item.stock || 0) * Number(item.avgCost || item.lastCost || 0), 0); }
+function stockValue() { return visibleInventory().reduce((sum, item) => sum + Number(item.stock || 0) * modelSalePrice(item.modelId || item.id), 0); }
 function colorDot(product) { return product.colorHex ? `<span class="color-dot" style="background:${escapeHtml(product.colorHex)}"></span>` : ""; }
 
 async function migrateLegacyModel(model) {
@@ -198,28 +203,19 @@ async function migrateLegacyModel(model) {
     const unassigned = unassignedSnap.exists() ? unassignedSnap.data() : null;
     const legacyStock = Number(legacy?.stock || 0);
     const currentStock = Number(unassigned?.stock || 0);
-    const legacyCost = Number(legacy?.avgCost || legacy?.lastCost || 0);
-    const currentCost = Number(unassigned?.avgCost || unassigned?.lastCost || 0);
     const nextStock = currentStock + legacyStock;
     const creationAudit = unassignedSnap.exists() ? {} : {
       createdAt: serverTimestamp(),
       createdBy: state.user.uid,
       createdByName: employee
     };
-    const nextAvg = nextStock > 0
-      ? ((currentStock * currentCost) + (legacyStock * legacyCost)) / nextStock
-      : (currentCost || legacyCost || 0);
-
     if (legacySnap.exists() || unassignedSnap.exists()) {
       tx.set(unassignedRef, {
         modelId: model.id,
         name: `${model.id} · Нераспределено`,
-        price: Number(legacy?.price || unassigned?.price || model.price),
         stock: nextStock,
         lowStock: 0,
         sort: model.sort,
-        avgCost: nextAvg,
-        lastCost: Number(legacy?.lastCost || unassigned?.lastCost || 0),
         legacyUnassigned: true,
         active: nextStock > 0,
         ...creationAudit,
@@ -240,14 +236,25 @@ async function migrateLegacyModel(model) {
 }
 
 async function ensureProducts() {
-  const snap = await getDocs(collection(state.db, "products"));
-  const existing = new Set(snap.docs.map((item) => item.id));
+  const [productSnap, catalogSnap] = await Promise.all([
+    getDocs(collection(state.db, "products")),
+    getDocs(collection(state.db, "catalog"))
+  ]);
+  const existingProducts = productSnap.docs.map((item) => ({ id: item.id, ...item.data() }));
+  const existing = new Set(existingProducts.map((item) => item.id));
+  const existingCatalog = new Set(catalogSnap.docs.map((item) => item.id));
   const employee = currentEmployeeName();
   await Promise.all(defaults.filter((item) => !existing.has(item.id)).map((item) => setDoc(doc(state.db, "products", item.id), {
-    ...item,
+    id: item.id,
+    modelId: item.modelId,
+    colorId: item.colorId,
+    colorName: item.colorName,
+    colorHex: item.colorHex,
+    name: item.name,
+    stock: item.stock,
+    lowStock: item.lowStock,
+    sort: item.sort,
     active: true,
-    avgCost: 0,
-    lastCost: 0,
     createdAt: serverTimestamp(),
     createdBy: state.user.uid,
     createdByName: employee,
@@ -255,6 +262,17 @@ async function ensureProducts() {
     updatedBy: state.user.uid,
     updatedByName: employee
   })));
+  await Promise.all(MODELS.filter((model) => !existingCatalog.has(model.id)).map((model) => {
+    const legacyPrice = existingProducts.find((item) => item.modelId === model.id && Number(item.price) > 0)?.price;
+    return setDoc(doc(state.db, "catalog", model.id), {
+      modelId: model.id,
+      name: model.name,
+      price: Math.trunc(Number(legacyPrice || model.price)),
+      updatedAt: serverTimestamp(),
+      updatedBy: state.user.uid,
+      updatedByName: employee
+    });
+  }));
   for (const model of MODELS) await migrateLegacyModel(model);
 }
 
@@ -265,6 +283,13 @@ function stopRealtime() {
 
 function startRealtime() {
   stopRealtime();
+  state.unsubs.push(onSnapshot(collection(state.db, "catalog"), (snap) => {
+    state.catalog = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+    renderProducts();
+    renderStock();
+    renderDashboard();
+    if ($("#model-dialog")?.open && state.modelDialogId) renderModelDialog(state.modelDialogId);
+  }, (error) => toast(`Каталог: ${error.message}`)));
   state.unsubs.push(onSnapshot(query(collection(state.db, "products"), orderBy("sort")), (snap) => {
     state.products = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
     renderProducts();
@@ -318,7 +343,7 @@ function renderDashboard() {
   const movementsToday = state.movements.filter((movement) => isToday(dateOf(movement)));
 
   $("#stock-units-hero").textContent = `${units} ед.`;
-  $("#stock-value-hero").textContent = `${KZT.format(value)} по себестоимости`;
+  $("#stock-value-hero").textContent = `${KZT.format(value)} по текущим ценам`;
   $("#metric-stock-value").textContent = KZT.format(value);
   $("#metric-sales").textContent = KZT.format(todayRevenue);
   $("#metric-low").textContent = String(low.length);
@@ -384,7 +409,7 @@ function renderProducts() {
     if (!variants.length) continue;
     html += `<div class="variant-group-label"><b>${escapeHtml(model.id)}</b><span>${variants.reduce((sum, item) => sum + Number(item.stock || 0), 0)} ед. · выберите цвет</span></div>`;
     html += variants.map((product) => `<div class="sale-product">
-      <div class="sale-product-name"><b>${colorDot(product)}${escapeHtml(product.colorName)}</b><small>${KZT.format(Number(product.price || model.price))} · остаток ${Number(product.stock || 0)}</small></div>
+      <div class="sale-product-name"><b>${colorDot(product)}${escapeHtml(product.colorName)}</b><small>${KZT.format(modelSalePrice(model.id))} · остаток ${Number(product.stock || 0)}</small></div>
       <div class="qty-control">
         <button type="button" data-qty-minus="${product.id}">−</button>
         <input type="number" min="0" max="${Number(product.stock || 0)}" value="0" inputmode="numeric" data-qty="${product.id}">
@@ -412,7 +437,7 @@ function selectedItems() {
     const input = document.querySelector(`[data-qty="${CSS.escape(product.id)}"]`);
     const qty = Number(input?.value || 0);
     if (qty <= 0) return null;
-    const price = Number(product.price || modelById(product.modelId)?.price || 0);
+    const price = modelSalePrice(product.modelId || product.id);
     return {
       inventoryId: product.id,
       productId: product.modelId || product.id,
@@ -461,7 +486,6 @@ async function createSale(event) {
         const data = snap.data();
         const before = Number(data.stock || 0);
         const after = before - items[index].qty;
-        const unitCost = Number(data.avgCost || data.lastCost || 0);
         tx.update(productRefs[index], { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid, updatedByName: employee });
         tx.set(movementRefs[index], {
           type: "sale",
@@ -473,8 +497,8 @@ async function createSale(event) {
           qtyDelta: -items[index].qty,
           before,
           after,
-          unitCost,
-          totalCost: unitCost * items[index].qty,
+          unitCost: 0,
+          totalCost: 0,
           salePrice: items[index].price,
           orderId: saleRef.id,
           reason: note,
@@ -538,7 +562,6 @@ async function cancelSale(saleId) {
       const before = Number(data.stock || 0);
       const qty = Number(items[index].qty || 0);
       const after = before + qty;
-      const unitCost = Number(data.avgCost || data.lastCost || 0);
       const update = { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid, updatedByName: employee };
       if (data.legacyUnassigned) update.active = true;
       tx.update(productRefs[index], update);
@@ -552,8 +575,8 @@ async function cancelSale(saleId) {
         qtyDelta: qty,
         before,
         after,
-        unitCost,
-        totalCost: unitCost * qty,
+        unitCost: 0,
+        totalCost: 0,
         orderId: saleId,
         reason: "Отмена продажи",
         createdAt: serverTimestamp(),
@@ -681,7 +704,6 @@ async function saveModelBalances(event) {
         const before = Number(data.stock || 0);
         const after = changed[index].stock;
         const delta = after - before;
-        const unitCost = Number(data.avgCost || data.lastCost || 0);
         const update = { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid, updatedByName: employee };
         if (data.legacyUnassigned) update.active = after > 0;
         tx.update(productRefs[index], update);
@@ -695,8 +717,8 @@ async function saveModelBalances(event) {
           qtyDelta: delta,
           before,
           after,
-          unitCost,
-          totalCost: Math.abs(delta) * unitCost,
+          unitCost: 0,
+          totalCost: 0,
           reason,
           createdAt: serverTimestamp(),
           createdAtClient: new Date().toISOString(),
@@ -722,8 +744,6 @@ function openStockDialog(productId, type) {
   $("#stock-current").textContent = `Сейчас на складе: ${Number(product.stock || 0)} ед.`;
   $("#stock-qty-label").firstChild.textContent = "Количество";
   $("#stock-operation-qty").value = "";
-  $("#stock-operation-cost").value = type === "receipt" && Number(product.lastCost || 0) ? String(Number(product.lastCost || 0)) : "";
-  $("#stock-cost-row").classList.toggle("hidden", type !== "receipt");
   $("#stock-operation-reason").value = "";
   $("#stock-operation-error").textContent = "";
   $("#stock-operation-submit").textContent = titles[type] || "Сохранить";
@@ -738,7 +758,6 @@ async function applyStockOperation(event) {
   const product = state.products.find((item) => item.id === operation.productId);
   if (!product) return;
   const qty = Math.trunc(Number($("#stock-operation-qty").value));
-  const cost = Number($("#stock-operation-cost").value || 0);
   const reason = $("#stock-operation-reason").value.trim();
   const errorNode = $("#stock-operation-error");
   errorNode.textContent = "";
@@ -758,11 +777,7 @@ async function applyStockOperation(event) {
       const delta = operation.type === "receipt" ? qty : -qty;
       if (before + delta < 0) throw new Error(`На складе только ${before} ед.`);
       const after = before + delta;
-      const oldAvg = Number(data.avgCost || data.lastCost || 0);
-      const avgCost = operation.type === "receipt" && cost > 0 && after > 0 ? ((before * oldAvg) + (qty * cost)) / after : oldAvg;
-      const lastCost = operation.type === "receipt" && cost > 0 ? cost : Number(data.lastCost || 0);
-      const unitCost = operation.type === "receipt" && cost > 0 ? cost : avgCost;
-      tx.update(productRef, { stock: after, avgCost, lastCost, updatedAt: serverTimestamp(), updatedBy: state.user.uid, updatedByName: employee });
+      tx.update(productRef, { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid, updatedByName: employee });
       tx.set(movementRef, {
         type: operation.type,
         inventoryId: operation.productId,
@@ -773,8 +788,8 @@ async function applyStockOperation(event) {
         qtyDelta: delta,
         before,
         after,
-        unitCost,
-        totalCost: Math.abs(delta) * unitCost,
+        unitCost: 0,
+        totalCost: 0,
         reason,
         createdAt: serverTimestamp(),
         createdAtClient: new Date().toISOString(),
@@ -832,7 +847,6 @@ function wireUi() {
     try { await resetPassword(state.user?.email || ""); } catch (error) { toast(error.message); }
   });
   $("#logout").addEventListener("click", () => signOut(state.auth));
-  $("#sync-button").addEventListener("click", () => toast(navigator.onLine ? "Синхронизация активна" : "Нет соединения с интернетом"));
 }
 
 async function boot() {
@@ -857,6 +871,13 @@ async function boot() {
       if (!user) {
         stopRealtime();
         showOnly("#login");
+        return;
+      }
+      if (!isAllowedStaffEmail(user.email || "")) {
+        stopRealtime();
+        showOnly("#login");
+        $("#login-error").textContent = "У этой учётной записи нет доступа к складу.";
+        signOut(state.auth);
         return;
       }
       const employee = currentEmployeeName();
