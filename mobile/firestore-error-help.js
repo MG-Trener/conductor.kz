@@ -1,3 +1,5 @@
+import "./app-update.js?v=1";
+
 const permissionPatterns = [
   /permission-denied/i,
   /missing or insufficient permissions/i,
