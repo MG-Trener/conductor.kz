@@ -1,0 +1,7 @@
+{
+  "version": "0.2.0",
+  "versionCode": 200,
+  "downloadUrl": "https://github.com/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk",
+  "notes": "Добавлена встроенная проверка обновлений и загрузка новой версии APK.",
+  "publishedAt": "2026-09-01"
+}
