@@ -13,11 +13,11 @@
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js" crossorigin>
-  <link rel="modulepreload" href="./app.js?v=12">
-  <link rel="manifest" href="./manifest.webmanifest?v=12">
+  <link rel="modulepreload" href="./app.js?v=13">
+  <link rel="manifest" href="./manifest.webmanifest?v=13">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=12">
-  <link rel="stylesheet" href="./warehouse.css?v=12">
+  <link rel="stylesheet" href="./styles.css?v=13">
+  <link rel="stylesheet" href="./warehouse.css?v=13">
 </head>
 <body>
   <div id="boot" class="boot">
@@ -120,7 +120,7 @@
         </div>
         <div class="panel">
           <h3>Как вносить остатки</h3>
-          <p class="muted">В разделе «Склад» нажмите «Задать остаток» у товара и введите фактическое количество. Разница автоматически попадёт в журнал движения.</p>
+          <p class="muted">В разделе «Склад» нажмите «Задать остаток» у нужной модели и цвета и введите фактическое количество. Разница автоматически попадёт в журнал движения.</p>
         </div>
         <button id="reset-password" class="btn full">Отправить письмо для смены пароля</button>
         <button id="logout" class="btn danger full">Выйти</button>
@@ -153,7 +153,6 @@
 
   <div id="toast" class="toast"></div>
   <script>
-    // Never leave the user behind a blocking splash screen if the Firebase CDN is slow.
     window.setTimeout(() => {
       const boot = document.getElementById("boot");
       if (!boot || boot.classList.contains("hide")) return;
@@ -162,7 +161,7 @@
       window.setTimeout(() => boot.remove(), 280);
     }, 1000);
   </script>
-  <script src="./firebase-config.js?v=12"></script>
-  <script type="module" src="./app.js?v=12"></script>
+  <script src="./firebase-config.js?v=13"></script>
+  <script type="module" src="./app.js?v=13"></script>
 </body>
 </html>
