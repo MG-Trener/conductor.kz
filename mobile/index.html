@@ -8,10 +8,16 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="CONDUCTOR Склад">
   <title>CONDUCTOR — склад</title>
-  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="preconnect" href="https://www.gstatic.com" crossorigin>
+  <link rel="dns-prefetch" href="https://www.gstatic.com">
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js" crossorigin>
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js" crossorigin>
+  <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js" crossorigin>
+  <link rel="modulepreload" href="./app.js?v=12">
+  <link rel="manifest" href="./manifest.webmanifest?v=12">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css">
-  <link rel="stylesheet" href="./warehouse.css">
+  <link rel="stylesheet" href="./styles.css?v=12">
+  <link rel="stylesheet" href="./warehouse.css?v=12">
 </head>
 <body>
   <div id="boot" class="boot">
@@ -146,7 +152,17 @@
   </dialog>
 
   <div id="toast" class="toast"></div>
-  <script src="./firebase-config.js"></script>
-  <script type="module" src="./app.js"></script>
+  <script>
+    // Never leave the user behind a blocking splash screen if the Firebase CDN is slow.
+    window.setTimeout(() => {
+      const boot = document.getElementById("boot");
+      if (!boot || boot.classList.contains("hide")) return;
+      document.getElementById("login")?.classList.remove("hidden");
+      boot.classList.add("hide");
+      window.setTimeout(() => boot.remove(), 280);
+    }, 1000);
+  </script>
+  <script src="./firebase-config.js?v=12"></script>
+  <script type="module" src="./app.js?v=12"></script>
 </body>
 </html>
