@@ -12,16 +12,18 @@ if (location.pathname.startsWith("/mobile/")) {
   };
 
   // app.js initializes Firestore with the application's cache settings.
-  // Load the inventory helper only after all module scripts have finished,
-  // otherwise it can call getFirestore() first and lock Firestore to default
-  // settings, causing initializeFirestore() in app.js to fail during login.
+  // The inventory helper must start later, otherwise it can call getFirestore()
+  // first and lock Firestore to default settings. That makes the subsequent
+  // initializeFirestore() call in app.js fail and prevents authorization.
   window.addEventListener("load", () => {
-    if (document.querySelector('script[data-conductor-inventory-state]')) return;
-    const inventoryState = document.createElement("script");
-    inventoryState.type = "module";
-    inventoryState.src = "./inventory-state.js?v=18";
-    inventoryState.dataset.conductorInventoryState = "1";
-    document.head.append(inventoryState);
+    window.setTimeout(() => {
+      if (document.querySelector('script[data-conductor-inventory-state]')) return;
+      const inventoryState = document.createElement("script");
+      inventoryState.type = "module";
+      inventoryState.src = "./inventory-state.js?v=18";
+      inventoryState.dataset.conductorInventoryState = "1";
+      document.head.append(inventoryState);
+    }, 1000);
   }, { once: true });
 } else {
   window.CONDUCTOR_FIREBASE_CONFIG = null;
