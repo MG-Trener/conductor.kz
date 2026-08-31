@@ -5,10 +5,14 @@ on:
   push:
     branches:
       - main
-      - feature/android-warehouse-app
+      - feature/in-app-updates
     paths:
       - "android-app/**"
+      - "mobile/app-version.json"
       - ".github/workflows/build-android-apk.yml"
+
+permissions:
+  contents: write
 
 jobs:
   build-apk:
@@ -43,16 +47,80 @@ jobs:
         working-directory: android-app
         run: npx cap add android
 
-      - name: Build debug APK
+      - name: Prepare optional release signing
+        id: signing
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.WAREHOUSE_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.WAREHOUSE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.WAREHOUSE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.WAREHOUSE_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+            printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$GITHUB_WORKSPACE/android-app/warehouse-release.jks"
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "Release signing secrets are not configured; building a debug-signed APK."
+          fi
+
+      - name: Configure Android version
+        working-directory: android-app
+        env:
+          WAREHOUSE_SIGNING_ENABLED: ${{ steps.signing.outputs.enabled }}
+        run: node configure-android.mjs
+
+      - name: Build signed release APK
+        if: steps.signing.outputs.enabled == 'true'
+        working-directory: android-app/android
+        env:
+          WAREHOUSE_KEYSTORE_PATH: ${{ github.workspace }}/android-app/warehouse-release.jks
+          WAREHOUSE_KEYSTORE_PASSWORD: ${{ secrets.WAREHOUSE_KEYSTORE_PASSWORD }}
+          WAREHOUSE_KEY_ALIAS: ${{ secrets.WAREHOUSE_KEY_ALIAS }}
+          WAREHOUSE_KEY_PASSWORD: ${{ secrets.WAREHOUSE_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+      - name: Build debug APK fallback
+        if: steps.signing.outputs.enabled != 'true'
         working-directory: android-app/android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Prepare APK file
+        shell: bash
+        run: |
+          mkdir -p dist
+          if [ "${{ steps.signing.outputs.enabled }}" = "true" ]; then
+            cp android-app/android/app/build/outputs/apk/release/app-release.apk dist/CONDUCTOR-Sklad.apk
+          else
+            cp android-app/android/app/build/outputs/apk/debug/app-debug.apk dist/CONDUCTOR-Sklad.apk
+          fi
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: CONDUCTOR-Warehouse-APK
-          path: android-app/android/app/build/outputs/apk/debug/app-debug.apk
+          path: dist/CONDUCTOR-Sklad.apk
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish permanent warehouse release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('./android-app/package.json').version")
+          NOTES=$(node -p "require('./mobile/app-version.json').notes")
+          if gh release view warehouse-latest >/dev/null 2>&1; then
+            gh release upload warehouse-latest dist/CONDUCTOR-Sklad.apk --clobber
+            gh release edit warehouse-latest --title "CONDUCTOR Склад v${VERSION}" --notes "$NOTES"
+          else
+            gh release create warehouse-latest dist/CONDUCTOR-Sklad.apk \
+              --target "$GITHUB_SHA" \
+              --title "CONDUCTOR Склад v${VERSION}" \
+              --notes "$NOTES"
+          fi
