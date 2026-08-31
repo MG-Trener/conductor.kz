@@ -5,27 +5,6 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function validWebsiteLead() {
-      return request.resource.data.keys().hasAll([
-        'customer', 'phone', 'productId', 'source', 'status', 'page', 'createdAt'
-      ])
-      && request.resource.data.keys().hasOnly([
-        'customer', 'phone', 'productId', 'source', 'status', 'page', 'createdAt'
-      ])
-      && request.resource.data.customer is string
-      && request.resource.data.customer.size() >= 2
-      && request.resource.data.customer.size() <= 80
-      && request.resource.data.phone is string
-      && request.resource.data.phone.size() >= 6
-      && request.resource.data.phone.size() <= 24
-      && request.resource.data.productId in ['DM30', 'DM60', 'DM90', 'HOLI']
-      && request.resource.data.source == 'website'
-      && request.resource.data.status == 'new'
-      && request.resource.data.page is string
-      && request.resource.data.page.size() <= 300
-      && request.resource.data.createdAt == request.time;
-    }
-
     match /products/{productId} {
       allow read, write: if signedIn();
     }
@@ -39,9 +18,10 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    // Website lead collection is retained only for historical/test records.
+    // Public visitors can no longer create leads.
     match /leads/{leadId} {
-      allow create: if validWebsiteLead();
-      allow read, update, delete: if signedIn();
+      allow read, write: if signedIn();
     }
 
     match /{document=**} {
