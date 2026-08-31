@@ -1,0 +1,20 @@
+{
+  "name": "CONDUCTOR — рабочее приложение",
+  "short_name": "CONDUCTOR",
+  "description": "Заказы, продажи и склад CONDUCTOR.KZ",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#05070d",
+  "theme_color": "#070a12",
+  "lang": "ru-KZ",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
