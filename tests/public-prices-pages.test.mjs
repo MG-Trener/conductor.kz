@@ -53,9 +53,13 @@ test("the warehouse model card renders the saved Firestore price", async () => {
 });
 
 test("the hero image contains a hidden desktop link to the warehouse", async () => {
-  const script = await readFile(publicEnhancements, "utf8");
+  const [script, home] = await Promise.all([
+    readFile(publicEnhancements, "utf8"),
+    readFile(pages.home, "utf8")
+  ]);
   assert.match(script, /document\.querySelector\("\.hero-shell"\)/);
   assert.match(script, /link\.href = "\/mobile\/"/);
   assert.match(script, /right:4\.8%;top:38%;width:10%;height:42%/);
   assert.match(script, /@media\(max-width:1000px\)/);
+  assert.match(home, /<script defer src="\/assets\/order-form\.js\?v=2"><\/script>/);
 });
