@@ -1,0 +1,9 @@
+{
+  "appId": "kz.conductor.warehouse",
+  "appName": "CONDUCTOR Склад",
+  "webDir": "www",
+  "server": {
+    "url": "https://conductor.kz/mobile/",
+    "cleartext": false
+  }
+}
