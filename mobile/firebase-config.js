@@ -12,7 +12,7 @@ window.CONDUCTOR_FIREBASE_CONFIG = {
 
 // Keep internal modules isolated to the mobile workspace.
 if (location.pathname.startsWith("/mobile/")) {
-  for (const src of ["./leads.js", "./lead-to-sale.js", "./customers.js", "./inventory.js"]) {
+  for (const src of ["./leads.js", "./lead-to-sale.js", "./customers.js", "./inventory.js", "./order-inventory.js"]) {
     const script = document.createElement("script");
     script.type = "module";
     script.src = src;
