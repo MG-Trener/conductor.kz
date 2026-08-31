@@ -4,11 +4,13 @@ import {
   getFirestore,
   collection,
   doc,
+  getDocs,
   onSnapshot,
   query,
   limit,
   runTransaction,
-  serverTimestamp
+  serverTimestamp,
+  setDoc
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 const KZT = new Intl.NumberFormat("ru-KZ", { style: "currency", currency: "KZT", maximumFractionDigits: 0 });
@@ -19,6 +21,7 @@ let movements = [];
 let db = null;
 let formBound = false;
 let documentBound = false;
+let publicPriceSyncStarted = false;
 
 function employeeNameFromEmail(email = "") {
   const normalized = String(email).trim().toLowerCase();
@@ -52,6 +55,35 @@ function modelProducts(modelId) {
 function currentModelPrice(modelId) {
   const variant = modelProducts(modelId).find((item) => Number(item.price) > 0);
   return Number(variant?.price || DEFAULT_PRICES[modelId] || 0);
+}
+
+async function syncMissingPublicPrices() {
+  if (publicPriceSyncStarted || !products.length || !db) return;
+  const app = getApps()[0];
+  const user = app ? getAuth(app).currentUser : null;
+  if (!user) return;
+  publicPriceSyncStarted = true;
+
+  try {
+    const snapshot = await getDocs(collection(db, "publicProducts"));
+    const published = new Map(snapshot.docs.map((item) => [item.id, Number(item.data().price || 0)]));
+    const employee = employeeNameFromEmail(user.email || "");
+    await Promise.all(Object.keys(DEFAULT_PRICES).map(async (modelId) => {
+      const price = currentModelPrice(modelId);
+      if (!price || published.get(modelId) === price) return;
+      const name = document.querySelector(`#stock-list [data-open-model="${modelId}"]`)?.closest(".stock-card")?.querySelector(".stock-name b")?.textContent?.trim() || modelId;
+      await setDoc(doc(db, "publicProducts", modelId), {
+        modelId,
+        name,
+        price,
+        updatedAt: serverTimestamp(),
+        updatedBy: user.uid,
+        updatedByName: employee
+      });
+    }));
+  } catch {
+    publicPriceSyncStarted = false;
+  }
 }
 
 function setText(node, value) {
@@ -375,6 +407,7 @@ async function start() {
     products = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
     bindUi();
     scheduleApply();
+    syncMissingPublicPrices();
   });
 
   onSnapshot(query(collection(db, "stockMovements"), limit(500)), (snap) => {

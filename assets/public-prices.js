@@ -1,5 +1,5 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { collection, getDocs, getFirestore } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import { collection, getFirestore, onSnapshot } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 const config = {
   apiKey: "AIzaSyDnH_Lp6JudyHw4bPbPptwnhRe6On23jCA",
@@ -23,8 +23,11 @@ function updateStructuredData(prices) {
       const data = JSON.parse(node.textContent);
       const graph = Array.isArray(data?.["@graph"]) ? data["@graph"] : [];
       const list = graph.find((item) => item?.["@type"] === "ItemList");
-      for (const entry of list?.itemListElement || []) {
-        const product = entry?.item;
+      const products = [
+        ...graph.filter((item) => item?.["@type"] === "Product"),
+        ...(list?.itemListElement || []).map((entry) => entry?.item).filter(Boolean)
+      ];
+      for (const product of products) {
         const modelId = product?.sku;
         const price = prices.get(modelId);
         if (!price || !product?.offers) continue;
@@ -38,24 +41,28 @@ function updateStructuredData(prices) {
   }
 }
 
-async function loadPublicPrices() {
-  const app = initializeApp(config, "conductor-public-prices");
-  const snapshot = await getDocs(collection(getFirestore(app), "publicProducts"));
-  const prices = new Map();
-
-  for (const item of snapshot.docs) {
-    const modelId = item.id;
-    const price = Math.trunc(Number(item.data().price));
-    if (!MODELS.has(modelId) || !Number.isFinite(price) || price <= 0) continue;
-    prices.set(modelId, price);
-    for (const node of document.querySelectorAll(`[data-public-price="${modelId}"]`)) {
-      node.textContent = KZT.format(price);
-    }
+function markPricesReady() {
+  for (const node of document.querySelectorAll("[data-public-price]")) {
+    node.dataset.publicPriceReady = "true";
   }
-
-  updateStructuredData(prices);
 }
 
-loadPublicPrices().catch(() => {
-  // Static prices in the HTML remain a resilient fallback.
-});
+function loadPublicPrices() {
+  const app = initializeApp(config, "conductor-public-prices");
+  onSnapshot(collection(getFirestore(app), "publicProducts"), (snapshot) => {
+    const prices = new Map();
+    for (const item of snapshot.docs) {
+      const modelId = item.id;
+      const price = Math.trunc(Number(item.data().price));
+      if (!MODELS.has(modelId) || !Number.isFinite(price) || price <= 0) continue;
+      prices.set(modelId, price);
+      for (const node of document.querySelectorAll(`[data-public-price="${modelId}"]`)) {
+        node.textContent = KZT.format(price);
+      }
+    }
+    updateStructuredData(prices);
+    markPricesReady();
+  }, markPricesReady);
+}
+
+loadPublicPrices();
