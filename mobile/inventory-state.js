@@ -1,5 +1,5 @@
 import { getApps } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
-import { getAuth } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import {
   getFirestore,
   collection,
@@ -21,7 +21,7 @@ let movements = [];
 let db = null;
 let formBound = false;
 let documentBound = false;
-let publicPriceSyncStarted = false;
+let publicPriceSyncPromise = null;
 
 function employeeNameFromEmail(email = "") {
   const normalized = String(email).trim().toLowerCase();
@@ -58,13 +58,12 @@ function currentModelPrice(modelId) {
 }
 
 async function syncMissingPublicPrices() {
-  if (publicPriceSyncStarted || !products.length || !db) return;
+  if (publicPriceSyncPromise || !products.length || !db) return publicPriceSyncPromise;
   const app = getApps()[0];
   const user = app ? getAuth(app).currentUser : null;
   if (!user) return;
-  publicPriceSyncStarted = true;
 
-  try {
+  publicPriceSyncPromise = (async () => {
     const snapshot = await getDocs(collection(db, "publicProducts"));
     const published = new Map(snapshot.docs.map((item) => [item.id, Number(item.data().price || 0)]));
     const employee = employeeNameFromEmail(user.email || "");
@@ -81,9 +80,11 @@ async function syncMissingPublicPrices() {
         updatedByName: employee
       });
     }));
-  } catch {
-    publicPriceSyncStarted = false;
-  }
+  })();
+
+  try { await publicPriceSyncPromise; }
+  catch { /* The next auth/product event retries the sync. */ }
+  finally { publicPriceSyncPromise = null; }
 }
 
 function setText(node, value) {
@@ -400,6 +401,9 @@ async function start() {
   if (!getApps().length) return;
 
   db = getFirestore(getApps()[0]);
+  onAuthStateChanged(getAuth(getApps()[0]), (user) => {
+    if (user) syncMissingPublicPrices();
+  });
   bindUi();
   scheduleApply();
 
