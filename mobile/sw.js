@@ -1,12 +1,12 @@
-const CACHE = "conductor-mobile-v13";
+const CACHE = "conductor-mobile-v14";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=13",
-  "./warehouse.css?v=13",
-  "./app.js?v=13",
-  "./firebase-config.js?v=13",
-  "./manifest.webmanifest?v=13",
+  "./styles.css?v=14",
+  "./warehouse.css?v=14",
+  "./app.js?v=14",
+  "./firebase-config.js?v=14",
+  "./manifest.webmanifest?v=14",
   "./icon.svg"
 ];
 
@@ -29,7 +29,6 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
-
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
