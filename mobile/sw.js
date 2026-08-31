@@ -1,8 +1,21 @@
-const CACHE = "conductor-mobile-v11";
-const APP_SHELL = ["./", "./index.html", "./styles.css", "./warehouse.css", "./app.js", "./firebase-config.js", "./manifest.webmanifest", "./icon.svg"];
+const CACHE = "conductor-mobile-v12";
+const APP_SHELL = [
+  "./",
+  "./index.html",
+  "./styles.css?v=12",
+  "./warehouse.css?v=12",
+  "./app.js?v=12",
+  "./firebase-config.js?v=12",
+  "./manifest.webmanifest?v=12",
+  "./icon.svg"
+];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(
+    caches.open(CACHE)
+      .then((cache) => cache.addAll(APP_SHELL))
+      .then(() => self.skipWaiting())
+  );
 });
 
 self.addEventListener("activate", (event) => {
@@ -16,9 +29,24 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
+
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
+  // HTML is network-first so an old installed PWA does not keep serving an old app shell.
+  if (request.mode === "navigate") {
+    event.respondWith(
+      fetch(request)
+        .then((response) => {
+          if (response.ok) caches.open(CACHE).then((cache) => cache.put("./index.html", response.clone()));
+          return response;
+        })
+        .catch(() => caches.match("./index.html").then((cached) => cached || caches.match("./")))
+    );
+    return;
+  }
+
+  // Static local assets open immediately from cache and refresh in the background.
   event.respondWith(
     caches.match(request).then((cached) => {
       const network = fetch(request)
