@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches:
+      - main
       - feature/android-warehouse-app
     paths:
       - "android-app/**"
