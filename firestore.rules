@@ -18,10 +18,9 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Website lead collection is retained only for historical/test records.
-    // Public visitors can no longer create leads.
+    // Obsolete CRM data is completely closed. The mobile app no longer uses leads.
     match /leads/{leadId} {
-      allow read, write: if signedIn();
+      allow read, write: if false;
     }
 
     match /{document=**} {
