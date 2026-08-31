@@ -1,7 +1,7 @@
 {
-  "name": "CONDUCTOR — рабочее приложение",
+  "name": "CONDUCTOR — склад и продажи",
   "short_name": "CONDUCTOR",
-  "description": "Заказы, продажи и склад CONDUCTOR.KZ",
+  "description": "Остатки, движения склада и фиксация продаж CONDUCTOR.KZ",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
