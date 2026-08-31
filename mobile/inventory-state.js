@@ -18,6 +18,7 @@ let products = [];
 let movements = [];
 let db = null;
 let formBound = false;
+let documentBound = false;
 
 function employeeNameFromEmail(email = "") {
   const normalized = String(email).trim().toLowerCase();
@@ -38,11 +39,10 @@ function initializedInventoryIds() {
 }
 
 function modelIdFromDialog() {
-  const input = document.querySelector("#model-variant-list [data-model-balance]");
-  const id = input?.dataset.modelBalance || "";
-  if (id.includes("_")) return id.split("_")[0];
+  const inventoryId = document.querySelector("#model-variant-list [data-model-balance]")?.dataset.modelBalance || "";
+  if (inventoryId.includes("_")) return inventoryId.split("_")[0];
   const title = document.getElementById("model-dialog-title")?.textContent || "";
-  return Object.keys(DEFAULT_PRICES).find((modelId) => title.includes(modelId)) || "";
+  return Object.keys(DEFAULT_PRICES).find((id) => title.includes(id)) || "";
 }
 
 function modelProducts(modelId) {
@@ -54,18 +54,19 @@ function currentModelPrice(modelId) {
   return Number(variant?.price || DEFAULT_PRICES[modelId] || 0);
 }
 
+function setText(node, value) {
+  if (node && node.textContent !== value) node.textContent = value;
+}
+
 function injectStyles() {
   if (document.getElementById("inventory-v17-styles")) return;
   const style = document.createElement("style");
   style.id = "inventory-v17-styles";
   style.textContent = `
     #view-dashboard .hero-card{display:none!important}
-    #metric-low.closest-metric-placeholder{display:none}
     #view-dashboard .metric-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
     #stock-total{display:none!important}
     #view-stock .stock-summary{grid-template-columns:repeat(2,minmax(0,1fr))!important}
-    #view-stock #stock-units{display:none!important}
-    #view-stock #stock-units-v17-parent{display:none!important}
     .inventory-overview-card .overview-model-head>strong{display:none!important}
     .stock-model-card>.stock-main>.stock-count{display:none!important}
     #model-dialog-total{display:none!important}
@@ -79,20 +80,17 @@ function injectStyles() {
 }
 
 function hideAggregateBlocks() {
-  const lowMetric = document.getElementById("metric-low")?.closest(".metric");
-  const movementsMetric = document.getElementById("metric-movements")?.closest(".metric");
-  if (lowMetric) lowMetric.style.display = "none";
-  if (movementsMetric) movementsMetric.style.display = "none";
+  const low = document.getElementById("metric-low")?.closest(".metric");
+  const movementsToday = document.getElementById("metric-movements")?.closest(".metric");
+  if (low) low.style.display = "none";
+  if (movementsToday) movementsToday.style.display = "none";
 
   const stockUnits = document.getElementById("stock-units");
-  if (stockUnits?.parentElement) {
-    stockUnits.parentElement.id = "stock-units-v17-parent";
-    stockUnits.parentElement.style.display = "none";
-  }
+  if (stockUnits?.parentElement) stockUnits.parentElement.style.display = "none";
 
   document.querySelectorAll(".inventory-overview-card .overview-model-head > strong").forEach((node) => node.style.display = "none");
   document.querySelectorAll(".stock-model-card > .stock-main > .stock-count").forEach((node) => node.style.display = "none");
-  document.querySelectorAll(".variant-group-label span").forEach((node) => node.textContent = "выберите цвет");
+  document.querySelectorAll(".variant-group-label span").forEach((node) => setText(node, "выберите цвет"));
 }
 
 function applyOverviewState() {
@@ -104,13 +102,13 @@ function applyOverviewState() {
 
     const headInfo = card.querySelector(".overview-model-head > div");
     if (headInfo) {
-      let price = headInfo.querySelector(".model-main-price");
-      if (!price) {
-        price = document.createElement("small");
-        price.className = "model-main-price";
-        headInfo.appendChild(price);
+      let priceNode = headInfo.querySelector(".model-main-price");
+      if (!priceNode) {
+        priceNode = document.createElement("small");
+        priceNode.className = "model-main-price";
+        headInfo.appendChild(priceNode);
       }
-      price.textContent = `Цена продажи: ${KZT.format(currentModelPrice(modelId))}`;
+      setText(priceNode, `Цена продажи: ${KZT.format(currentModelPrice(modelId))}`);
     }
 
     card.querySelectorAll(".overview-color").forEach((row) => {
@@ -120,8 +118,8 @@ function applyOverviewState() {
       const product = products.find((item) => item.modelId === modelId && item.colorName === colorName);
       if (!product || !value) return;
       const isInitialized = initialized.has(product.id);
-      value.textContent = isInitialized ? String(Number(product.stock || 0)) : "—";
-      value.classList.toggle("low", false);
+      setText(value, isInitialized ? String(Number(product.stock || 0)) : "—");
+      value.classList.remove("low");
       value.classList.toggle("inventory-not-set", !isInitialized);
       value.title = isInitialized ? "Фактический остаток" : "Остаток ещё не внесён";
     });
@@ -130,26 +128,21 @@ function applyOverviewState() {
 
 function applyStockCardState() {
   const initialized = initializedInventoryIds();
-  const cards = [...document.querySelectorAll("#stock-list .stock-model-card")];
-  cards.forEach((card) => {
+  document.querySelectorAll("#stock-list .stock-model-card").forEach((card) => {
     const title = card.querySelector(".stock-name b")?.textContent || "";
     const modelId = Object.keys(DEFAULT_PRICES).find((id) => title.includes(id));
     if (!modelId) return;
 
     const small = card.querySelector(".stock-name small");
-    if (small) {
-      const colorCount = modelProducts(modelId).length || "";
-      small.textContent = `${colorCount} цветов · цена ${KZT.format(currentModelPrice(modelId))}`;
-    }
+    if (small) setText(small, `${modelProducts(modelId).length} цветов · цена ${KZT.format(currentModelPrice(modelId))}`);
 
     card.querySelectorAll(".stock-color-summary span").forEach((row) => {
       if (row.classList.contains("warning")) return;
-      const colorName = row.childNodes[1]?.textContent?.trim() || row.textContent.replace(/\d+$/, "").trim();
       const value = row.querySelector("b");
       const product = products.find((item) => item.modelId === modelId && row.textContent.includes(item.colorName));
       if (!product || !value) return;
       const isInitialized = initialized.has(product.id);
-      value.textContent = isInitialized ? String(Number(product.stock || 0)) : "—";
+      setText(value, isInitialized ? String(Number(product.stock || 0)) : "—");
       value.classList.toggle("inventory-not-set", !isInitialized);
     });
   });
@@ -168,7 +161,7 @@ function ensureModelPriceField() {
     row = document.createElement("label");
     row.id = "model-sale-price-row";
     row.className = "model-sale-price-row";
-    row.innerHTML = `Цена продажи модели, ₸<input id="model-sale-price" type="number" min="0" step="1" inputmode="numeric" required>`;
+    row.innerHTML = `Цена продажи модели, ₸<input id="model-sale-price" type="number" min="1" step="1" inputmode="numeric" required>`;
     list.before(row);
   }
 
@@ -181,19 +174,17 @@ function ensureModelPriceField() {
   const initialized = initializedInventoryIds();
   document.querySelectorAll("#model-variant-list [data-model-balance]").forEach((input) => {
     const product = products.find((item) => item.id === input.dataset.modelBalance);
-    if (!product || product.legacyUnassigned) return;
-    if (!input.dataset.inventoryPatched) {
-      input.dataset.inventoryPatched = "1";
-      if (!initialized.has(product.id)) input.value = "";
-      input.addEventListener("input", () => input.dataset.userEdited = "1", { once: true });
-    }
+    if (!product || product.legacyUnassigned || input.dataset.inventoryPatched) return;
+    input.dataset.inventoryPatched = "1";
+    if (!initialized.has(product.id)) input.value = "";
+    input.addEventListener("input", () => input.dataset.userEdited = "1", { once: true });
     const small = input.closest(".model-variant-row")?.querySelector(".model-variant-info small");
-    if (small && !initialized.has(product.id) && !input.dataset.userEdited) small.textContent = "Сейчас: не внесено";
+    if (small && !initialized.has(product.id)) setText(small, "Сейчас: не внесено");
   });
 }
 
 function friendlyError(error) {
-  if (error?.code === "permission-denied" || String(error?.message || "").includes("permission")) {
+  if (error?.code === "permission-denied" || String(error?.message || "").toLowerCase().includes("permission")) {
     return "Firebase запретил сохранение. Опубликуйте актуальные Firestore Rules из репозитория.";
   }
   return error?.message || "Не удалось сохранить изменения.";
@@ -206,8 +197,7 @@ async function saveModelInventory(event) {
 
   const modelId = modelIdFromDialog();
   const errorNode = document.getElementById("model-balance-error");
-  const priceInput = document.getElementById("model-sale-price");
-  const price = Math.trunc(Number(priceInput?.value));
+  const price = Math.trunc(Number(document.getElementById("model-sale-price")?.value));
   if (errorNode) errorNode.textContent = "";
 
   if (!modelId) {
@@ -226,8 +216,7 @@ async function saveModelInventory(event) {
     return;
   }
 
-  const inputs = [...document.querySelectorAll("#model-variant-list [data-model-balance]")];
-  const entered = inputs.map((input) => ({
+  const entered = [...document.querySelectorAll("#model-variant-list [data-model-balance]")].map((input) => ({
     id: input.dataset.modelBalance,
     raw: input.value.trim(),
     stock: Math.trunc(Number(input.value))
@@ -235,8 +224,8 @@ async function saveModelInventory(event) {
 
   const byId = new Map(products.map((item) => [item.id, item]));
   const variants = modelProducts(modelId);
-  const priceChanged = variants.some((item) => Number(item.price || 0) !== price);
   const initialized = initializedInventoryIds();
+  const priceChanged = variants.some((item) => Number(item.price || 0) !== price);
   const stockChanged = entered.filter((item) => Number(byId.get(item.id)?.stock || 0) !== item.stock);
   const initializationChanged = entered.filter((item) => !initialized.has(item.id));
 
@@ -254,7 +243,7 @@ async function saveModelInventory(event) {
     const enteredMap = new Map(entered.map((item) => [item.id, item]));
     const refIds = [...new Set([...variants.map((item) => item.id), ...entered.map((item) => item.id)])];
     const refs = refIds.map((id) => doc(db, "products", id));
-    const movementRefs = new Map(stockChanged.map((item) => [item.id, doc(collection(db, "stockMovements"))]));
+    const movementRefs = new Map(entered.map((item) => [item.id, doc(collection(db, "stockMovements"))]));
 
     await runTransaction(db, async (tx) => {
       const snaps = [];
@@ -321,7 +310,7 @@ async function saveModelInventory(event) {
     document.getElementById("model-dialog")?.close();
     const toast = document.getElementById("toast");
     if (toast) {
-      toast.textContent = `${modelId}: цена и остатки сохранены · ${employee}`;
+      setText(toast, `${modelId}: цена и остатки сохранены · ${employee}`);
       toast.classList.add("show");
       setTimeout(() => toast.classList.remove("show"), 2400);
     }
@@ -340,11 +329,25 @@ function applyUi() {
   ensureModelPriceField();
 }
 
-function bindForm() {
+function scheduleApply() {
+  setTimeout(applyUi, 0);
+  setTimeout(applyUi, 100);
+  setTimeout(applyUi, 300);
+}
+
+function bindUi() {
   const form = document.getElementById("model-balance-form");
-  if (!form || formBound) return;
-  formBound = true;
-  form.addEventListener("submit", saveModelInventory, true);
+  if (form && !formBound) {
+    formBound = true;
+    form.addEventListener("submit", saveModelInventory, true);
+  }
+
+  if (!documentBound) {
+    documentBound = true;
+    document.addEventListener("click", (event) => {
+      if (event.target.closest("[data-open-model]") || event.target.closest("[data-nav]")) scheduleApply();
+    });
+  }
 }
 
 async function start() {
@@ -356,26 +359,19 @@ async function start() {
   if (!getApps().length) return;
 
   db = getFirestore(getApps()[0]);
-  bindForm();
-  applyUi();
+  bindUi();
+  scheduleApply();
 
   onSnapshot(collection(db, "products"), (snap) => {
     products = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
-    applyUi();
-    setTimeout(applyUi, 60);
+    bindUi();
+    scheduleApply();
   });
 
   onSnapshot(query(collection(db, "stockMovements"), limit(500)), (snap) => {
     movements = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
-    applyUi();
-    setTimeout(applyUi, 60);
+    scheduleApply();
   });
-
-  const observer = new MutationObserver(() => {
-    bindForm();
-    applyUi();
-  });
-  observer.observe(document.body, { childList: true, subtree: true });
 }
 
 start().catch(() => {});
