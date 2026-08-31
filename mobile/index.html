@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#070a12">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="CONDUCTOR">
-  <title>CONDUCTOR — рабочее приложение</title>
+  <meta name="apple-mobile-web-app-title" content="CONDUCTOR Склад">
+  <title>CONDUCTOR — склад</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
@@ -15,33 +15,21 @@
 <body>
   <div id="boot" class="boot">
     <div class="boot-logo">CONDUCTOR<span>.KZ</span></div>
-    <div class="boot-sub">Рабочее приложение</div>
-  </div>
-
-  <div id="setup" class="screen hidden">
-    <main class="center-wrap">
-      <section class="auth-card">
-        <div class="brand">CONDUCTOR<span>.KZ</span></div>
-        <h1>Подключение Firebase</h1>
-        <p class="muted">Вставьте объект <b>firebaseConfig</b> из Firebase Console → Project settings → Your apps → Web app. Конфигурация сохранится только на этом устройстве.</p>
-        <textarea id="firebase-config-input" class="config-input" spellcheck="false" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'></textarea>
-        <button id="save-config" class="btn primary full">Сохранить и подключить</button>
-        <p id="setup-error" class="error"></p>
-      </section>
-    </main>
+    <div class="boot-sub">Склад и продажи</div>
   </div>
 
   <div id="login" class="screen hidden">
     <main class="center-wrap">
       <section class="auth-card">
         <div class="brand">CONDUCTOR<span>.KZ</span></div>
-        <div class="eyebrow">Внутренний доступ</div>
-        <h1>Вход в работу</h1>
+        <div class="eyebrow">Складской доступ</div>
+        <h1>Вход</h1>
         <form id="login-form" class="form-stack">
           <label>Email<input id="email" type="email" autocomplete="username" required placeholder="name@company.kz"></label>
           <label>Пароль<input id="password" type="password" autocomplete="current-password" required placeholder="••••••••"></label>
           <button class="btn primary full" type="submit">Войти</button>
         </form>
+        <button id="reset-password-login" class="link-action" type="button">Восстановить пароль</button>
         <p id="login-error" class="error"></p>
       </section>
     </main>
@@ -51,72 +39,69 @@
     <header class="topbar">
       <div>
         <div class="mini-brand">CONDUCTOR<span>.KZ</span></div>
-        <div id="page-subtitle" class="top-subtitle">Сегодня</div>
+        <div id="page-subtitle" class="top-subtitle">Склад сегодня</div>
       </div>
-      <button id="sync-button" class="icon-btn" aria-label="Обновить">↻</button>
+      <button id="sync-button" class="icon-btn" aria-label="Состояние синхронизации">↻</button>
     </header>
 
     <main class="content">
       <section id="view-dashboard" class="view active">
         <div class="hero-card">
           <div>
-            <div class="eyebrow">Продажи сегодня</div>
-            <div id="today-revenue" class="hero-number">0 ₸</div>
-            <div id="today-orders" class="hero-note">0 заказов</div>
+            <div class="eyebrow">Остаток на складе</div>
+            <div id="stock-units-hero" class="hero-number">0 ед.</div>
+            <div id="stock-value-hero" class="hero-note">0 ₸ по себестоимости</div>
           </div>
           <div class="pulse-dot"></div>
         </div>
 
         <div class="metric-grid">
-          <article class="metric"><span>Новые</span><b id="metric-new">0</b></article>
-          <article class="metric"><span>В работе</span><b id="metric-active">0</b></article>
+          <article class="metric"><span>Стоимость склада</span><b id="metric-stock-value">0 ₸</b></article>
+          <article class="metric"><span>Продажи сегодня</span><b id="metric-sales">0 ₸</b></article>
           <article class="metric"><span>Низкий остаток</span><b id="metric-low">0</b></article>
-          <article class="metric"><span>Всего сегодня</span><b id="metric-today">0</b></article>
+          <article class="metric"><span>Движений сегодня</span><b id="metric-movements">0</b></article>
         </div>
 
         <div class="section-head"><h2>Быстрые действия</h2></div>
         <div class="quick-grid">
-          <button class="quick pink" data-nav="sale"><span>＋</span><b>Новая продажа</b><small>Оформить за минуту</small></button>
-          <button class="quick blue" data-nav="orders"><span>≡</span><b>Заказы</b><small>Статусы и клиенты</small></button>
-          <button class="quick green" data-nav="stock"><span>▦</span><b>Остатки</b><small>Склад продукции</small></button>
+          <button class="quick pink" data-nav="sale"><span>＋</span><b>Зафиксировать продажу</b><small>Списать товар со склада</small></button>
+          <button class="quick green" data-nav="stock"><span>▦</span><b>Актуальные остатки</b><small>Поступления и корректировки</small></button>
+          <button class="quick blue" data-nav="sales"><span>≡</span><b>Продажи</b><small>История и возвраты</small></button>
         </div>
 
-        <div class="section-head"><h2>Последние заказы</h2><button class="link-btn" data-nav="orders">Все</button></div>
-        <div id="dashboard-orders" class="list"></div>
+        <div class="section-head"><h2>Последние продажи</h2><button class="link-btn" data-nav="sales">Все</button></div>
+        <div id="dashboard-sales" class="list"></div>
       </section>
 
-      <section id="view-orders" class="view">
-        <div class="section-head sticky-head"><h1>Заказы</h1><button class="btn small primary" data-nav="sale">＋ Новый</button></div>
-        <div class="chips" id="order-filters">
-          <button class="chip active" data-status="all">Все</button>
-          <button class="chip" data-status="new">Новые</button>
-          <button class="chip" data-status="confirmed">Подтверждены</button>
-          <button class="chip" data-status="shipped">Отправлены</button>
-          <button class="chip" data-status="done">Готово</button>
-        </div>
-        <div id="orders-list" class="list"></div>
+      <section id="view-sales" class="view">
+        <div class="section-head sticky-head"><h1>Продажи</h1><button class="btn small primary" data-nav="sale">＋ Продажа</button></div>
+        <div id="sales-summary" class="panel mini-summary"></div>
+        <div id="sales-list" class="list"></div>
       </section>
 
       <section id="view-sale" class="view">
         <div class="section-head"><h1>Новая продажа</h1></div>
         <form id="sale-form" class="panel form-stack">
-          <div class="form-grid two">
-            <label>Клиент<input id="sale-customer" required placeholder="Имя или компания"></label>
-            <label>Телефон<input id="sale-phone" inputmode="tel" required placeholder="+7 7__ ___ __ __"></label>
-          </div>
-          <label>Город<input id="sale-city" placeholder="Астана"></label>
           <div class="section-label">Товары</div>
           <div id="sale-products" class="sale-products"></div>
-          <label>Комментарий<textarea id="sale-notes" rows="3" placeholder="Цвета, доставка, пожелания"></textarea></label>
-          <div class="sale-total"><span>Итого</span><b id="sale-total">0 ₸</b></div>
-          <button class="btn primary full" type="submit">Создать заказ и списать товар</button>
+          <label>Комментарий<textarea id="sale-notes" rows="3" maxlength="300" placeholder="Необязательно: канал продажи, цвет, примечание"></textarea></label>
+          <div class="sale-total"><span>Сумма продажи</span><b id="sale-total">0 ₸</b></div>
+          <button class="btn primary full" type="submit">Записать продажу и списать товар</button>
           <p id="sale-error" class="error"></p>
         </form>
       </section>
 
       <section id="view-stock" class="view">
-        <div class="section-head"><h1>Склад</h1><span id="stock-total" class="muted"></span></div>
+        <div class="section-head"><h1>Склад</h1><span id="stock-total" class="muted">0 ед.</span></div>
+        <div class="panel stock-summary">
+          <div><span>Товаров</span><b id="stock-sku-count">0</b></div>
+          <div><span>Единиц</span><b id="stock-units">0</b></div>
+          <div><span>Себестоимость</span><b id="stock-value">0 ₸</b></div>
+        </div>
         <div id="stock-list" class="stock-list"></div>
+
+        <div class="section-head"><h2>Журнал движения</h2><span class="muted">последние 100</span></div>
+        <div id="movement-list" class="list"></div>
       </section>
 
       <section id="view-settings" class="view">
@@ -124,30 +109,43 @@
         <div class="panel settings-panel">
           <div class="settings-row"><span>Пользователь</span><b id="settings-email">—</b></div>
           <div class="settings-row"><span>Firebase project</span><b id="settings-project">—</b></div>
-          <div class="settings-row"><span>Режим</span><b>Внутренний</b></div>
+          <div class="settings-row"><span>Режим</span><b>Склад и продажи</b></div>
         </div>
         <div class="panel">
-          <h3>Установка на телефон</h3>
-          <p class="muted">Откройте эту страницу в Chrome → меню браузера → «Установить приложение» или «Добавить на главный экран».</p>
+          <h3>Как вносить остатки</h3>
+          <p class="muted">В разделе «Склад» нажмите «Задать остаток» у товара и введите фактическое количество. Разница автоматически попадёт в журнал движения.</p>
         </div>
-        <button id="logout" class="btn full">Выйти</button>
-        <button id="reset-config" class="btn danger full">Сбросить Firebase на этом устройстве</button>
+        <button id="reset-password" class="btn full">Отправить письмо для смены пароля</button>
+        <button id="logout" class="btn danger full">Выйти</button>
       </section>
     </main>
 
     <nav class="bottom-nav" aria-label="Навигация">
       <button class="nav-btn active" data-nav="dashboard"><span>⌂</span><small>Обзор</small></button>
-      <button class="nav-btn" data-nav="orders"><span>≡</span><small>Заказы</small></button>
+      <button class="nav-btn" data-nav="sales"><span>≡</span><small>Продажи</small></button>
       <button class="nav-btn sale-nav" data-nav="sale"><span>＋</span><small>Продажа</small></button>
       <button class="nav-btn" data-nav="stock"><span>▦</span><small>Склад</small></button>
       <button class="nav-btn" data-nav="settings"><span>⚙</span><small>Ещё</small></button>
     </nav>
   </div>
 
+  <dialog id="stock-dialog" class="stock-dialog">
+    <form id="stock-operation-form" method="dialog" class="stock-dialog-card">
+      <div class="dialog-head">
+        <div><div id="stock-dialog-eyebrow" class="eyebrow">Складская операция</div><h2 id="stock-dialog-title">Товар</h2></div>
+        <button id="stock-dialog-close" class="dialog-close" type="button" aria-label="Закрыть">×</button>
+      </div>
+      <div id="stock-current" class="dialog-current"></div>
+      <label id="stock-qty-label">Количество<input id="stock-operation-qty" type="number" min="0" step="1" inputmode="numeric" required></label>
+      <label id="stock-cost-row">Закупочная цена за единицу, ₸<input id="stock-operation-cost" type="number" min="0" step="1" inputmode="numeric"></label>
+      <label>Комментарий<textarea id="stock-operation-reason" rows="3" maxlength="300" placeholder="Необязательно"></textarea></label>
+      <button id="stock-operation-submit" class="btn primary full" type="submit">Сохранить</button>
+      <p id="stock-operation-error" class="error"></p>
+    </form>
+  </dialog>
+
   <div id="toast" class="toast"></div>
   <script src="./firebase-config.js"></script>
-  <script src="./auth-config-fix.js"></script>
   <script type="module" src="./app.js"></script>
-  <script type="module" src="./auth-tools.js"></script>
 </body>
 </html>
