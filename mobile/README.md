@@ -30,6 +30,8 @@ Firebase Web Config не является серверным секретом. �
 
 В Firebase Console включите **Authentication → Sign-in method → Email/Password**.
 
+В **Authentication → Settings → Authorized domains** добавьте `conductor.kz`, если домена там ещё нет. Без этого Firebase Authentication может отклонять вход с рабочего приложения на пользовательском домене.
+
 Публичной регистрации в приложении нет. Учётные записи сотрудников создаются администратором проекта Firebase.
 
 ## Firestore
