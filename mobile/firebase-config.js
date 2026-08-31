@@ -10,10 +10,12 @@ window.CONDUCTOR_FIREBASE_CONFIG = {
   appId: "1:249591037242:web:e534b60202dca9245ee403"
 };
 
-// Keep website-lead UI isolated to the internal mobile workspace.
+// Keep internal modules isolated to the mobile workspace.
 if (location.pathname.startsWith("/mobile/")) {
-  const script = document.createElement("script");
-  script.type = "module";
-  script.src = "./leads.js";
-  document.head.append(script);
+  for (const src of ["./leads.js", "./lead-to-sale.js"]) {
+    const script = document.createElement("script");
+    script.type = "module";
+    script.src = src;
+    document.head.append(script);
+  }
 }
