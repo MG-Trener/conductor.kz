@@ -1,17 +1,11 @@
-import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
+import { getApps } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import { getFirestore, collection, query, orderBy, limit, onSnapshot, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
-const LOCAL_CONFIG_KEY = "conductor.firebaseConfig";
 const PRODUCT_LABELS = { DM30: "Цветной дым DM30", DM60: "Цветной дым DM60", DM90: "Цветной дым DM90", HOLI: "Краски Холи" };
 let leads = [];
 let unsubscribe = null;
-
-function config() {
-  const embedded = window.CONDUCTOR_FIREBASE_CONFIG;
-  if (embedded?.apiKey && embedded?.projectId && embedded?.appId) return embedded;
-  try { return JSON.parse(localStorage.getItem(LOCAL_CONFIG_KEY) || "null"); } catch { return null; }
-}
+let started = false;
 
 function escapeHtml(value = "") {
   return String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
@@ -49,7 +43,7 @@ function ensureUi() {
 function leadCard(lead) {
   const product = PRODUCT_LABELS[lead.productId] || lead.productId;
   const date = dateOf(lead);
-  const statusClass = lead.status === "new" ? "new" : lead.status === "contacted" ? "confirmed" : lead.status === "converted" ? "done" : "done";
+  const statusClass = lead.status === "new" ? "new" : lead.status === "contacted" ? "confirmed" : "done";
   const workflowAction = lead.status === "new"
     ? `<button data-lead-action="contacted" data-lead-id="${lead.id}">В работу</button>`
     : lead.status === "contacted"
@@ -131,9 +125,13 @@ function render(db) {
 }
 
 function start() {
-  const cfg = config();
-  if (!cfg?.apiKey || !cfg?.projectId || !cfg?.appId) return;
-  const app = getApps()[0] || initializeApp(cfg);
+  if (started) return;
+  const app = getApps()[0];
+  if (!app) {
+    setTimeout(start, 100);
+    return;
+  }
+  started = true;
   const auth = getAuth(app);
   const db = getFirestore(app);
   onAuthStateChanged(auth, (user) => {
