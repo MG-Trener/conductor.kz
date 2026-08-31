@@ -1,12 +1,12 @@
-const CACHE = "conductor-mobile-v12";
+const CACHE = "conductor-mobile-v13";
 const APP_SHELL = [
   "./",
   "./index.html",
-  "./styles.css?v=12",
-  "./warehouse.css?v=12",
-  "./app.js?v=12",
-  "./firebase-config.js?v=12",
-  "./manifest.webmanifest?v=12",
+  "./styles.css?v=13",
+  "./warehouse.css?v=13",
+  "./app.js?v=13",
+  "./firebase-config.js?v=13",
+  "./manifest.webmanifest?v=13",
   "./icon.svg"
 ];
 
@@ -33,7 +33,6 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // HTML is network-first so an old installed PWA does not keep serving an old app shell.
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request)
@@ -46,7 +45,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Static local assets open immediately from cache and refresh in the background.
   event.respondWith(
     caches.match(request).then((cached) => {
       const network = fetch(request)
