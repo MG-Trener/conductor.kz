@@ -1,5 +1,5 @@
-const CACHE = "conductor-mobile-v7";
-const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./leads.js", "./lead-to-sale.js", "./customers.js", "./auth-config-fix.js", "./auth-tools.js", "./firebase-config.js", "./manifest.webmanifest", "./icon.svg"];
+const CACHE = "conductor-mobile-v8";
+const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./leads.js", "./lead-to-sale.js", "./customers.js", "./inventory.js", "./auth-config-fix.js", "./auth-tools.js", "./firebase-config.js", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
