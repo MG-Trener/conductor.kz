@@ -13,11 +13,11 @@
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js" crossorigin>
-  <link rel="modulepreload" href="./app.js?v=20">
+  <link rel="modulepreload" href="./app.js?v=21">
   <link rel="manifest" href="./manifest.webmanifest?v=15">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css?v=15">
-  <link rel="stylesheet" href="./warehouse.css?v=18">
+  <link rel="stylesheet" href="./warehouse.css?v=19">
 </head>
 <body>
   <div id="boot" class="boot">
@@ -60,20 +60,9 @@
 
     <main class="content">
       <section id="view-dashboard" class="view active">
-        <div class="hero-card">
-          <div>
-            <div class="eyebrow">Остаток на складе</div>
-            <div id="stock-units-hero" class="hero-number">0 ед.</div>
-            <div id="stock-value-hero" class="hero-note">Потенциальная стоимость товаров</div>
-          </div>
-          <div class="pulse-dot"></div>
-        </div>
-
         <div class="metric-grid">
           <article class="metric"><span>Стоимость склада</span><b id="metric-stock-value">0 ₸</b></article>
           <article class="metric"><span>Продажи сегодня</span><b id="metric-sales">0 ₸</b></article>
-          <article class="metric"><span>Низкий остаток</span><b id="metric-low">0</b></article>
-          <article class="metric"><span>Движений сегодня</span><b id="metric-movements">0</b></article>
         </div>
 
         <div class="section-head"><h2>Картина склада</h2><button class="link-btn" data-nav="stock">Открыть склад</button></div>
@@ -112,10 +101,9 @@
       </section>
 
       <section id="view-stock" class="view">
-        <div class="section-head"><h1>Склад</h1><span id="stock-total" class="muted">0 ед.</span></div>
+        <div class="section-head"><h1>Склад</h1></div>
         <div class="panel stock-summary">
           <div><span>Моделей</span><b id="stock-sku-count">0</b></div>
-          <div><span>Единиц</span><b id="stock-units">0</b></div>
           <div><span>Потенциальная стоимость</span><b id="stock-value">0 ₸</b></div>
         </div>
         <div id="stock-list" class="stock-list"></div>
@@ -183,13 +171,12 @@
     window.setTimeout(() => {
       const boot = document.getElementById("boot");
       if (!boot || boot.classList.contains("hide")) return;
-      document.getElementById("login")?.classList.remove("hidden");
-      boot.classList.add("hide");
-      window.setTimeout(() => boot.remove(), 280);
-    }, 1000);
+      const status = boot.querySelector(".boot-sub");
+      if (status) status.textContent = "Подключаем данные…";
+    }, 2500);
   </script>
   <script src="./firebase-config.js?v=21"></script>
-  <script type="module" src="./app.js?v=20"></script>
+  <script type="module" src="./app.js?v=21"></script>
   <script type="module" src="./firestore-error-help.js?v=16"></script>
 </body>
 </html>

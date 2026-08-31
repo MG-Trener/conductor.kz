@@ -283,34 +283,47 @@ function stopRealtime() {
   state.unsubs = [];
 }
 
-function startRealtime() {
+function startRealtime(onInitialData) {
   stopRealtime();
+  const initialCollections = new Set(["catalog", "products", "orders", "movements"]);
+  let initialDataDelivered = false;
+  const markInitialCollection = (name) => {
+    initialCollections.delete(name);
+    if (!initialCollections.size && !initialDataDelivered) {
+      initialDataDelivered = true;
+      onInitialData?.();
+    }
+  };
   state.unsubs.push(onSnapshot(collection(state.db, "catalog"), (snap) => {
     state.catalog = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
     renderProducts();
     renderStock();
     renderDashboard();
     if ($("#model-dialog")?.open && state.modelDialogId) renderModelDialog(state.modelDialogId);
-  }, (error) => toast(`Каталог: ${error.message}`)));
+    markInitialCollection("catalog");
+  }, (error) => { toast(`Каталог: ${error.message}`); markInitialCollection("catalog"); }));
   state.unsubs.push(onSnapshot(query(collection(state.db, "products"), orderBy("sort")), (snap) => {
     state.products = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
     renderProducts();
     renderStock();
     renderDashboard();
     if ($("#model-dialog")?.open && state.modelDialogId) renderModelDialog(state.modelDialogId);
-  }, (error) => toast(`Склад: ${error.message}`)));
+    markInitialCollection("products");
+  }, (error) => { toast(`Склад: ${error.message}`); markInitialCollection("products"); }));
 
   state.unsubs.push(onSnapshot(query(collection(state.db, "orders"), orderBy("createdAt", "desc"), limit(100)), (snap) => {
     state.sales = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
     renderSales();
     renderDashboard();
-  }, (error) => toast(`Продажи: ${error.message}`)));
+    markInitialCollection("orders");
+  }, (error) => { toast(`Продажи: ${error.message}`); markInitialCollection("orders"); }));
 
   state.unsubs.push(onSnapshot(query(collection(state.db, "stockMovements"), orderBy("createdAt", "desc"), limit(100)), (snap) => {
     state.movements = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
     renderMovements();
     renderDashboard();
-  }, (error) => toast(`Журнал: ${error.message}`)));
+    markInitialCollection("movements");
+  }, (error) => { toast(`Журнал: ${error.message}`); markInitialCollection("movements"); }));
 }
 
 function modelTotal(modelId) {
@@ -325,9 +338,8 @@ function renderInventoryOverview() {
   root.innerHTML = MODELS.map((model) => {
     const variants = modelVariants(model.id);
     const unassigned = unassignedForModel(model.id);
-    const total = modelTotal(model.id);
     return `<article class="inventory-overview-card">
-      <div class="overview-model-head"><div><b>${escapeHtml(model.id)}</b><small>${escapeHtml(model.name)}</small></div><strong>${total}</strong></div>
+      <div class="overview-model-head"><div><b>${escapeHtml(model.id)}</b><small>${escapeHtml(model.name)}</small></div></div>
       <div class="overview-colors">
         ${variants.map((item) => `<div class="overview-color"><span>${colorDot(item)}${escapeHtml(item.colorName)}</span><b class="${Number(item.stock || 0) <= Number(item.lowStock || 0) ? "low" : ""}">${Number(item.stock || 0)}</b></div>`).join("")}
         ${unassigned ? `<div class="overview-color warning"><span>⚠ Нераспределено</span><b>${Number(unassigned.stock || 0)}</b></div>` : ""}
@@ -337,19 +349,12 @@ function renderInventoryOverview() {
 }
 
 function renderDashboard() {
-  const units = totalUnits();
   const value = stockValue();
   const todaySales = state.sales.filter((sale) => sale.status !== "cancelled" && isToday(dateOf(sale)));
   const todayRevenue = todaySales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
-  const low = state.products.filter((item) => item.active !== false && !item.legacyUnassigned && !item.modelOnly && Number(item.stock || 0) <= Number(item.lowStock || 0));
-  const movementsToday = state.movements.filter((movement) => isToday(dateOf(movement)));
 
-  $("#stock-units-hero").textContent = `${units} ед.`;
-  $("#stock-value-hero").textContent = `${KZT.format(value)} по текущим ценам`;
   $("#metric-stock-value").textContent = KZT.format(value);
   $("#metric-sales").textContent = KZT.format(todayRevenue);
-  $("#metric-low").textContent = String(low.length);
-  $("#metric-movements").textContent = String(movementsToday.length);
   renderInventoryOverview();
 
   const recent = state.sales.slice(0, 4);
@@ -652,17 +657,13 @@ function compactColorSummary(modelId) {
 }
 
 function renderStock() {
-  const units = totalUnits();
   const value = stockValue();
-  $("#stock-total").textContent = `${units} ед.`;
   $("#stock-sku-count").textContent = String(MODELS.length);
-  $("#stock-units").textContent = String(units);
   $("#stock-value").textContent = KZT.format(value);
 
   $("#stock-list").innerHTML = MODELS.map((model) => `<article class="stock-card stock-model-card">
     <div class="stock-main">
       <div class="stock-name"><b>${escapeHtml(model.name)}</b><small>${model.variants.length} цветов · цена ${KZT.format(modelSalePrice(model.id))}</small></div>
-      <div class="stock-count">${modelTotal(model.id)}</div>
     </div>
     ${compactColorSummary(model.id)}
     <button class="btn full model-balance-btn" data-open-model="${model.id}">Цвета и актуальные остатки</button>
@@ -921,30 +922,36 @@ async function boot() {
       if (!user) {
         stopRealtime();
         showOnly("#login");
+        hideBoot();
         return;
       }
       if (!isAllowedStaffEmail(user.email || "")) {
         stopRealtime();
         showOnly("#login");
         $("#login-error").textContent = "У этой учётной записи нет доступа к складу.";
+        hideBoot();
         signOut(state.auth);
         return;
       }
       const employee = currentEmployeeName();
-      showOnly("#app");
       $("#current-user-name").textContent = employee;
       $("#current-user-email").textContent = user.email || "";
       $("#settings-name").textContent = employee;
       $("#settings-email").textContent = user.email || user.uid;
       $("#settings-project").textContent = cfg.projectId;
-      startRealtime();
-      navigate("dashboard");
+      startRealtime(() => {
+        if (state.user !== user) return;
+        showOnly("#app");
+        navigate("dashboard");
+        hideBoot();
+      });
       ensureProducts().catch((error) => toast(`Товары: ${error.message}`));
     });
   } catch (error) {
     showOnly("#login");
     $("#login-error").textContent = `Firebase: ${error.message}`;
-  } finally { hideBoot(); }
+    hideBoot();
+  }
 }
 
 boot();

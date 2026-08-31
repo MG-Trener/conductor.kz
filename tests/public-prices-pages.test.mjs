@@ -52,9 +52,9 @@ test("the warehouse model card renders the saved Firestore price", async () => {
   assert.match(app, /Number\(item\.stock \|\| 0\) \* modelSalePrice/);
   assert.doesNotMatch(app, /stockValue\(\).*avgCost/);
   assert.match(html, /Потенциальная стоимость/);
-  assert.match(html, /app\.js\?v=20/);
-  assert.match(worker, /conductor-mobile-v29/);
-  assert.match(worker, /app\.js\?v=20/);
+  assert.match(html, /app\.js\?v=21/);
+  assert.match(worker, /conductor-mobile-v30/);
+  assert.match(worker, /app\.js\?v=21/);
 });
 
 test("Firestore is initialized once before any asynchronous auth setup", async () => {
@@ -120,7 +120,22 @@ test("the warehouse header has one logout button wired to Firebase sign-out", as
   assert.match(html, /<button id="logout" class="site-btn logout-btn"[^>]*>Выйти<\/button>/);
   assert.equal((html.match(/id="logout"/g) || []).length, 1);
   assert.match(app, /\$\("#logout"\)\.addEventListener\("click", \(\) => signOut\(state\.auth\)\)/);
-  assert.match(worker, /warehouse\.css\?v=18/);
+  assert.match(worker, /warehouse\.css\?v=19/);
+});
+
+test("warehouse stays behind the boot screen until initial live data is ready", async () => {
+  const [app, html] = await Promise.all([
+    readFile(mobileApp, "utf8"),
+    readFile(mobileHtml, "utf8")
+  ]);
+
+  assert.match(app, /const initialCollections = new Set\(\["catalog", "products", "orders", "movements"\]\)/);
+  assert.match(app, /if \(!initialCollections\.size && !initialDataDelivered\)/);
+  assert.match(app, /initialDataDelivered = true/);
+  assert.match(app, /startRealtime\(\(\) => \{/);
+  assert.doesNotMatch(app, /finally \{ hideBoot\(\); \}/);
+  assert.doesNotMatch(html, /document\.getElementById\("login"\)\?\.classList\.remove\("hidden"\)/);
+  assert.doesNotMatch(html, /id="stock-units-hero"|id="metric-low"|id="metric-movements"|id="stock-total"|id="stock-units"/);
 });
 
 test("new sale groups variants by model and keeps the selected total visible", async () => {
