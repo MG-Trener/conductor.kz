@@ -1,24 +1,156 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function signedIn() {
-      return request.auth != null;
+    // Employee accounts are provisioned in Firebase Authentication. The app has
+    // no public sign-up, and anonymous/non-email identities are not warehouse users.
+    function isStaff() {
+      return request.auth != null
+        && request.auth.token.keys().hasAll(['email'])
+        && request.auth.token.email is string;
+    }
+
+    function isModel(modelId) {
+      return modelId in ['DM30', 'DM60', 'DM90', 'HOLI'];
+    }
+
+    function validProductId(productId) {
+      return productId.matches('^(DM30|DM60|DM90|HOLI)_[A-Z0-9]+$');
+    }
+
+    function validProductState(data, productId) {
+      return data.keys().hasAll(['name', 'price', 'stock'])
+        && isModel(data.get('modelId', productId))
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
+        && data.price is number
+        && data.price > 0
+        && data.stock is int
+        && data.stock >= 0
+        && data.get('avgCost', 0) is number
+        && data.get('avgCost', 0) >= 0
+        && data.get('lastCost', 0) is number
+        && data.get('lastCost', 0) >= 0;
+    }
+
+    function validProductAuthor(data) {
+      return data.updatedBy == request.auth.uid
+        && data.updatedAt == request.time
+        && data.updatedByName is string
+        && data.updatedByName.size() <= 80;
     }
 
     match /products/{productId} {
-      allow read, write: if signedIn();
+      allow read: if isStaff();
+
+      // The client only seeds the fixed colour-variant catalogue.
+      allow create: if isStaff()
+        && validProductId(productId)
+        && validProductState(request.resource.data, productId)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && validProductAuthor(request.resource.data)
+        && request.resource.data.keys().hasOnly([
+          'id', 'modelId', 'colorId', 'colorName', 'colorHex', 'name',
+          'price', 'stock', 'lowStock', 'sort', 'active', 'avgCost',
+          'lastCost', 'legacyUnassigned', 'createdAt', 'createdBy',
+          'createdByName', 'updatedAt', 'updatedBy', 'updatedByName'
+        ]);
+
+      // Inventory operations can alter balances, cost, model sale price and
+      // their audit markers, but cannot rewrite catalogue identity fields.
+      allow update: if isStaff()
+        && validProductState(request.resource.data, productId)
+        && validProductAuthor(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'stock', 'price', 'avgCost', 'lastCost', 'active', 'modelOnly',
+          'variantMigrationV2', 'stockInitialized', 'inventoryInitialized',
+          'lastInventoryAt', 'lastInventoryBy', 'lastInventoryByName',
+          'priceUpdatedAt', 'priceUpdatedBy', 'priceUpdatedByName',
+          'updatedAt', 'updatedBy', 'updatedByName'
+        ])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'price', 'priceUpdatedAt', 'priceUpdatedBy', 'priceUpdatedByName'
+        ])
+          || (request.resource.data.priceUpdatedAt == request.time
+            && request.resource.data.priceUpdatedBy == request.auth.uid))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny([
+          'stockInitialized', 'inventoryInitialized', 'lastInventoryAt',
+          'lastInventoryBy', 'lastInventoryByName'
+        ])
+          || (request.resource.data.lastInventoryAt == request.time
+            && request.resource.data.lastInventoryBy == request.auth.uid));
+
+      allow delete: if false;
     }
 
     match /orders/{orderId} {
-      allow read, write: if signedIn();
+      allow read: if isStaff();
+      allow create: if isStaff()
+        && request.resource.data.source == 'stock-app'
+        && request.resource.data.status == 'done'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update: if isStaff()
+        && resource.data.status == 'done'
+        && request.resource.data.status == 'cancelled'
+        && request.resource.data.cancelledBy == request.auth.uid
+        && request.resource.data.cancelledAt == request.time
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'cancelledAt', 'cancelledBy', 'cancelledByEmail',
+          'cancelledByName'
+        ]);
+      allow delete: if false;
+    }
+
+    function validMovement(data) {
+      return data.keys().hasAll([
+          'type', 'inventoryId', 'productId', 'productName', 'qtyDelta',
+          'before', 'after', 'unitCost', 'totalCost', 'reason', 'createdAt',
+          'createdAtClient', 'createdBy', 'createdByEmail', 'createdByName'
+        ])
+        && data.keys().hasOnly([
+          'type', 'inventoryId', 'productId', 'productName', 'colorId',
+          'colorName', 'qtyDelta', 'before', 'after', 'unitCost',
+          'totalCost', 'salePrice', 'orderId', 'reason', 'createdAt',
+          'createdAtClient', 'createdBy', 'createdByEmail', 'createdByName'
+        ])
+        && data.type in ['receipt', 'writeoff', 'adjustment', 'sale', 'sale_return']
+        && data.inventoryId is string
+        && validProductId(data.inventoryId)
+        && isModel(data.productId)
+        && data.productName is string
+        && data.productName.size() > 0
+        && data.productName.size() <= 120
+        && data.qtyDelta is int
+        && data.qtyDelta != 0
+        && data.before is int
+        && data.before >= 0
+        && data.after is int
+        && data.after >= 0
+        && data.after == data.before + data.qtyDelta
+        && data.unitCost is number
+        && data.unitCost >= 0
+        && data.totalCost is number
+        && data.totalCost >= 0
+        && data.reason is string
+        && data.reason.size() <= 300
+        && data.createdAtClient is string
+        && data.createdBy == request.auth.uid
+        && data.createdByEmail == request.auth.token.email
+        && data.createdByName is string
+        && data.createdByName.size() <= 80
+        && data.createdAt == request.time
+        && getAfter(/databases/$(database)/documents/products/$(data.inventoryId)).data.stock == data.after;
     }
 
     match /stockMovements/{movementId} {
-      allow read, create: if signedIn();
+      allow read: if isStaff();
+      allow create: if isStaff() && validMovement(request.resource.data);
       allow update, delete: if false;
     }
 
-    // Obsolete CRM data is completely closed. The mobile app no longer uses leads.
+    // Obsolete CRM data and every unlisted path remain completely closed.
     match /leads/{leadId} {
       allow read, write: if false;
     }

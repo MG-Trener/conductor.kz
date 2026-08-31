@@ -178,6 +178,12 @@ function colorDot(product) { return product.colorHex ? `<span class="color-dot" 
 async function migrateLegacyModel(model) {
   const legacyRef = doc(state.db, "products", model.id);
   const unassignedRef = doc(state.db, "products", `${model.id}_UNASSIGNED`);
+  const employee = currentEmployeeName();
+  const audit = {
+    updatedAt: serverTimestamp(),
+    updatedBy: state.user.uid,
+    updatedByName: employee
+  };
 
   await runTransaction(state.db, async (tx) => {
     const legacySnap = await tx.get(legacyRef);
@@ -191,6 +197,11 @@ async function migrateLegacyModel(model) {
     const legacyCost = Number(legacy?.avgCost || legacy?.lastCost || 0);
     const currentCost = Number(unassigned?.avgCost || unassigned?.lastCost || 0);
     const nextStock = currentStock + legacyStock;
+    const creationAudit = unassignedSnap.exists() ? {} : {
+      createdAt: serverTimestamp(),
+      createdBy: state.user.uid,
+      createdByName: employee
+    };
     const nextAvg = nextStock > 0
       ? ((currentStock * currentCost) + (legacyStock * legacyCost)) / nextStock
       : (currentCost || legacyCost || 0);
@@ -207,7 +218,8 @@ async function migrateLegacyModel(model) {
         lastCost: Number(legacy?.lastCost || unassigned?.lastCost || 0),
         legacyUnassigned: true,
         active: nextStock > 0,
-        updatedAt: serverTimestamp()
+        ...creationAudit,
+        ...audit
       }, { merge: true });
     }
 
@@ -217,7 +229,7 @@ async function migrateLegacyModel(model) {
         stock: 0,
         modelOnly: true,
         variantMigrationV2: true,
-        updatedAt: serverTimestamp()
+        ...audit
       }, { merge: true });
     }
   });
@@ -226,13 +238,18 @@ async function migrateLegacyModel(model) {
 async function ensureProducts() {
   const snap = await getDocs(collection(state.db, "products"));
   const existing = new Set(snap.docs.map((item) => item.id));
+  const employee = currentEmployeeName();
   await Promise.all(defaults.filter((item) => !existing.has(item.id)).map((item) => setDoc(doc(state.db, "products", item.id), {
     ...item,
     active: true,
     avgCost: 0,
     lastCost: 0,
     createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp()
+    createdBy: state.user.uid,
+    createdByName: employee,
+    updatedAt: serverTimestamp(),
+    updatedBy: state.user.uid,
+    updatedByName: employee
   })));
   for (const model of MODELS) await migrateLegacyModel(model);
 }

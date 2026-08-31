@@ -185,7 +185,7 @@ function ensureModelPriceField() {
 
 function friendlyError(error) {
   if (error?.code === "permission-denied" || String(error?.message || "").toLowerCase().includes("permission")) {
-    return "Firebase запретил сохранение. Опубликуйте актуальные Firestore Rules из репозитория.";
+    return "Firebase отклонил сохранение: у аккаунта нет доступа или на сервере не опубликованы актуальные Firestore Rules.";
   }
   return error?.message || "Не удалось сохранить изменения.";
 }
@@ -222,6 +222,13 @@ async function saveModelInventory(event) {
     stock: Math.trunc(Number(input.value))
   })).filter((item) => item.raw !== "" && Number.isFinite(item.stock) && item.stock >= 0);
 
+  const invalidStock = [...document.querySelectorAll("#model-variant-list [data-model-balance]")]
+    .some((input) => input.value.trim() !== "" && (!Number.isInteger(Number(input.value)) || Number(input.value) < 0));
+  if (invalidStock) {
+    if (errorNode) errorNode.textContent = "Остаток должен быть целым числом не меньше нуля.";
+    return;
+  }
+
   const byId = new Map(products.map((item) => [item.id, item]));
   const variants = modelProducts(modelId);
   const initialized = initializedInventoryIds();
@@ -243,7 +250,7 @@ async function saveModelInventory(event) {
     const enteredMap = new Map(entered.map((item) => [item.id, item]));
     const refIds = [...new Set([...variants.map((item) => item.id), ...entered.map((item) => item.id)])];
     const refs = refIds.map((id) => doc(db, "products", id));
-    const movementRefs = new Map(entered.map((item) => [item.id, doc(collection(db, "stockMovements"))]));
+    const movementRefs = new Map(stockChanged.map((item) => [item.id, doc(collection(db, "stockMovements"))]));
 
     await runTransaction(db, async (tx) => {
       const snaps = [];

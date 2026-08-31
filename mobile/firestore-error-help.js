@@ -5,7 +5,7 @@ const permissionPatterns = [
   /permission/i
 ];
 
-const friendly = "Firebase запретил запись. Обновите Firestore Rules из файла firestore.rules в Firebase Console → Firestore Database → Rules → Publish.";
+const friendly = "Firebase отклонил запись: у аккаунта нет доступа или на сервере не опубликованы актуальные Firestore Rules из репозитория.";
 
 function isPermissionError(text = "") {
   return permissionPatterns.some((pattern) => pattern.test(String(text)));
