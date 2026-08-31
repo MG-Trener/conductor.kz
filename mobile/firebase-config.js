@@ -13,7 +13,7 @@ if (location.pathname.startsWith("/mobile/")) {
 
   const inventoryState = document.createElement("script");
   inventoryState.type = "module";
-  inventoryState.src = "./inventory-state.js?v=16";
+  inventoryState.src = "./inventory-state.js?v=17";
   document.head.append(inventoryState);
 } else {
   window.CONDUCTOR_FIREBASE_CONFIG = null;
