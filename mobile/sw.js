@@ -1,4 +1,4 @@
-const CACHE = "conductor-mobile-v9";
+const CACHE = "conductor-mobile-v10";
 const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./leads.js", "./lead-to-sale.js", "./customers.js", "./inventory.js", "./order-inventory.js", "./auth-config-fix.js", "./auth-tools.js", "./firebase-config.js", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", (event) => {
