@@ -26,7 +26,7 @@ function selectedItems() {
 }
 
 async function createManualSale(event) {
-  if (event.defaultPrevented || processing) return;
+  if (window.CONDUCTOR_ACTIVE_LEAD_ID || event.defaultPrevented || processing) return;
   event.preventDefault();
   event.stopImmediatePropagation();
   processing = true;
@@ -186,7 +186,6 @@ async function cancelOrder(button) {
 
 function start() {
   const form = document.querySelector("#sale-form");
-  // lead-to-sale.js is loaded earlier and stops this handler when a site lead is active.
   form?.addEventListener("submit", createManualSale, true);
 
   document.addEventListener("click", (event) => {
