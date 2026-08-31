@@ -27,9 +27,15 @@ import {
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const KZT = new Intl.NumberFormat("ru-KZ", { style: "currency", currency: "KZT", maximumFractionDigits: 0 });
+const LEGACY_DM30 = "DM30";
+const UNASSIGNED_DM30 = "DM30_UNASSIGNED";
 
 const defaults = [
-  { id: "DM30", name: "Цветной дым DM30", price: 2500, stock: 0, lowStock: 10, sort: 10 },
+  { id: "DM30_BLUE", modelId: "DM30", colorId: "blue", colorName: "Синий", colorHex: "#258cff", name: "DM30 · Синий", price: 2500, stock: 0, lowStock: 2, sort: 11 },
+  { id: "DM30_YELLOW", modelId: "DM30", colorId: "yellow", colorName: "Жёлтый", colorHex: "#ffd42a", name: "DM30 · Жёлтый", price: 2500, stock: 0, lowStock: 2, sort: 12 },
+  { id: "DM30_RED", modelId: "DM30", colorId: "red", colorName: "Красный", colorHex: "#ff4545", name: "DM30 · Красный", price: 2500, stock: 0, lowStock: 2, sort: 13 },
+  { id: "DM30_PURPLE", modelId: "DM30", colorId: "purple", colorName: "Фиолетовый", colorHex: "#9b59ff", name: "DM30 · Фиолетовый", price: 2500, stock: 0, lowStock: 2, sort: 14 },
+  { id: "DM30_TURQUOISE", modelId: "DM30", colorId: "turquoise", colorName: "Бирюзовый", colorHex: "#27d3c3", name: "DM30 · Бирюзовый", price: 2500, stock: 0, lowStock: 2, sort: 15 },
   { id: "DM60", name: "Цветной дым DM60", price: 3000, stock: 0, lowStock: 10, sort: 20 },
   { id: "DM90", name: "Цветной дым DM90", price: 3500, stock: 0, lowStock: 10, sort: 30 },
   { id: "HOLI", name: "Краска Холи", price: 1000, stock: 0, lowStock: 50, sort: 40 }
@@ -67,7 +73,7 @@ function toast(message) {
 }
 
 function escapeHtml(value = "") {
-  return String(value).replace(/[&<>'"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
+  return String(value).replace(/[&<>'\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
 }
 
 function dateOf(item) {
@@ -99,6 +105,10 @@ function stockValue() {
   return activeProducts().reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.avgCost || product.lastCost || 0), 0);
 }
 
+function colorDot(product) {
+  return product.colorHex ? `<span class="color-dot" style="background:${escapeHtml(product.colorHex)}"></span>` : "";
+}
+
 function showOnly(selector) {
   ["#login", "#app"].forEach((id) => $(id).classList.add("hidden"));
   $(selector).classList.remove("hidden");
@@ -111,21 +121,67 @@ function hideBoot() {
   setTimeout(() => boot.remove(), 280);
 }
 
-async function ensureProducts() {
-  for (const product of defaults) {
-    const ref = doc(state.db, "products", product.id);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) {
-      await setDoc(ref, {
-        ...product,
-        active: true,
-        avgCost: 0,
-        lastCost: 0,
-        createdAt: serverTimestamp(),
+async function migrateLegacyDm30() {
+  const legacyRef = doc(state.db, "products", LEGACY_DM30);
+  const unassignedRef = doc(state.db, "products", UNASSIGNED_DM30);
+
+  await runTransaction(state.db, async (tx) => {
+    const legacySnap = await tx.get(legacyRef);
+    const unassignedSnap = await tx.get(unassignedRef);
+    const legacy = legacySnap.exists() ? legacySnap.data() : null;
+    const unassigned = unassignedSnap.exists() ? unassignedSnap.data() : null;
+    const legacyStock = Number(legacy?.stock || 0);
+    const currentUnassigned = Number(unassigned?.stock || 0);
+    const legacyCost = Number(legacy?.avgCost || legacy?.lastCost || 0);
+    const unassignedCost = Number(unassigned?.avgCost || unassigned?.lastCost || 0);
+    const nextUnassigned = currentUnassigned + legacyStock;
+    const nextAvg = nextUnassigned > 0
+      ? ((currentUnassigned * unassignedCost) + (legacyStock * legacyCost)) / nextUnassigned
+      : (unassignedCost || legacyCost || 0);
+
+    if (!unassignedSnap.exists() || legacyStock > 0) {
+      tx.set(unassignedRef, {
+        modelId: "DM30",
+        name: "DM30 · Нераспределено",
+        price: Number(legacy?.price || 2500),
+        stock: nextUnassigned,
+        lowStock: 0,
+        sort: 10,
+        avgCost: nextAvg,
+        lastCost: Number(legacy?.lastCost || unassigned?.lastCost || 0),
+        legacyUnassigned: true,
+        active: nextUnassigned > 0,
         updatedAt: serverTimestamp()
-      });
+      }, { merge: true });
     }
-  }
+
+    if (legacySnap.exists()) {
+      tx.set(legacyRef, {
+        active: false,
+        stock: 0,
+        modelOnly: true,
+        variantMigrationV1: true,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    }
+  });
+}
+
+async function ensureProducts() {
+  const refs = defaults.map((product) => doc(state.db, "products", product.id));
+  const snaps = await Promise.all(refs.map((ref) => getDoc(ref)));
+  await Promise.all(snaps.map((snap, index) => {
+    if (snap.exists()) return Promise.resolve();
+    return setDoc(refs[index], {
+      ...defaults[index],
+      active: true,
+      avgCost: 0,
+      lastCost: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+  }));
+  await migrateLegacyDm30();
 }
 
 function stopRealtime() {
@@ -161,7 +217,7 @@ function renderDashboard() {
   const value = stockValue();
   const todaySales = state.sales.filter((sale) => sale.status !== "cancelled" && isToday(dateOf(sale)));
   const todayRevenue = todaySales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
-  const low = activeProducts().filter((product) => Number(product.stock || 0) <= Number(product.lowStock || 0));
+  const low = activeProducts().filter((product) => !product.legacyUnassigned && Number(product.stock || 0) <= Number(product.lowStock || 0));
   const movementsToday = state.movements.filter((movement) => isToday(dateOf(movement)));
 
   $("#stock-units-hero").textContent = `${units} ед.`;
@@ -172,29 +228,26 @@ function renderDashboard() {
   $("#metric-movements").textContent = String(movementsToday.length);
 
   const recent = state.sales.slice(0, 4);
-  $("#dashboard-sales").innerHTML = recent.length
-    ? recent.map(saleCard).join("")
-    : `<div class="empty">Продаж пока нет.</div>`;
+  $("#dashboard-sales").innerHTML = recent.length ? recent.map(saleCard).join("") : `<div class="empty">Продаж пока нет.</div>`;
   bindSaleActions($("#dashboard-sales"));
 }
 
+function saleItemLabel(item) {
+  if (item.colorName) return `${escapeHtml(item.productId || "DM30")} · ${escapeHtml(item.colorName)}`;
+  return escapeHtml(item.name || item.productId || "Товар");
+}
+
 function saleCard(sale) {
-  const items = (sale.items || []).map((item) => `${escapeHtml(item.productId)} × ${Number(item.qty || 0)}`).join(" · ");
+  const items = (sale.items || []).map((item) => `${saleItemLabel(item)} × ${Number(item.qty || 0)}`).join(" · ");
   const cancelled = sale.status === "cancelled";
   const note = sale.note || sale.notes || "";
   return `<article class="order-card">
     <div class="order-top">
-      <div>
-        <div class="order-customer">Продажа #${escapeHtml(sale.id.slice(0, 8))}</div>
-        <div class="order-phone">${escapeHtml(sale.createdByEmail || "Сотрудник")}</div>
-      </div>
+      <div><div class="order-customer">Продажа #${escapeHtml(sale.id.slice(0, 8))}</div><div class="order-phone">${escapeHtml(sale.createdByEmail || "Сотрудник")}</div></div>
       <div class="order-total">${KZT.format(Number(sale.total || 0))}</div>
     </div>
     <div class="order-items">${items || "Без позиций"}${note ? `<br><span class="muted">${escapeHtml(note)}</span>` : ""}</div>
-    <div class="order-bottom">
-      <span class="status ${cancelled ? "cancelled" : "done"}">${cancelled ? "Отменена" : "Продажа"}</span>
-      <span class="order-meta">${formatDate(dateOf(sale))}</span>
-    </div>
+    <div class="order-bottom"><span class="status ${cancelled ? "cancelled" : "done"}">${cancelled ? "Отменена" : "Продажа"}</span><span class="order-meta">${formatDate(dateOf(sale))}</span></div>
     ${cancelled ? "" : `<div class="order-actions"><button data-cancel-sale="${sale.id}">Отменить и вернуть товар</button></div>`}
   </article>`;
 }
@@ -227,24 +280,35 @@ function bindSaleActions(root) {
 
 function renderProducts() {
   const products = activeProducts();
-  $("#sale-products").innerHTML = products.map((product) => `<div class="sale-product">
-    <div class="sale-product-name"><b>${escapeHtml(product.name)}</b><small>${KZT.format(Number(product.price || 0))} · остаток ${Number(product.stock || 0)}</small></div>
-    <div class="qty-control">
-      <button type="button" data-qty-minus="${product.id}">−</button>
-      <input type="number" min="0" max="${Number(product.stock || 0)}" value="0" inputmode="numeric" data-qty="${product.id}">
-      <button type="button" data-qty-plus="${product.id}">+</button>
-    </div>
-  </div>`).join("");
+  let html = "";
+  let dm30HeaderShown = false;
 
+  for (const product of products) {
+    if (product.modelId === "DM30" && !product.legacyUnassigned && !dm30HeaderShown) {
+      html += `<div class="variant-group-label"><b>DM30</b><span>выберите цвет</span></div>`;
+      dm30HeaderShown = true;
+    }
+    if (product.legacyUnassigned) continue;
+    html += `<div class="sale-product">
+      <div class="sale-product-name"><b>${colorDot(product)}${escapeHtml(product.name)}</b><small>${KZT.format(Number(product.price || 0))} · остаток ${Number(product.stock || 0)}</small></div>
+      <div class="qty-control">
+        <button type="button" data-qty-minus="${product.id}">−</button>
+        <input type="number" min="0" max="${Number(product.stock || 0)}" value="0" inputmode="numeric" data-qty="${product.id}">
+        <button type="button" data-qty-plus="${product.id}">+</button>
+      </div>
+    </div>`;
+  }
+
+  $("#sale-products").innerHTML = html;
   $$('[data-qty-minus]').forEach((button) => button.addEventListener("click", () => changeSaleQty(button.dataset.qtyMinus, -1)));
   $$('[data-qty-plus]').forEach((button) => button.addEventListener("click", () => changeSaleQty(button.dataset.qtyPlus, 1)));
   $$('[data-qty]').forEach((input) => input.addEventListener("input", updateSaleTotal));
   updateSaleTotal();
 }
 
-function changeSaleQty(productId, delta) {
-  const input = document.querySelector(`[data-qty="${CSS.escape(productId)}"]`);
-  const product = state.products.find((item) => item.id === productId);
+function changeSaleQty(inventoryId, delta) {
+  const input = document.querySelector(`[data-qty="${CSS.escape(inventoryId)}"]`);
+  const product = state.products.find((item) => item.id === inventoryId);
   if (!input || !product) return;
   const next = Math.max(0, Math.min(Number(product.stock || 0), Number(input.value || 0) + delta));
   input.value = String(next);
@@ -257,7 +321,16 @@ function selectedItems() {
     const qty = Number(input?.value || 0);
     if (qty <= 0) return null;
     const price = Number(product.price || 0);
-    return { productId: product.id, name: product.name, qty, price, lineTotal: qty * price };
+    return {
+      inventoryId: product.id,
+      productId: product.modelId || product.id,
+      name: product.name,
+      colorId: product.colorId || "",
+      colorName: product.colorName || "",
+      qty,
+      price,
+      lineTotal: qty * price
+    };
   }).filter(Boolean);
 }
 
@@ -282,7 +355,7 @@ async function createSale(event) {
   submit.disabled = true;
 
   try {
-    const productRefs = items.map((item) => doc(state.db, "products", item.productId));
+    const productRefs = items.map((item) => doc(state.db, "products", item.inventoryId));
     const movementRefs = items.map(() => doc(collection(state.db, "stockMovements")));
     const saleRef = doc(collection(state.db, "orders"));
 
@@ -291,9 +364,9 @@ async function createSale(event) {
       for (const ref of productRefs) snaps.push(await tx.get(ref));
 
       snaps.forEach((snap, index) => {
-        if (!snap.exists()) throw new Error(`${items[index].productId}: товар не найден`);
+        if (!snap.exists()) throw new Error(`${items[index].name}: товар не найден`);
         const stock = Number(snap.data().stock || 0);
-        if (stock < items[index].qty) throw new Error(`${items[index].productId}: на складе только ${stock}`);
+        if (stock < items[index].qty) throw new Error(`${items[index].name}: на складе только ${stock}`);
       });
 
       snaps.forEach((snap, index) => {
@@ -304,8 +377,11 @@ async function createSale(event) {
         tx.update(productRefs[index], { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid });
         tx.set(movementRefs[index], {
           type: "sale",
+          inventoryId: items[index].inventoryId,
           productId: items[index].productId,
           productName: items[index].name,
+          colorId: items[index].colorId,
+          colorName: items[index].colorName,
           qtyDelta: -items[index].qty,
           before,
           after,
@@ -346,6 +422,12 @@ async function createSale(event) {
   }
 }
 
+function inventoryIdForSaleItem(item) {
+  if (item.inventoryId) return item.inventoryId;
+  if (item.productId === LEGACY_DM30) return UNASSIGNED_DM30;
+  return item.productId;
+}
+
 async function cancelSale(saleId) {
   const saleRef = doc(state.db, "orders", saleId);
   await runTransaction(state.db, async (tx) => {
@@ -356,13 +438,14 @@ async function cancelSale(saleId) {
     const items = sale.items || [];
     if (!items.length) throw new Error("В продаже нет товарных позиций");
 
-    const productRefs = items.map((item) => doc(state.db, "products", item.productId));
+    const inventoryIds = items.map(inventoryIdForSaleItem);
+    const productRefs = inventoryIds.map((id) => doc(state.db, "products", id));
     const productSnaps = [];
     for (const ref of productRefs) productSnaps.push(await tx.get(ref));
     const movementRefs = items.map(() => doc(collection(state.db, "stockMovements")));
 
     productSnaps.forEach((snap, index) => {
-      if (!snap.exists()) throw new Error(`${items[index].productId}: товар не найден`);
+      if (!snap.exists()) throw new Error(`${items[index].name || items[index].productId}: товар не найден`);
     });
 
     productSnaps.forEach((snap, index) => {
@@ -371,11 +454,16 @@ async function cancelSale(saleId) {
       const qty = Number(items[index].qty || 0);
       const after = before + qty;
       const unitCost = Number(data.avgCost || data.lastCost || 0);
-      tx.update(productRefs[index], { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid });
+      const update = { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid };
+      if (data.legacyUnassigned) update.active = true;
+      tx.update(productRefs[index], update);
       tx.set(movementRefs[index], {
         type: "sale_return",
-        productId: items[index].productId,
-        productName: items[index].name || items[index].productId,
+        inventoryId: inventoryIds[index],
+        productId: data.modelId || items[index].productId,
+        productName: data.name || items[index].name || items[index].productId,
+        colorId: data.colorId || items[index].colorId || "",
+        colorName: data.colorName || items[index].colorName || "",
         qtyDelta: qty,
         before,
         after,
@@ -399,32 +487,63 @@ async function cancelSale(saleId) {
   });
 }
 
+function stockOperationButtons(product) {
+  return `<div class="stock-actions stock-actions-warehouse">
+    <button data-stock-op="receipt" data-product-id="${product.id}">＋ Поступление</button>
+    <button data-stock-op="writeoff" data-product-id="${product.id}">− Списание</button>
+    <button data-stock-op="adjustment" data-product-id="${product.id}">= Задать остаток</button>
+  </div>`;
+}
+
 function renderStock() {
   const products = activeProducts();
   const units = totalUnits();
   const value = stockValue();
+  const modelCount = new Set(products.filter((p) => !p.legacyUnassigned).map((p) => p.modelId || p.id)).size;
   $("#stock-total").textContent = `${units} ед.`;
-  $("#stock-sku-count").textContent = String(products.length);
+  $("#stock-sku-count").textContent = String(modelCount);
   $("#stock-units").textContent = String(units);
   $("#stock-value").textContent = KZT.format(value);
 
-  $("#stock-list").innerHTML = products.map((product) => {
+  const dm30 = products.filter((product) => product.modelId === "DM30" && !product.legacyUnassigned);
+  const unassigned = products.find((product) => product.legacyUnassigned);
+  const others = products.filter((product) => product.modelId !== "DM30");
+  let html = "";
+
+  if (dm30.length) {
+    const dm30Total = dm30.reduce((sum, product) => sum + Number(product.stock || 0), 0);
+    html += `<article class="stock-card stock-model-card">
+      <div class="stock-main"><div class="stock-name"><b>Цветной дым DM30</b><small>Остатки отдельно по цветам</small></div><div class="stock-count">${dm30Total}</div></div>
+      <div class="variant-stock-list">${dm30.map((product) => {
+        const stock = Number(product.stock || 0);
+        const low = stock <= Number(product.lowStock || 0);
+        const avgCost = Number(product.avgCost || product.lastCost || 0);
+        return `<div class="variant-stock-row">
+          <div class="variant-stock-head"><div class="variant-stock-name">${colorDot(product)}<b>${escapeHtml(product.colorName)}</b><small>${avgCost ? `себест. ${KZT.format(avgCost)}` : "себестоимость не задана"}</small></div><strong class="${low ? "low" : ""}">${stock}</strong></div>
+          ${stockOperationButtons(product)}
+        </div>`;
+      }).join("")}</div>
+    </article>`;
+  }
+
+  if (unassigned) {
+    html += `<article class="stock-card legacy-stock-card">
+      <div class="stock-main"><div class="stock-name"><b>DM30 · Нераспределено</b><small>Старый общий остаток. Разнесите его по цветам и затем задайте здесь 0.</small></div><div class="stock-count">${Number(unassigned.stock || 0)}</div></div>
+      ${stockOperationButtons(unassigned)}
+    </article>`;
+  }
+
+  html += others.map((product) => {
     const stock = Number(product.stock || 0);
     const low = stock <= Number(product.lowStock || 0);
     const avgCost = Number(product.avgCost || product.lastCost || 0);
     return `<article class="stock-card">
-      <div class="stock-main">
-        <div class="stock-name"><b>${escapeHtml(product.name)}</b><small>${product.id} · продажа ${KZT.format(Number(product.price || 0))}${avgCost ? ` · себест. ${KZT.format(avgCost)}` : ""}</small></div>
-        <div class="stock-count ${low ? "low" : ""}">${stock}</div>
-      </div>
-      <div class="stock-actions stock-actions-warehouse">
-        <button data-stock-op="receipt" data-product-id="${product.id}">＋ Поступление</button>
-        <button data-stock-op="writeoff" data-product-id="${product.id}">− Списание</button>
-        <button data-stock-op="adjustment" data-product-id="${product.id}">= Задать остаток</button>
-      </div>
+      <div class="stock-main"><div class="stock-name"><b>${escapeHtml(product.name)}</b><small>${product.id} · продажа ${KZT.format(Number(product.price || 0))}${avgCost ? ` · себест. ${KZT.format(avgCost)}` : ""}</small></div><div class="stock-count ${low ? "low" : ""}">${stock}</div></div>
+      ${stockOperationButtons(product)}
     </article>`;
   }).join("");
 
+  $("#stock-list").innerHTML = html;
   $$('[data-stock-op]').forEach((button) => button.addEventListener("click", () => openStockDialog(button.dataset.productId, button.dataset.stockOp)));
 }
 
@@ -433,11 +552,9 @@ function renderMovements() {
     const delta = Number(movement.qtyDelta || 0);
     const sign = delta > 0 ? "+" : "";
     const reason = movement.reason ? `<div class="movement-reason">${escapeHtml(movement.reason)}</div>` : "";
+    const title = movement.colorName ? `${escapeHtml(movement.productId || "DM30")} · ${escapeHtml(movement.colorName)}` : escapeHtml(movement.productName || movement.productId);
     return `<article class="movement-card">
-      <div class="movement-top">
-        <div><b>${escapeHtml(movement.productName || movement.productId)}</b><small>${movementLabels[movement.type] || escapeHtml(movement.type || "Операция")}</small></div>
-        <strong class="${delta < 0 ? "negative" : "positive"}">${sign}${delta}</strong>
-      </div>
+      <div class="movement-top"><div><b>${title}</b><small>${movementLabels[movement.type] || escapeHtml(movement.type || "Операция")}</small></div><strong class="${delta < 0 ? "negative" : "positive"}">${sign}${delta}</strong></div>
       <div class="movement-meta"><span>${Number(movement.before || 0)} → ${Number(movement.after || 0)}</span><span>${formatDate(dateOf(movement))}</span></div>
       ${reason}
     </article>`;
@@ -521,18 +638,17 @@ async function applyStockOperation(event) {
         lastCost = costInput;
       }
       const unitCost = operation.type === "receipt" && costInput > 0 ? costInput : avgCost;
+      const update = { stock: after, avgCost, lastCost, updatedAt: serverTimestamp(), updatedBy: state.user.uid };
+      if (data.legacyUnassigned && after === 0) update.active = false;
 
-      tx.update(productRef, {
-        stock: after,
-        avgCost,
-        lastCost,
-        updatedAt: serverTimestamp(),
-        updatedBy: state.user.uid
-      });
+      tx.update(productRef, update);
       tx.set(movementRef, {
         type: operation.type,
-        productId: operation.productId,
+        inventoryId: operation.productId,
+        productId: data.modelId || operation.productId,
         productName: data.name || product.name,
+        colorId: data.colorId || "",
+        colorName: data.colorName || "",
         qtyDelta: delta,
         before,
         after,
@@ -624,7 +740,7 @@ async function boot() {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
     });
 
-    onAuthStateChanged(state.auth, async (user) => {
+    onAuthStateChanged(state.auth, (user) => {
       state.user = user;
       if (!user) {
         stopRealtime();
@@ -634,9 +750,9 @@ async function boot() {
       showOnly("#app");
       $("#settings-email").textContent = user.email || user.uid;
       $("#settings-project").textContent = cfg.projectId;
-      await ensureProducts();
       startRealtime();
       navigate("dashboard");
+      ensureProducts().catch((error) => toast(`Товары: ${error.message}`));
     });
   } catch (error) {
     showOnly("#login");
