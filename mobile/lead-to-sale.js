@@ -95,6 +95,7 @@ async function submitLeadOrder(event) {
     const productRefs = items.map((item) => doc(db, "products", item.productId));
     const leadRef = doc(db, "leads", activeLead.id);
     const orderRef = doc(collection(db, "orders"));
+    const movementRefs = items.map(() => doc(collection(db, "stockMovements")));
 
     await runTransaction(db, async (tx) => {
       const productSnaps = [];
@@ -107,10 +108,31 @@ async function submitLeadOrder(event) {
       });
 
       productSnaps.forEach((snap, index) => {
+        const data = snap.data();
+        const before = Number(data.stock || 0);
+        const after = before - items[index].qty;
+        const avgCost = Number(data.averagePurchasePrice || 0);
         tx.update(productRefs[index], {
-          stock: Number(snap.data().stock || 0) - items[index].qty,
+          stock: after,
           updatedAt: serverTimestamp(),
           updatedBy: user.uid
+        });
+        tx.set(movementRefs[index], {
+          productId: items[index].productId,
+          productName: data.name || items[index].name,
+          type: "sale",
+          qty: items[index].qty,
+          delta: -items[index].qty,
+          before,
+          after,
+          purchasePrice: avgCost || null,
+          totalCost: avgCost ? avgCost * items[index].qty : null,
+          reason: `Продажа по заявке с сайта · заказ #${orderRef.id.slice(0, 8)}`,
+          orderId: orderRef.id,
+          leadId: activeLead.id,
+          createdAt: serverTimestamp(),
+          createdBy: user.uid,
+          createdByEmail: user.email || ""
         });
       });
 
@@ -124,6 +146,7 @@ async function submitLeadOrder(event) {
         status: "new",
         source: "website-lead",
         leadId: activeLead.id,
+        inventoryLogged: true,
         createdAt: serverTimestamp(),
         createdAtClient: new Date().toISOString(),
         createdBy: user.uid,
@@ -143,7 +166,7 @@ async function submitLeadOrder(event) {
     document.querySelectorAll("[data-qty]").forEach((input) => input.value = "0");
     document.querySelector("[data-qty]")?.dispatchEvent(new Event("input", { bubbles: true }));
     activeLead = null;
-    toast("Заявка оформлена в заказ");
+    toast("Заявка оформлена в заказ, товар списан");
     document.querySelector('[data-nav="orders"]')?.click();
   } catch (error) {
     if (errorNode) errorNode.textContent = error.message;
