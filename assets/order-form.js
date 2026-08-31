@@ -114,7 +114,7 @@ async function submitLead(event) {
   const submit = form.querySelector(".conductor-order-submit");
   errorNode.textContent = "";
 
-  if (form.website.value) return;
+  if (form.elements.website.value) return;
   if (Date.now() - openedAt < 800) return;
 
   const last = Number(localStorage.getItem(SUBMIT_LOCK_KEY) || 0);
@@ -123,8 +123,8 @@ async function submitLead(event) {
     return;
   }
 
-  const customer = form.customer.value.trim();
-  const phone = normalizePhone(form.phone.value);
+  const customer = form.elements.customer.value.trim();
+  const phone = normalizePhone(form.elements.phone.value);
   if (customer.length < 2 || phone.length < 6) {
     errorNode.textContent = "Проверьте имя и номер телефона.";
     return;
@@ -148,9 +148,7 @@ async function submitLead(event) {
     form.parentElement.querySelector(".conductor-order-success").hidden = false;
   } catch (error) {
     console.error("CONDUCTOR lead submit failed", error);
-    errorNode.textContent = getConfig()
-      ? "Не удалось отправить заявку. Попробуйте ещё раз или позвоните нам."
-      : "Онлайн-заявка ещё не подключена к Firebase. Позвоните нам по номеру в шапке сайта.";
+    errorNode.textContent = "Не удалось отправить заявку. Попробуйте ещё раз или позвоните нам.";
   } finally {
     submit.disabled = false;
   }
@@ -171,5 +169,8 @@ function bindButtons() {
   });
 }
 
-ensureModal();
-bindButtons();
+// Until firebaseConfig is published, existing WhatsApp links remain an intact fallback.
+if (getConfig()) {
+  ensureModal();
+  bindButtons();
+}
