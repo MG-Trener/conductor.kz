@@ -15,18 +15,172 @@
 <meta property="og:url" content="https://conductor.kz/kraski-holi/">
 <meta property="og:image" content="https://conductor.kz/assets/images/holi-colors.webp">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="stylesheet" href="/assets/order-form.css?v=1">
 <style>
 :root{--bg:#030713;--text:#fff;--muted:#cbd3df;--line:rgba(255,255,255,.16);--accent:#59d300;--max:980px}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 75% 10%,rgba(89,211,0,.13),transparent 30%),radial-gradient(circle at 15% 20%,rgba(239,53,172,.12),transparent 28%),#030713;color:var(--text);font-family:Arial,Helvetica,sans-serif}.wrap{width:min(var(--max),calc(100% - 28px));margin:auto}header{padding:14px 0;border-bottom:1px solid var(--line)}.top{display:flex;align-items:center;justify-content:space-between;gap:16px}.brand{font-size:27px;font-weight:900}.brand b{color:#ff3558}.nav{display:flex;gap:14px;flex-wrap:wrap}.nav a{color:#fff;text-decoration:none;font-size:13px;font-weight:800}.hero{display:grid;grid-template-columns:1.05fr .95fr;align-items:center;gap:26px;padding:42px 0 26px}.hero h1{margin:0 0 14px;font-size:clamp(40px,6vw,68px);line-height:.94;letter-spacing:-.045em;text-transform:uppercase}.hero h1 span{color:var(--accent)}.lead{font-size:17px;line-height:1.55;color:#e5e9f0}.hero img{display:block;width:100%;height:auto;aspect-ratio:4/3;object-fit:contain;border-radius:22px;box-shadow:0 20px 60px rgba(0,0,0,.45)}.panel{border:1px solid var(--line);border-radius:18px;background:rgba(255,255,255,.035);padding:18px;margin:12px 0}.panel h2{margin:0 0 12px;font-size:25px}.prices{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.price{border:1px solid rgba(89,211,0,.45);border-radius:14px;padding:14px;text-align:center}.price span{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}.price b{font-size:24px;color:var(--accent)}.cta{display:block;margin:14px 0 0;text-align:center;padding:13px;border-radius:12px;background:var(--accent);color:#061018;text-decoration:none;font-weight:900}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.text{color:var(--muted);font-size:14px;line-height:1.65}.faq details{border-top:1px solid var(--line);padding:12px 0}.faq summary{font-weight:900;cursor:pointer}.faq p{color:var(--muted);font-size:14px;line-height:1.55}.crumbs{padding-top:16px;font-size:12px;color:var(--muted)}.crumbs a{color:#fff}.bottomlinks{display:flex;justify-content:center;gap:18px;flex-wrap:wrap;padding:18px 0 26px}.bottomlinks a{color:#fff;font-weight:800}footer{text-align:center;color:#9ea8b8;font-size:12px;padding:14px 0 24px}@media(max-width:700px){.hero{grid-template-columns:1fr}.prices,.grid{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}.hero{padding-top:26px}.hero img{max-width:100%;height:auto}}
-[data-public-price]{position:relative}[data-public-price]:not([data-public-price-ready]){color:transparent!important}[data-public-price]:not([data-public-price-ready])::after{content:"…";position:absolute;inset:0;display:grid;place-items:center;color:var(--accent,#fff)}</style>
-<script type="module" src="/assets/public-prices.js?v=3"></script>
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Главная","item":"https://conductor.kz/"},{"@type":"ListItem","position":2,"name":"Краски Холи","item":"https://conductor.kz/kraski-holi/"}]},{"@type":"Product","name":"Краски Холи","sku":"HOLI","url":"https://conductor.kz/kraski-holi/","image":"https://conductor.kz/assets/images/holi-colors.webp","description":"Краски Холи в 8 цветах для праздников, фотосессий и фестивалей. Розница и опт.","brand":{"@type":"Brand","name":"CONDUCTOR.KZ"},"offers":{"@type":"AggregateOffer","lowPrice":"650","highPrice":"1000","priceCurrency":"KZT","offerCount":"3","availability":"https://schema.org/InStock","seller":{"@type":"Organization","name":"CONDUCTOR.KZ","url":"https://conductor.kz/"}}},{"@type":"FAQPage","mainEntity":[{"@type":"Question","name":"Сколько стоят краски Холи?","acceptedAnswer":{"@type":"Answer","text":"1 пакет стоит 1 000 ₸, от 500 штук — 850 ₸ за пакет, от 2 000 штук — 650 ₸ за пакет."}},{"@type":"Question","name":"Сколько цветов красок Холи доступно?","acceptedAnswer":{"@type":"Answer","text":"На сайте представлены краски Холи в 8 цветах."}},{"@type":"Question","name":"Можно ли заказать краски Холи оптом?","acceptedAnswer":{"@type":"Answer","text":"Да. На сайте указаны отдельные цены для заказов от 500 и от 2 000 пакетов."}},{"@type":"Question","name":"Как заказать краски Холи в Казахстане?","acceptedAnswer":{"@type":"Answer","text":"Нажмите кнопку заказа, оставьте имя и телефон, и менеджер свяжется с вами для уточнения количества и доставки."}}]}]}</script>
+.skip-link{position:fixed;left:12px;top:12px;z-index:1000;padding:11px 15px;border-radius:10px;background:#fff;color:#030713;font-weight:900;transform:translateY(-160%)}.skip-link:focus{transform:none}.brand{color:#fff;text-decoration:none}.nav a,.cta,.bottomlinks a{min-height:44px;display:flex;align-items:center}.cta{justify-content:center;font-size:15px}.crumbs{font-size:14px}.price span{font-size:14px}.text,.faq p{font-size:15px}.faq summary{font-size:16px}a:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid #fff;outline-offset:3px}[data-public-price]{position:relative}[data-public-price]:not([data-public-price-ready]){color:transparent!important}[data-public-price]:not([data-public-price-ready])::after{content:"…";position:absolute;inset:0;display:grid;place-items:center;color:var(--accent,#fff)}</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "position": 1,
+          "name": "Главная",
+          "item": "https://conductor.kz/"
+        },
+        {
+          "@type": "ListItem",
+          "position": 2,
+          "name": "Краски Холи",
+          "item": "https://conductor.kz/kraski-holi/"
+        }
+      ]
+    },
+    {
+      "@type": "Product",
+      "name": "Краски Холи",
+      "sku": "HOLI",
+      "url": "https://conductor.kz/kraski-holi/",
+      "image": "https://conductor.kz/assets/images/holi-colors.webp",
+      "description": "Краски Холи в 8 цветах для праздников, фотосессий и фестивалей. Розница и опт.",
+      "brand": {
+        "@type": "Brand",
+        "name": "CONDUCTOR.KZ"
+      },
+      "offers": {
+        "@type": "AggregateOffer",
+        "lowPrice": "650",
+        "highPrice": "1000",
+        "priceCurrency": "KZT",
+        "offerCount": "3",
+        "availability": "https://schema.org/InStock",
+        "seller": {
+          "@type": "Organization",
+          "name": "CONDUCTOR.KZ",
+          "url": "https://conductor.kz/"
+        }
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Сколько стоят краски Холи?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "1 пакет стоит 1 000 ₸, от 500 штук — 850 ₸ за пакет, от 2 000 штук — 650 ₸ за пакет."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Сколько цветов красок Холи доступно?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "На сайте представлены краски Холи в 8 цветах."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Можно ли заказать краски Холи оптом?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Да. На сайте указаны отдельные цены для заказов от 500 и от 2 000 пакетов."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Как заказать краски Холи в Казахстане?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Нажмите кнопку заказа, оставьте имя и телефон, и менеджер свяжется с вами для уточнения количества и доставки."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
 </head>
 <body>
-<header><div class="wrap top"><div class="brand">CONDUCTOR<b>.KZ</b></div><nav class="nav"><a href="/">Главная</a><a href="/cvetnoy-dym/">Цветной дым</a><a href="https://www.instagram.com/conductor.kz">Instagram</a></nav></div></header>
-<main class="wrap"><div class="crumbs"><a href="/">Главная</a> → Краски Холи</div><section class="hero"><div><h1>Краски <span>Холи</span><br>в Казахстане</h1><p class="lead">Яркие порошковые краски для праздников, фотосессий, фестивалей и мероприятий. На сайте представлены 8 цветов, есть розничные и оптовые цены.</p><a class="cta" href="https://wa.me/77018709384?text=Здравствуйте!%20Интересуют%20краски%20Холи">Заказать краски Холи</a></div><img src="/assets/images/holi-colors.webp" alt="Яркие краски Холи разных цветов" width="1280" height="960"></section>
-<section class="panel"><h2>Цена на краски Холи</h2><div class="prices"><div class="price"><span>1 пакет</span><b data-public-price="HOLI">1 000 ₸</b></div><div class="price"><span>от 500 пакетов</span><b>850 ₸</b></div><div class="price"><span>от 2 000 пакетов</span><b>650 ₸</b></div></div></section>
-<section class="grid"><div class="panel"><h2>Для чего используют</h2><p class="text">Краски Холи подходят для цветных фотосессий, праздничных мероприятий, фестивалей, дней рождения, корпоративов и других событий, где нужен яркий визуальный эффект.</p></div><div class="panel"><h2>Заказ по Казахстану</h2><p class="text">Заказ можно оформить из любого города Казахстана. Оставьте имя и телефон в форме, и менеджер свяжется с вами для уточнения количества, доставки и оплаты.</p></div></section>
-<section class="panel faq"><h2>Вопросы о красках Холи</h2><details><summary>Сколько стоят краски Холи?</summary><p>1 пакет — <span data-public-price="HOLI">1 000 ₸</span>. При заказе от 500 пакетов — 850 ₸, от 2 000 пакетов — 650 ₸ за пакет.</p></details><details><summary>Сколько цветов доступно?</summary><p>На сайте представлены краски Холи в 8 цветах.</p></details><details><summary>Можно ли заказать оптом?</summary><p>Да. Для крупных заказов указаны отдельные оптовые цены от 500 и от 2 000 пакетов.</p></details><details><summary>Как оформить заказ?</summary><p>Нажмите кнопку «Заказать краски Холи», оставьте имя и телефон — заявка сразу попадёт менеджеру.</p></details></section>
-<div class="bottomlinks"><a href="/">Все товары</a><a href="/cvetnoy-dym/">Купить цветной дым</a></div></main><footer>© 2026 CONDUCTOR.KZ</footer>
-<script src="/mobile/firebase-config.js?v=2"></script><script type="module" src="/assets/public-prices.js?v=2"></script><script type="module" src="/assets/order-form.js?v=1"></script></body></html>
+<a class="skip-link" href="#main-content">Перейти к содержанию</a>
+<header>
+<div class="wrap top">
+<a class="brand" href="/" aria-label="CONDUCTOR.KZ — главная">CONDUCTOR<b>.KZ</b></a>
+<nav class="nav">
+<a href="/">Главная</a>
+<a href="/cvetnoy-dym/">Цветной дым</a>
+<a href="https://www.instagram.com/conductor.kz">Instagram</a>
+</nav>
+</div>
+</header>
+<main id="main-content" class="wrap">
+<div class="crumbs">
+<a href="/">Главная</a> → Краски Холи</div>
+<section class="hero">
+<div>
+<h1>Краски <span>Холи</span>
+<br>в Казахстане</h1>
+<p class="lead">Яркие порошковые краски для праздников, фотосессий, фестивалей и мероприятий. На сайте представлены 8 цветов, есть розничные и оптовые цены.</p>
+<a class="cta" href="https://wa.me/77018709384?text=Здравствуйте!%20Интересуют%20краски%20Холи">Заказать краски Холи</a>
+</div>
+<img src="/assets/images/holi-colors.webp" alt="Яркие краски Холи разных цветов" width="1280" height="960" decoding="async" fetchpriority="high">
+</section>
+<section class="panel">
+<h2>Цена на краски Холи</h2>
+<div class="prices">
+<div class="price">
+<span>1 пакет</span>
+<b data-public-price="HOLI">1 000 ₸</b>
+</div>
+<div class="price">
+<span>от 500 пакетов</span>
+<b>850 ₸</b>
+</div>
+<div class="price">
+<span>от 2 000 пакетов</span>
+<b>650 ₸</b>
+</div>
+</div>
+</section>
+<section class="grid">
+<div class="panel">
+<h2>Для чего используют</h2>
+<p class="text">Краски Холи подходят для цветных фотосессий, праздничных мероприятий, фестивалей, дней рождения, корпоративов и других событий, где нужен яркий визуальный эффект.</p>
+</div>
+<div class="panel">
+<h2>Заказ по Казахстану</h2>
+<p class="text">Заказ можно оформить из любого города Казахстана. Оставьте имя и телефон в форме, и менеджер свяжется с вами для уточнения количества, доставки и оплаты.</p>
+</div>
+</section>
+<section class="panel faq">
+<h2>Вопросы о красках Холи</h2>
+<details>
+<summary>Сколько стоят краски Холи?</summary>
+<p>1 пакет — <span data-public-price="HOLI">1 000 ₸</span>. При заказе от 500 пакетов — 850 ₸, от 2 000 пакетов — 650 ₸ за пакет.</p>
+</details>
+<details>
+<summary>Сколько цветов доступно?</summary>
+<p>На сайте представлены краски Холи в 8 цветах.</p>
+</details>
+<details>
+<summary>Можно ли заказать оптом?</summary>
+<p>Да. Для крупных заказов указаны отдельные оптовые цены от 500 и от 2 000 пакетов.</p>
+</details>
+<details>
+<summary>Как оформить заказ?</summary>
+<p>Нажмите кнопку «Заказать краски Холи», оставьте имя и телефон — заявка сразу попадёт менеджеру.</p>
+</details>
+</section>
+<div class="bottomlinks">
+<a href="/">Все товары</a>
+<a href="/cvetnoy-dym/">Купить цветной дым</a>
+</div>
+</main>
+<footer>© 2026 CONDUCTOR.KZ</footer>
+<script type="module" src="/assets/public-prices.js?v=4"></script>
+</body>
+</html>
