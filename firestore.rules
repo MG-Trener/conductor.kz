@@ -26,8 +26,6 @@ service cloud.firestore {
       && request.resource.data.createdAt == request.time;
     }
 
-    // Internal CONDUCTOR application. There is intentionally no public sign-up
-    // in the client: employee accounts are created in Firebase Authentication.
     match /products/{productId} {
       allow read, write: if signedIn();
     }
@@ -36,14 +34,16 @@ service cloud.firestore {
       allow read, write: if signedIn();
     }
 
-    // Public visitors may only CREATE a tightly validated lead. They cannot read,
-    // update or delete leads. Authenticated employees can manage them in the app.
+    match /stockMovements/{movementId} {
+      allow read, create: if signedIn();
+      allow update, delete: if false;
+    }
+
     match /leads/{leadId} {
       allow create: if validWebsiteLead();
       allow read, update, delete: if signedIn();
     }
 
-    // Everything else stays closed by default.
     match /{document=**} {
       allow read, write: if false;
     }
