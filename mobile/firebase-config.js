@@ -10,6 +10,11 @@ if (location.pathname.startsWith("/mobile/")) {
     messagingSenderId: "249591037242",
     appId: "1:249591037242:web:e534b60202dca9245ee403"
   };
+
+  const inventoryState = document.createElement("script");
+  inventoryState.type = "module";
+  inventoryState.src = "./inventory-state.js?v=16";
+  document.head.append(inventoryState);
 } else {
   window.CONDUCTOR_FIREBASE_CONFIG = null;
   try { localStorage.removeItem("conductor.firebaseConfig"); } catch {}
