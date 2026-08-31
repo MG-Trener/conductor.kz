@@ -84,6 +84,31 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Public website price catalogue. No stock, cost or internal audit history
+    // is exposed through this collection.
+    match /publicProducts/{modelId} {
+      allow read: if true;
+      allow create, update: if isStaff()
+        && isModel(modelId)
+        && request.resource.data.keys().hasAll([
+          'modelId', 'name', 'price', 'updatedAt', 'updatedBy', 'updatedByName'
+        ])
+        && request.resource.data.keys().hasOnly([
+          'modelId', 'name', 'price', 'updatedAt', 'updatedBy', 'updatedByName'
+        ])
+        && request.resource.data.modelId == modelId
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.name.size() <= 120
+        && request.resource.data.price is int
+        && request.resource.data.price > 0
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.updatedByName is string
+        && request.resource.data.updatedByName.size() <= 80;
+      allow delete: if false;
+    }
+
     match /orders/{orderId} {
       allow read: if isStaff();
       allow create: if isStaff()

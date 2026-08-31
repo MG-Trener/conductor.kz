@@ -97,6 +97,36 @@ test("unauthenticated and non-email identities cannot access warehouse data", as
   await assertFails(getDoc(doc(testEnv.authenticatedContext("anonymous-user").firestore(), "products", "DM30_BLUE")));
 });
 
+test("public visitors can read prices but only staff can publish the restricted price shape", async () => {
+  const publicRef = doc(staffDb(), "publicProducts", "DM30");
+  await assertSucceeds(setDoc(publicRef, {
+    modelId: "DM30",
+    name: "Цветной дым DM30",
+    price: 2700,
+    updatedAt: serverTimestamp(),
+    updatedBy: staffUid,
+    updatedByName: "Сотрудник"
+  }));
+
+  const publicDb = testEnv.unauthenticatedContext().firestore();
+  const snapshot = await assertSucceeds(getDoc(doc(publicDb, "publicProducts", "DM30")));
+  assert.equal(snapshot.data().price, 2700);
+  await assertFails(setDoc(doc(publicDb, "publicProducts", "DM60"), {
+    modelId: "DM60",
+    name: "Цветной дым DM60",
+    price: 3100
+  }));
+  await assertFails(setDoc(doc(staffDb(), "publicProducts", "DM90"), {
+    modelId: "DM90",
+    name: "Цветной дым DM90",
+    price: 3600,
+    stock: 99,
+    updatedAt: serverTimestamp(),
+    updatedBy: staffUid,
+    updatedByName: "Сотрудник"
+  }));
+});
+
 test("staff can atomically save model price, actual stock and its movement", async () => {
   const db = staffDb();
   await assertSucceeds(runTransaction(db, async (transaction) => {
@@ -118,6 +148,14 @@ test("staff can atomically save model price, actual stock and its movement", asy
       updatedByName: "Сотрудник"
     });
     transaction.set(movementRef, movement());
+    transaction.set(doc(db, "publicProducts", "DM30"), {
+      modelId: "DM30",
+      name: "Цветной дым DM30",
+      price: 2750,
+      updatedAt: serverTimestamp(),
+      updatedBy: staffUid,
+      updatedByName: "Сотрудник"
+    });
   }));
 });
 

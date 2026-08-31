@@ -231,15 +231,7 @@ async function saveModelInventory(event) {
 
   const byId = new Map(products.map((item) => [item.id, item]));
   const variants = modelProducts(modelId);
-  const initialized = initializedInventoryIds();
-  const priceChanged = variants.some((item) => Number(item.price || 0) !== price);
   const stockChanged = entered.filter((item) => Number(byId.get(item.id)?.stock || 0) !== item.stock);
-  const initializationChanged = entered.filter((item) => !initialized.has(item.id));
-
-  if (!priceChanged && !stockChanged.length && !initializationChanged.length) {
-    if (errorNode) errorNode.textContent = "Цена и остатки не изменились.";
-    return;
-  }
 
   const submit = event.submitter || event.target.querySelector('button[type="submit"]');
   if (submit) submit.disabled = true;
@@ -251,6 +243,7 @@ async function saveModelInventory(event) {
     const refIds = [...new Set([...variants.map((item) => item.id), ...entered.map((item) => item.id)])];
     const refs = refIds.map((id) => doc(db, "products", id));
     const movementRefs = new Map(stockChanged.map((item) => [item.id, doc(collection(db, "stockMovements"))]));
+    const publicProductRef = doc(db, "publicProducts", modelId);
 
     await runTransaction(db, async (tx) => {
       const snaps = [];
@@ -312,6 +305,15 @@ async function saveModelInventory(event) {
 
         tx.update(doc(db, "products", id), update);
       }
+
+      tx.set(publicProductRef, {
+        modelId,
+        name: document.getElementById("model-dialog-title")?.textContent?.trim() || modelId,
+        price,
+        updatedAt: serverTimestamp(),
+        updatedBy: user.uid,
+        updatedByName: employee
+      });
     });
 
     document.getElementById("model-dialog")?.close();
