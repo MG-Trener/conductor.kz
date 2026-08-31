@@ -169,6 +169,10 @@ function hideBoot() {
 function modelById(modelId) { return MODELS.find((model) => model.id === modelId); }
 function variantDefaults(modelId) { return defaults.filter((item) => item.modelId === modelId); }
 function modelVariants(modelId) { return state.products.filter((item) => item.modelId === modelId && !item.legacyUnassigned && item.active !== false).sort((a, b) => Number(a.sort || 0) - Number(b.sort || 0)); }
+function modelSalePrice(modelId) {
+  const savedVariant = modelVariants(modelId).find((item) => Number(item.price) > 0);
+  return Number(savedVariant?.price || modelById(modelId)?.price || 0);
+}
 function unassignedForModel(modelId) { return state.products.find((item) => item.modelId === modelId && item.legacyUnassigned && Number(item.stock || 0) > 0); }
 function visibleInventory() { return state.products.filter((item) => item.active !== false && !item.modelOnly); }
 function totalUnits() { return visibleInventory().reduce((sum, item) => sum + Number(item.stock || 0), 0); }
@@ -586,7 +590,7 @@ function renderStock() {
 
   $("#stock-list").innerHTML = MODELS.map((model) => `<article class="stock-card stock-model-card">
     <div class="stock-main">
-      <div class="stock-name"><b>${escapeHtml(model.name)}</b><small>${model.variants.length} цветов · цена ${KZT.format(model.price)}</small></div>
+      <div class="stock-name"><b>${escapeHtml(model.name)}</b><small>${model.variants.length} цветов · цена ${KZT.format(modelSalePrice(model.id))}</small></div>
       <div class="stock-count">${modelTotal(model.id)}</div>
     </div>
     ${compactColorSummary(model.id)}
