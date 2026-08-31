@@ -14,7 +14,7 @@ import {
   persistentMultipleTabManager,
   collection,
   doc,
-  getDoc,
+  getDocs,
   setDoc,
   query,
   orderBy,
@@ -27,24 +27,74 @@ import {
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const KZT = new Intl.NumberFormat("ru-KZ", { style: "currency", currency: "KZT", maximumFractionDigits: 0 });
-const LEGACY_DM30 = "DM30";
-const UNASSIGNED_DM30 = "DM30_UNASSIGNED";
 
-const defaults = [
-  { id: "DM30_BLUE", modelId: "DM30", colorId: "blue", colorName: "Синий", colorHex: "#258cff", name: "DM30 · Синий", price: 2500, stock: 0, lowStock: 2, sort: 11 },
-  { id: "DM30_YELLOW", modelId: "DM30", colorId: "yellow", colorName: "Жёлтый", colorHex: "#ffd42a", name: "DM30 · Жёлтый", price: 2500, stock: 0, lowStock: 2, sort: 12 },
-  { id: "DM30_RED", modelId: "DM30", colorId: "red", colorName: "Красный", colorHex: "#ff4545", name: "DM30 · Красный", price: 2500, stock: 0, lowStock: 2, sort: 13 },
-  { id: "DM30_PURPLE", modelId: "DM30", colorId: "purple", colorName: "Фиолетовый", colorHex: "#9b59ff", name: "DM30 · Фиолетовый", price: 2500, stock: 0, lowStock: 2, sort: 14 },
-  { id: "DM30_TURQUOISE", modelId: "DM30", colorId: "turquoise", colorName: "Бирюзовый", colorHex: "#27d3c3", name: "DM30 · Бирюзовый", price: 2500, stock: 0, lowStock: 2, sort: 15 },
-  { id: "DM60", name: "Цветной дым DM60", price: 3000, stock: 0, lowStock: 10, sort: 20 },
-  { id: "DM90", name: "Цветной дым DM90", price: 3500, stock: 0, lowStock: 10, sort: 30 },
-  { id: "HOLI", name: "Краска Холи", price: 1000, stock: 0, lowStock: 50, sort: 40 }
+const MODELS = [
+  {
+    id: "DM30", name: "Цветной дым DM30", price: 2500, lowStock: 2, sort: 10,
+    variants: [
+      ["BLUE", "Синий", "#258cff"],
+      ["YELLOW", "Жёлтый", "#ffd42a"],
+      ["RED", "Красный", "#ff4545"],
+      ["PURPLE", "Фиолетовый", "#9b59ff"],
+      ["TURQUOISE", "Бирюзовый", "#27d3c3"]
+    ]
+  },
+  {
+    id: "DM60", name: "Цветной дым DM60", price: 3000, lowStock: 2, sort: 20,
+    variants: [
+      ["WHITE", "Белый", "#f4f5f7"],
+      ["BLACK", "Чёрный", "#15171d"],
+      ["YELLOW", "Жёлтый", "#ffd42a"],
+      ["BLUE", "Синий", "#258cff"],
+      ["PINK", "Розовый", "#ff6bab"],
+      ["GREEN", "Зелёный", "#42c66b"],
+      ["PURPLE", "Фиолетовый", "#9b59ff"],
+      ["RED", "Красный", "#ff4545"]
+    ]
+  },
+  {
+    id: "DM90", name: "Цветной дым DM90", price: 3500, lowStock: 2, sort: 30,
+    variants: [
+      ["ORANGE", "Оранжевый", "#ff8b2d"],
+      ["PURPLE", "Фиолетовый", "#9b59ff"],
+      ["TURQUOISE", "Бирюзовый", "#27d3c3"],
+      ["YELLOW", "Жёлтый", "#ffd42a"],
+      ["PISTACHIO", "Фисташковый", "#9ecb68"],
+      ["RED", "Красный", "#ff4545"]
+    ]
+  },
+  {
+    id: "HOLI", name: "Краски Холи", price: 1000, lowStock: 10, sort: 40,
+    variants: [
+      ["SCARLET", "Алый", "#ff3030"],
+      ["RASPBERRY", "Малиновый", "#d92b70"],
+      ["YELLOW", "Жёлтый", "#ffd42a"],
+      ["BLUE", "Синий", "#258cff"],
+      ["LIME", "Салатовый", "#8bdc45"],
+      ["PURPLE", "Фиолетовый", "#9b59ff"],
+      ["ORANGE", "Оранжевый", "#ff8b2d"],
+      ["TURQUOISE", "Бирюзовый", "#27d3c3"]
+    ]
+  }
 ];
+
+const defaults = MODELS.flatMap((model) => model.variants.map(([key, colorName, colorHex], index) => ({
+  id: `${model.id}_${key}`,
+  modelId: model.id,
+  colorId: key.toLowerCase(),
+  colorName,
+  colorHex,
+  name: `${model.id} · ${colorName}`,
+  price: model.price,
+  stock: 0,
+  lowStock: model.lowStock,
+  sort: model.sort + index + 1
+})));
 
 const movementLabels = {
   receipt: "Поступление",
   writeoff: "Списание",
-  adjustment: "Корректировка",
+  adjustment: "Инвентаризация",
   sale: "Продажа",
   sale_return: "Возврат продажи"
 };
@@ -57,15 +107,26 @@ const state = {
   sales: [],
   movements: [],
   operation: null,
+  modelDialogId: null,
   unsubs: []
 };
 
-function config() {
-  return window.CONDUCTOR_FIREBASE_CONFIG || null;
+function config() { return window.CONDUCTOR_FIREBASE_CONFIG || null; }
+
+function employeeNameFromEmail(email = "") {
+  const normalized = String(email).trim().toLowerCase();
+  if (normalized === "mihagavr@gmail.com") return "Михаил";
+  if (normalized) return "Алексей";
+  return "Сотрудник";
+}
+
+function currentEmployeeName() {
+  return employeeNameFromEmail(state.user?.email || "");
 }
 
 function toast(message) {
   const node = $("#toast");
+  if (!node) return;
   node.textContent = message;
   node.classList.add("show");
   clearTimeout(toast.timer);
@@ -93,25 +154,9 @@ function formatDate(date) {
   return date.toLocaleString("ru-KZ", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
 
-function activeProducts() {
-  return state.products.filter((product) => product.active !== false);
-}
-
-function totalUnits() {
-  return activeProducts().reduce((sum, product) => sum + Number(product.stock || 0), 0);
-}
-
-function stockValue() {
-  return activeProducts().reduce((sum, product) => sum + Number(product.stock || 0) * Number(product.avgCost || product.lastCost || 0), 0);
-}
-
-function colorDot(product) {
-  return product.colorHex ? `<span class="color-dot" style="background:${escapeHtml(product.colorHex)}"></span>` : "";
-}
-
 function showOnly(selector) {
-  ["#login", "#app"].forEach((id) => $(id).classList.add("hidden"));
-  $(selector).classList.remove("hidden");
+  ["#login", "#app"].forEach((id) => $(id)?.classList.add("hidden"));
+  $(selector)?.classList.remove("hidden");
 }
 
 function hideBoot() {
@@ -121,36 +166,47 @@ function hideBoot() {
   setTimeout(() => boot.remove(), 280);
 }
 
-async function migrateLegacyDm30() {
-  const legacyRef = doc(state.db, "products", LEGACY_DM30);
-  const unassignedRef = doc(state.db, "products", UNASSIGNED_DM30);
+function modelById(modelId) { return MODELS.find((model) => model.id === modelId); }
+function variantDefaults(modelId) { return defaults.filter((item) => item.modelId === modelId); }
+function modelVariants(modelId) { return state.products.filter((item) => item.modelId === modelId && !item.legacyUnassigned && item.active !== false).sort((a, b) => Number(a.sort || 0) - Number(b.sort || 0)); }
+function unassignedForModel(modelId) { return state.products.find((item) => item.modelId === modelId && item.legacyUnassigned && Number(item.stock || 0) > 0); }
+function visibleInventory() { return state.products.filter((item) => item.active !== false && !item.modelOnly); }
+function totalUnits() { return visibleInventory().reduce((sum, item) => sum + Number(item.stock || 0), 0); }
+function stockValue() { return visibleInventory().reduce((sum, item) => sum + Number(item.stock || 0) * Number(item.avgCost || item.lastCost || 0), 0); }
+function colorDot(product) { return product.colorHex ? `<span class="color-dot" style="background:${escapeHtml(product.colorHex)}"></span>` : ""; }
+
+async function migrateLegacyModel(model) {
+  const legacyRef = doc(state.db, "products", model.id);
+  const unassignedRef = doc(state.db, "products", `${model.id}_UNASSIGNED`);
 
   await runTransaction(state.db, async (tx) => {
     const legacySnap = await tx.get(legacyRef);
     const unassignedSnap = await tx.get(unassignedRef);
+    if (!legacySnap.exists() && !unassignedSnap.exists()) return;
+
     const legacy = legacySnap.exists() ? legacySnap.data() : null;
     const unassigned = unassignedSnap.exists() ? unassignedSnap.data() : null;
     const legacyStock = Number(legacy?.stock || 0);
-    const currentUnassigned = Number(unassigned?.stock || 0);
+    const currentStock = Number(unassigned?.stock || 0);
     const legacyCost = Number(legacy?.avgCost || legacy?.lastCost || 0);
-    const unassignedCost = Number(unassigned?.avgCost || unassigned?.lastCost || 0);
-    const nextUnassigned = currentUnassigned + legacyStock;
-    const nextAvg = nextUnassigned > 0
-      ? ((currentUnassigned * unassignedCost) + (legacyStock * legacyCost)) / nextUnassigned
-      : (unassignedCost || legacyCost || 0);
+    const currentCost = Number(unassigned?.avgCost || unassigned?.lastCost || 0);
+    const nextStock = currentStock + legacyStock;
+    const nextAvg = nextStock > 0
+      ? ((currentStock * currentCost) + (legacyStock * legacyCost)) / nextStock
+      : (currentCost || legacyCost || 0);
 
-    if (!unassignedSnap.exists() || legacyStock > 0) {
+    if (legacySnap.exists() || unassignedSnap.exists()) {
       tx.set(unassignedRef, {
-        modelId: "DM30",
-        name: "DM30 · Нераспределено",
-        price: Number(legacy?.price || 2500),
-        stock: nextUnassigned,
+        modelId: model.id,
+        name: `${model.id} · Нераспределено`,
+        price: Number(legacy?.price || unassigned?.price || model.price),
+        stock: nextStock,
         lowStock: 0,
-        sort: 10,
+        sort: model.sort,
         avgCost: nextAvg,
         lastCost: Number(legacy?.lastCost || unassigned?.lastCost || 0),
         legacyUnassigned: true,
-        active: nextUnassigned > 0,
+        active: nextStock > 0,
         updatedAt: serverTimestamp()
       }, { merge: true });
     }
@@ -160,7 +216,7 @@ async function migrateLegacyDm30() {
         active: false,
         stock: 0,
         modelOnly: true,
-        variantMigrationV1: true,
+        variantMigrationV2: true,
         updatedAt: serverTimestamp()
       }, { merge: true });
     }
@@ -168,20 +224,17 @@ async function migrateLegacyDm30() {
 }
 
 async function ensureProducts() {
-  const refs = defaults.map((product) => doc(state.db, "products", product.id));
-  const snaps = await Promise.all(refs.map((ref) => getDoc(ref)));
-  await Promise.all(snaps.map((snap, index) => {
-    if (snap.exists()) return Promise.resolve();
-    return setDoc(refs[index], {
-      ...defaults[index],
-      active: true,
-      avgCost: 0,
-      lastCost: 0,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
-    });
-  }));
-  await migrateLegacyDm30();
+  const snap = await getDocs(collection(state.db, "products"));
+  const existing = new Set(snap.docs.map((item) => item.id));
+  await Promise.all(defaults.filter((item) => !existing.has(item.id)).map((item) => setDoc(doc(state.db, "products", item.id), {
+    ...item,
+    active: true,
+    avgCost: 0,
+    lastCost: 0,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  })));
+  for (const model of MODELS) await migrateLegacyModel(model);
 }
 
 function stopRealtime() {
@@ -191,12 +244,12 @@ function stopRealtime() {
 
 function startRealtime() {
   stopRealtime();
-
   state.unsubs.push(onSnapshot(query(collection(state.db, "products"), orderBy("sort")), (snap) => {
     state.products = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
     renderProducts();
     renderStock();
     renderDashboard();
+    if ($("#model-dialog")?.open && state.modelDialogId) renderModelDialog(state.modelDialogId);
   }, (error) => toast(`Склад: ${error.message}`)));
 
   state.unsubs.push(onSnapshot(query(collection(state.db, "orders"), orderBy("createdAt", "desc"), limit(100)), (snap) => {
@@ -212,12 +265,35 @@ function startRealtime() {
   }, (error) => toast(`Журнал: ${error.message}`)));
 }
 
+function modelTotal(modelId) {
+  const variants = modelVariants(modelId);
+  const unassigned = unassignedForModel(modelId);
+  return variants.reduce((sum, item) => sum + Number(item.stock || 0), 0) + Number(unassigned?.stock || 0);
+}
+
+function renderInventoryOverview() {
+  const root = $("#inventory-overview");
+  if (!root) return;
+  root.innerHTML = MODELS.map((model) => {
+    const variants = modelVariants(model.id);
+    const unassigned = unassignedForModel(model.id);
+    const total = modelTotal(model.id);
+    return `<article class="inventory-overview-card">
+      <div class="overview-model-head"><div><b>${escapeHtml(model.id)}</b><small>${escapeHtml(model.name)}</small></div><strong>${total}</strong></div>
+      <div class="overview-colors">
+        ${variants.map((item) => `<div class="overview-color"><span>${colorDot(item)}${escapeHtml(item.colorName)}</span><b class="${Number(item.stock || 0) <= Number(item.lowStock || 0) ? "low" : ""}">${Number(item.stock || 0)}</b></div>`).join("")}
+        ${unassigned ? `<div class="overview-color warning"><span>⚠ Нераспределено</span><b>${Number(unassigned.stock || 0)}</b></div>` : ""}
+      </div>
+    </article>`;
+  }).join("");
+}
+
 function renderDashboard() {
   const units = totalUnits();
   const value = stockValue();
   const todaySales = state.sales.filter((sale) => sale.status !== "cancelled" && isToday(dateOf(sale)));
   const todayRevenue = todaySales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
-  const low = activeProducts().filter((product) => !product.legacyUnassigned && Number(product.stock || 0) <= Number(product.lowStock || 0));
+  const low = state.products.filter((item) => item.active !== false && !item.legacyUnassigned && !item.modelOnly && Number(item.stock || 0) <= Number(item.lowStock || 0));
   const movementsToday = state.movements.filter((movement) => isToday(dateOf(movement)));
 
   $("#stock-units-hero").textContent = `${units} ед.`;
@@ -226,6 +302,7 @@ function renderDashboard() {
   $("#metric-sales").textContent = KZT.format(todayRevenue);
   $("#metric-low").textContent = String(low.length);
   $("#metric-movements").textContent = String(movementsToday.length);
+  renderInventoryOverview();
 
   const recent = state.sales.slice(0, 4);
   $("#dashboard-sales").innerHTML = recent.length ? recent.map(saleCard).join("") : `<div class="empty">Продаж пока нет.</div>`;
@@ -233,8 +310,12 @@ function renderDashboard() {
 }
 
 function saleItemLabel(item) {
-  if (item.colorName) return `${escapeHtml(item.productId || "DM30")} · ${escapeHtml(item.colorName)}`;
+  if (item.colorName) return `${escapeHtml(item.productId || "Товар")} · ${escapeHtml(item.colorName)}`;
   return escapeHtml(item.name || item.productId || "Товар");
+}
+
+function saleEmployee(sale) {
+  return sale.createdByName || employeeNameFromEmail(sale.createdByEmail || "");
 }
 
 function saleCard(sale) {
@@ -243,7 +324,7 @@ function saleCard(sale) {
   const note = sale.note || sale.notes || "";
   return `<article class="order-card">
     <div class="order-top">
-      <div><div class="order-customer">Продажа #${escapeHtml(sale.id.slice(0, 8))}</div><div class="order-phone">${escapeHtml(sale.createdByEmail || "Сотрудник")}</div></div>
+      <div><div class="order-customer">Продажа #${escapeHtml(sale.id.slice(0, 8))}</div><div class="order-phone">Внёс: ${escapeHtml(saleEmployee(sale))}</div></div>
       <div class="order-total">${KZT.format(Number(sale.total || 0))}</div>
     </div>
     <div class="order-items">${items || "Без позиций"}${note ? `<br><span class="muted">${escapeHtml(note)}</span>` : ""}</div>
@@ -262,44 +343,35 @@ function renderSales() {
 }
 
 function bindSaleActions(root) {
-  root.querySelectorAll("[data-cancel-sale]").forEach((button) => {
+  root?.querySelectorAll("[data-cancel-sale]").forEach((button) => {
     button.addEventListener("click", async () => {
       if (!confirm("Отменить продажу и вернуть весь товар на склад?")) return;
       button.disabled = true;
       try {
         await cancelSale(button.dataset.cancelSale);
         toast("Продажа отменена, товар возвращён");
-      } catch (error) {
-        toast(error.message);
-      } finally {
-        button.disabled = false;
-      }
+      } catch (error) { toast(error.message); }
+      finally { button.disabled = false; }
     });
   });
 }
 
 function renderProducts() {
-  const products = activeProducts();
   let html = "";
-  let dm30HeaderShown = false;
-
-  for (const product of products) {
-    if (product.modelId === "DM30" && !product.legacyUnassigned && !dm30HeaderShown) {
-      html += `<div class="variant-group-label"><b>DM30</b><span>выберите цвет</span></div>`;
-      dm30HeaderShown = true;
-    }
-    if (product.legacyUnassigned) continue;
-    html += `<div class="sale-product">
-      <div class="sale-product-name"><b>${colorDot(product)}${escapeHtml(product.name)}</b><small>${KZT.format(Number(product.price || 0))} · остаток ${Number(product.stock || 0)}</small></div>
+  for (const model of MODELS) {
+    const variants = modelVariants(model.id);
+    if (!variants.length) continue;
+    html += `<div class="variant-group-label"><b>${escapeHtml(model.id)}</b><span>${variants.reduce((sum, item) => sum + Number(item.stock || 0), 0)} ед. · выберите цвет</span></div>`;
+    html += variants.map((product) => `<div class="sale-product">
+      <div class="sale-product-name"><b>${colorDot(product)}${escapeHtml(product.colorName)}</b><small>${KZT.format(Number(product.price || model.price))} · остаток ${Number(product.stock || 0)}</small></div>
       <div class="qty-control">
         <button type="button" data-qty-minus="${product.id}">−</button>
         <input type="number" min="0" max="${Number(product.stock || 0)}" value="0" inputmode="numeric" data-qty="${product.id}">
         <button type="button" data-qty-plus="${product.id}">+</button>
       </div>
-    </div>`;
+    </div>`).join("");
   }
-
-  $("#sale-products").innerHTML = html;
+  $("#sale-products").innerHTML = html || `<div class="empty">Товары загружаются…</div>`;
   $$('[data-qty-minus]').forEach((button) => button.addEventListener("click", () => changeSaleQty(button.dataset.qtyMinus, -1)));
   $$('[data-qty-plus]').forEach((button) => button.addEventListener("click", () => changeSaleQty(button.dataset.qtyPlus, 1)));
   $$('[data-qty]').forEach((input) => input.addEventListener("input", updateSaleTotal));
@@ -310,8 +382,7 @@ function changeSaleQty(inventoryId, delta) {
   const input = document.querySelector(`[data-qty="${CSS.escape(inventoryId)}"]`);
   const product = state.products.find((item) => item.id === inventoryId);
   if (!input || !product) return;
-  const next = Math.max(0, Math.min(Number(product.stock || 0), Number(input.value || 0) + delta));
-  input.value = String(next);
+  input.value = String(Math.max(0, Math.min(Number(product.stock || 0), Number(input.value || 0) + delta)));
   updateSaleTotal();
 }
 
@@ -320,7 +391,7 @@ function selectedItems() {
     const input = document.querySelector(`[data-qty="${CSS.escape(product.id)}"]`);
     const qty = Number(input?.value || 0);
     if (qty <= 0) return null;
-    const price = Number(product.price || 0);
+    const price = Number(product.price || modelById(product.modelId)?.price || 0);
     return {
       inventoryId: product.id,
       productId: product.modelId || product.id,
@@ -335,8 +406,7 @@ function selectedItems() {
 }
 
 function updateSaleTotal() {
-  const total = selectedItems().reduce((sum, item) => sum + item.lineTotal, 0);
-  $("#sale-total").textContent = KZT.format(total);
+  $("#sale-total").textContent = KZT.format(selectedItems().reduce((sum, item) => sum + item.lineTotal, 0));
 }
 
 async function createSale(event) {
@@ -344,14 +414,12 @@ async function createSale(event) {
   const errorNode = $("#sale-error");
   errorNode.textContent = "";
   const items = selectedItems();
-  if (!items.length) {
-    errorNode.textContent = "Укажите количество хотя бы одного товара.";
-    return;
-  }
+  if (!items.length) { errorNode.textContent = "Укажите количество хотя бы одного товара."; return; }
 
   const note = $("#sale-notes").value.trim();
   const total = items.reduce((sum, item) => sum + item.lineTotal, 0);
   const submit = event.submitter;
+  const employee = currentEmployeeName();
   submit.disabled = true;
 
   try {
@@ -362,7 +430,6 @@ async function createSale(event) {
     await runTransaction(state.db, async (tx) => {
       const snaps = [];
       for (const ref of productRefs) snaps.push(await tx.get(ref));
-
       snaps.forEach((snap, index) => {
         if (!snap.exists()) throw new Error(`${items[index].name}: товар не найден`);
         const stock = Number(snap.data().stock || 0);
@@ -374,7 +441,7 @@ async function createSale(event) {
         const before = Number(data.stock || 0);
         const after = before - items[index].qty;
         const unitCost = Number(data.avgCost || data.lastCost || 0);
-        tx.update(productRefs[index], { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid });
+        tx.update(productRefs[index], { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid, updatedByName: employee });
         tx.set(movementRefs[index], {
           type: "sale",
           inventoryId: items[index].inventoryId,
@@ -393,7 +460,8 @@ async function createSale(event) {
           createdAt: serverTimestamp(),
           createdAtClient: new Date().toISOString(),
           createdBy: state.user.uid,
-          createdByEmail: state.user.email || ""
+          createdByEmail: state.user.email || "",
+          createdByName: employee
         });
       });
 
@@ -406,29 +474,28 @@ async function createSale(event) {
         createdAt: serverTimestamp(),
         createdAtClient: new Date().toISOString(),
         createdBy: state.user.uid,
-        createdByEmail: state.user.email || ""
+        createdByEmail: state.user.email || "",
+        createdByName: employee
       });
     });
 
     event.target.reset();
     $$('[data-qty]').forEach((input) => input.value = "0");
     updateSaleTotal();
-    toast("Продажа записана");
+    toast(`Продажа записана · ${employee}`);
     navigate("sales");
-  } catch (error) {
-    errorNode.textContent = error.message;
-  } finally {
-    submit.disabled = false;
-  }
+  } catch (error) { errorNode.textContent = error.message; }
+  finally { submit.disabled = false; }
 }
 
 function inventoryIdForSaleItem(item) {
   if (item.inventoryId) return item.inventoryId;
-  if (item.productId === LEGACY_DM30) return UNASSIGNED_DM30;
+  if (MODELS.some((model) => model.id === item.productId)) return `${item.productId}_UNASSIGNED`;
   return item.productId;
 }
 
 async function cancelSale(saleId) {
+  const employee = currentEmployeeName();
   const saleRef = doc(state.db, "orders", saleId);
   await runTransaction(state.db, async (tx) => {
     const saleSnap = await tx.get(saleRef);
@@ -444,17 +511,14 @@ async function cancelSale(saleId) {
     for (const ref of productRefs) productSnaps.push(await tx.get(ref));
     const movementRefs = items.map(() => doc(collection(state.db, "stockMovements")));
 
-    productSnaps.forEach((snap, index) => {
-      if (!snap.exists()) throw new Error(`${items[index].name || items[index].productId}: товар не найден`);
-    });
-
+    productSnaps.forEach((snap, index) => { if (!snap.exists()) throw new Error(`${items[index].name || items[index].productId}: товар не найден`); });
     productSnaps.forEach((snap, index) => {
       const data = snap.data();
       const before = Number(data.stock || 0);
       const qty = Number(items[index].qty || 0);
       const after = before + qty;
       const unitCost = Number(data.avgCost || data.lastCost || 0);
-      const update = { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid };
+      const update = { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid, updatedByName: employee };
       if (data.legacyUnassigned) update.active = true;
       tx.update(productRefs[index], update);
       tx.set(movementRefs[index], {
@@ -474,7 +538,8 @@ async function cancelSale(saleId) {
         createdAt: serverTimestamp(),
         createdAtClient: new Date().toISOString(),
         createdBy: state.user.uid,
-        createdByEmail: state.user.email || ""
+        createdByEmail: state.user.email || "",
+        createdByName: employee
       });
     });
 
@@ -482,69 +547,40 @@ async function cancelSale(saleId) {
       status: "cancelled",
       cancelledAt: serverTimestamp(),
       cancelledBy: state.user.uid,
-      cancelledByEmail: state.user.email || ""
+      cancelledByEmail: state.user.email || "",
+      cancelledByName: employee
     });
   });
 }
 
-function stockOperationButtons(product) {
-  return `<div class="stock-actions stock-actions-warehouse">
-    <button data-stock-op="receipt" data-product-id="${product.id}">＋ Поступление</button>
-    <button data-stock-op="writeoff" data-product-id="${product.id}">− Списание</button>
-    <button data-stock-op="adjustment" data-product-id="${product.id}">= Задать остаток</button>
-  </div>`;
+function compactColorSummary(modelId) {
+  const variants = modelVariants(modelId);
+  const unassigned = unassignedForModel(modelId);
+  return `<div class="stock-color-summary">${variants.map((item) => `<span>${colorDot(item)}${escapeHtml(item.colorName)} <b>${Number(item.stock || 0)}</b></span>`).join("")}${unassigned ? `<span class="warning">⚠ Нераспр. <b>${Number(unassigned.stock || 0)}</b></span>` : ""}</div>`;
 }
 
 function renderStock() {
-  const products = activeProducts();
   const units = totalUnits();
   const value = stockValue();
-  const modelCount = new Set(products.filter((p) => !p.legacyUnassigned).map((p) => p.modelId || p.id)).size;
   $("#stock-total").textContent = `${units} ед.`;
-  $("#stock-sku-count").textContent = String(modelCount);
+  $("#stock-sku-count").textContent = String(MODELS.length);
   $("#stock-units").textContent = String(units);
   $("#stock-value").textContent = KZT.format(value);
 
-  const dm30 = products.filter((product) => product.modelId === "DM30" && !product.legacyUnassigned);
-  const unassigned = products.find((product) => product.legacyUnassigned);
-  const others = products.filter((product) => product.modelId !== "DM30");
-  let html = "";
+  $("#stock-list").innerHTML = MODELS.map((model) => `<article class="stock-card stock-model-card">
+    <div class="stock-main">
+      <div class="stock-name"><b>${escapeHtml(model.name)}</b><small>${model.variants.length} цветов · цена ${KZT.format(model.price)}</small></div>
+      <div class="stock-count">${modelTotal(model.id)}</div>
+    </div>
+    ${compactColorSummary(model.id)}
+    <button class="btn full model-balance-btn" data-open-model="${model.id}">Цвета и актуальные остатки</button>
+  </article>`).join("");
 
-  if (dm30.length) {
-    const dm30Total = dm30.reduce((sum, product) => sum + Number(product.stock || 0), 0);
-    html += `<article class="stock-card stock-model-card">
-      <div class="stock-main"><div class="stock-name"><b>Цветной дым DM30</b><small>Остатки отдельно по цветам</small></div><div class="stock-count">${dm30Total}</div></div>
-      <div class="variant-stock-list">${dm30.map((product) => {
-        const stock = Number(product.stock || 0);
-        const low = stock <= Number(product.lowStock || 0);
-        const avgCost = Number(product.avgCost || product.lastCost || 0);
-        return `<div class="variant-stock-row">
-          <div class="variant-stock-head"><div class="variant-stock-name">${colorDot(product)}<b>${escapeHtml(product.colorName)}</b><small>${avgCost ? `себест. ${KZT.format(avgCost)}` : "себестоимость не задана"}</small></div><strong class="${low ? "low" : ""}">${stock}</strong></div>
-          ${stockOperationButtons(product)}
-        </div>`;
-      }).join("")}</div>
-    </article>`;
-  }
+  $$('[data-open-model]').forEach((button) => button.addEventListener("click", () => openModelDialog(button.dataset.openModel)));
+}
 
-  if (unassigned) {
-    html += `<article class="stock-card legacy-stock-card">
-      <div class="stock-main"><div class="stock-name"><b>DM30 · Нераспределено</b><small>Старый общий остаток. Разнесите его по цветам и затем задайте здесь 0.</small></div><div class="stock-count">${Number(unassigned.stock || 0)}</div></div>
-      ${stockOperationButtons(unassigned)}
-    </article>`;
-  }
-
-  html += others.map((product) => {
-    const stock = Number(product.stock || 0);
-    const low = stock <= Number(product.lowStock || 0);
-    const avgCost = Number(product.avgCost || product.lastCost || 0);
-    return `<article class="stock-card">
-      <div class="stock-main"><div class="stock-name"><b>${escapeHtml(product.name)}</b><small>${product.id} · продажа ${KZT.format(Number(product.price || 0))}${avgCost ? ` · себест. ${KZT.format(avgCost)}` : ""}</small></div><div class="stock-count ${low ? "low" : ""}">${stock}</div></div>
-      ${stockOperationButtons(product)}
-    </article>`;
-  }).join("");
-
-  $("#stock-list").innerHTML = html;
-  $$('[data-stock-op]').forEach((button) => button.addEventListener("click", () => openStockDialog(button.dataset.productId, button.dataset.stockOp)));
+function movementEmployee(movement) {
+  return movement.createdByName || employeeNameFromEmail(movement.createdByEmail || "");
 }
 
 function renderMovements() {
@@ -552,96 +588,160 @@ function renderMovements() {
     const delta = Number(movement.qtyDelta || 0);
     const sign = delta > 0 ? "+" : "";
     const reason = movement.reason ? `<div class="movement-reason">${escapeHtml(movement.reason)}</div>` : "";
-    const title = movement.colorName ? `${escapeHtml(movement.productId || "DM30")} · ${escapeHtml(movement.colorName)}` : escapeHtml(movement.productName || movement.productId);
+    const title = movement.colorName ? `${escapeHtml(movement.productId || "Товар")} · ${escapeHtml(movement.colorName)}` : escapeHtml(movement.productName || movement.productId);
     return `<article class="movement-card">
-      <div class="movement-top"><div><b>${title}</b><small>${movementLabels[movement.type] || escapeHtml(movement.type || "Операция")}</small></div><strong class="${delta < 0 ? "negative" : "positive"}">${sign}${delta}</strong></div>
+      <div class="movement-top"><div><b>${title}</b><small>${movementLabels[movement.type] || escapeHtml(movement.type || "Операция")} · ${escapeHtml(movementEmployee(movement))}</small></div><strong class="${delta < 0 ? "negative" : "positive"}">${sign}${delta}</strong></div>
       <div class="movement-meta"><span>${Number(movement.before || 0)} → ${Number(movement.after || 0)}</span><span>${formatDate(dateOf(movement))}</span></div>
       ${reason}
     </article>`;
   }).join("") : `<div class="empty">Движений склада пока нет.</div>`;
 }
 
+function renderModelDialog(modelId) {
+  const model = modelById(modelId);
+  if (!model) return;
+  const variants = modelVariants(modelId);
+  const unassigned = unassignedForModel(modelId);
+  $("#model-dialog-title").textContent = model.name;
+  $("#model-dialog-total").textContent = `Всего по модели: ${modelTotal(modelId)} ед. · внесите фактические остатки по цветам`;
+  $("#model-variant-list").innerHTML = variants.map((item) => `<div class="model-variant-row">
+    <div class="model-variant-info"><span>${colorDot(item)}</span><div><b>${escapeHtml(item.colorName)}</b><small>Сейчас: ${Number(item.stock || 0)}</small></div></div>
+    <input type="number" min="0" step="1" inputmode="numeric" value="${Number(item.stock || 0)}" data-model-balance="${item.id}" aria-label="${escapeHtml(item.colorName)}">
+    <div class="model-variant-actions"><button type="button" data-variant-op="receipt" data-product-id="${item.id}">＋</button><button type="button" data-variant-op="writeoff" data-product-id="${item.id}">−</button></div>
+  </div>`).join("") + (unassigned ? `<div class="model-variant-row unassigned-row">
+    <div class="model-variant-info"><span>⚠</span><div><b>Нераспределено</b><small>Старый общий остаток</small></div></div>
+    <input type="number" min="0" step="1" inputmode="numeric" value="${Number(unassigned.stock || 0)}" data-model-balance="${unassigned.id}" aria-label="Нераспределено">
+    <div></div>
+  </div>` : "");
+
+  $$('[data-variant-op]').forEach((button) => button.addEventListener("click", () => {
+    $("#model-dialog").close();
+    openStockDialog(button.dataset.productId, button.dataset.variantOp);
+  }));
+}
+
+function openModelDialog(modelId) {
+  state.modelDialogId = modelId;
+  $("#model-balance-reason").value = "";
+  $("#model-balance-error").textContent = "";
+  renderModelDialog(modelId);
+  $("#model-dialog").showModal();
+}
+
+async function saveModelBalances(event) {
+  event.preventDefault();
+  const modelId = state.modelDialogId;
+  if (!modelId) return;
+  const model = modelById(modelId);
+  const inputs = $$('[data-model-balance]');
+  const desired = inputs.map((input) => ({ id: input.dataset.modelBalance, stock: Math.trunc(Number(input.value)) })).filter((item) => Number.isFinite(item.stock) && item.stock >= 0);
+  const changed = desired.filter((item) => {
+    const current = state.products.find((product) => product.id === item.id);
+    return current && Number(current.stock || 0) !== item.stock;
+  });
+  const errorNode = $("#model-balance-error");
+  errorNode.textContent = "";
+  if (!changed.length) { errorNode.textContent = "Остатки не изменились."; return; }
+
+  const employee = currentEmployeeName();
+  const reason = $("#model-balance-reason").value.trim() || `Инвентаризация ${modelId}`;
+  const submit = event.submitter;
+  submit.disabled = true;
+
+  try {
+    const productRefs = changed.map((item) => doc(state.db, "products", item.id));
+    const movementRefs = changed.map(() => doc(collection(state.db, "stockMovements")));
+    await runTransaction(state.db, async (tx) => {
+      const snaps = [];
+      for (const ref of productRefs) snaps.push(await tx.get(ref));
+      snaps.forEach((snap, index) => { if (!snap.exists()) throw new Error(`${changed[index].id}: позиция не найдена`); });
+      snaps.forEach((snap, index) => {
+        const data = snap.data();
+        const before = Number(data.stock || 0);
+        const after = changed[index].stock;
+        const delta = after - before;
+        const unitCost = Number(data.avgCost || data.lastCost || 0);
+        const update = { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid, updatedByName: employee };
+        if (data.legacyUnassigned) update.active = after > 0;
+        tx.update(productRefs[index], update);
+        tx.set(movementRefs[index], {
+          type: "adjustment",
+          inventoryId: changed[index].id,
+          productId: data.modelId || modelId,
+          productName: data.name || `${modelId} · ${data.colorName || "Нераспределено"}`,
+          colorId: data.colorId || "",
+          colorName: data.colorName || "",
+          qtyDelta: delta,
+          before,
+          after,
+          unitCost,
+          totalCost: Math.abs(delta) * unitCost,
+          reason,
+          createdAt: serverTimestamp(),
+          createdAtClient: new Date().toISOString(),
+          createdBy: state.user.uid,
+          createdByEmail: state.user.email || "",
+          createdByName: employee
+        });
+      });
+    });
+    $("#model-dialog").close();
+    toast(`${model.id}: остатки обновил ${employee}`);
+  } catch (error) { errorNode.textContent = error.message; }
+  finally { submit.disabled = false; }
+}
+
 function openStockDialog(productId, type) {
   const product = state.products.find((item) => item.id === productId);
   if (!product) return;
   state.operation = { productId, type };
-  const dialog = $("#stock-dialog");
-  const titles = { receipt: "Поступление", writeoff: "Списание", adjustment: "Задать фактический остаток" };
-  $("#stock-dialog-eyebrow").textContent = titles[type];
+  const titles = { receipt: "Поступление", writeoff: "Списание" };
+  $("#stock-dialog-eyebrow").textContent = titles[type] || "Складская операция";
   $("#stock-dialog-title").textContent = product.name;
   $("#stock-current").textContent = `Сейчас на складе: ${Number(product.stock || 0)} ед.`;
-  $("#stock-qty-label").firstChild.textContent = type === "adjustment" ? "Фактический остаток" : "Количество";
-  $("#stock-operation-qty").value = type === "adjustment" ? String(Number(product.stock || 0)) : "";
+  $("#stock-qty-label").firstChild.textContent = "Количество";
+  $("#stock-operation-qty").value = "";
   $("#stock-operation-cost").value = type === "receipt" && Number(product.lastCost || 0) ? String(Number(product.lastCost || 0)) : "";
   $("#stock-cost-row").classList.toggle("hidden", type !== "receipt");
   $("#stock-operation-reason").value = "";
   $("#stock-operation-error").textContent = "";
-  $("#stock-operation-submit").textContent = titles[type];
-  dialog.showModal();
+  $("#stock-operation-submit").textContent = titles[type] || "Сохранить";
+  $("#stock-dialog").showModal();
   setTimeout(() => $("#stock-operation-qty").focus(), 80);
 }
 
 async function applyStockOperation(event) {
   event.preventDefault();
-  const errorNode = $("#stock-operation-error");
-  errorNode.textContent = "";
   const operation = state.operation;
   if (!operation) return;
   const product = state.products.find((item) => item.id === operation.productId);
   if (!product) return;
-
-  const qtyInput = Number($("#stock-operation-qty").value);
-  const costInput = Number($("#stock-operation-cost").value || 0);
+  const qty = Math.trunc(Number($("#stock-operation-qty").value));
+  const cost = Number($("#stock-operation-cost").value || 0);
   const reason = $("#stock-operation-reason").value.trim();
-  if (!Number.isFinite(qtyInput) || qtyInput < 0) {
-    errorNode.textContent = "Укажите корректное количество.";
-    return;
-  }
-  if (operation.type !== "adjustment" && qtyInput <= 0) {
-    errorNode.textContent = "Количество должно быть больше нуля.";
-    return;
-  }
+  const errorNode = $("#stock-operation-error");
+  errorNode.textContent = "";
+  if (!Number.isFinite(qty) || qty <= 0) { errorNode.textContent = "Количество должно быть больше нуля."; return; }
 
+  const employee = currentEmployeeName();
   const submit = $("#stock-operation-submit");
   submit.disabled = true;
   try {
     const productRef = doc(state.db, "products", operation.productId);
     const movementRef = doc(collection(state.db, "stockMovements"));
-
     await runTransaction(state.db, async (tx) => {
       const snap = await tx.get(productRef);
       if (!snap.exists()) throw new Error("Товар не найден");
       const data = snap.data();
       const before = Number(data.stock || 0);
-      let after = before;
-      let delta = 0;
-
-      if (operation.type === "receipt") {
-        delta = Math.trunc(qtyInput);
-        after = before + delta;
-      } else if (operation.type === "writeoff") {
-        delta = -Math.trunc(qtyInput);
-        if (before + delta < 0) throw new Error(`На складе только ${before} ед.`);
-        after = before + delta;
-      } else {
-        after = Math.trunc(qtyInput);
-        delta = after - before;
-      }
-
-      if (delta === 0) throw new Error("Остаток не изменился");
-
+      const delta = operation.type === "receipt" ? qty : -qty;
+      if (before + delta < 0) throw new Error(`На складе только ${before} ед.`);
+      const after = before + delta;
       const oldAvg = Number(data.avgCost || data.lastCost || 0);
-      let avgCost = oldAvg;
-      let lastCost = Number(data.lastCost || 0);
-      if (operation.type === "receipt" && costInput > 0) {
-        avgCost = after > 0 ? ((before * oldAvg) + (delta * costInput)) / after : costInput;
-        lastCost = costInput;
-      }
-      const unitCost = operation.type === "receipt" && costInput > 0 ? costInput : avgCost;
-      const update = { stock: after, avgCost, lastCost, updatedAt: serverTimestamp(), updatedBy: state.user.uid };
-      if (data.legacyUnassigned && after === 0) update.active = false;
-
-      tx.update(productRef, update);
+      const avgCost = operation.type === "receipt" && cost > 0 && after > 0 ? ((before * oldAvg) + (qty * cost)) / after : oldAvg;
+      const lastCost = operation.type === "receipt" && cost > 0 ? cost : Number(data.lastCost || 0);
+      const unitCost = operation.type === "receipt" && cost > 0 ? cost : avgCost;
+      tx.update(productRef, { stock: after, avgCost, lastCost, updatedAt: serverTimestamp(), updatedBy: state.user.uid, updatedByName: employee });
       tx.set(movementRef, {
         type: operation.type,
         inventoryId: operation.productId,
@@ -658,18 +758,14 @@ async function applyStockOperation(event) {
         createdAt: serverTimestamp(),
         createdAtClient: new Date().toISOString(),
         createdBy: state.user.uid,
-        createdByEmail: state.user.email || ""
+        createdByEmail: state.user.email || "",
+        createdByName: employee
       });
     });
-
     $("#stock-dialog").close();
-    state.operation = null;
-    toast("Остаток обновлён");
-  } catch (error) {
-    errorNode.textContent = error.message;
-  } finally {
-    submit.disabled = false;
-  }
+    toast(`${operation.type === "receipt" ? "Поступление" : "Списание"} · ${employee}`);
+  } catch (error) { errorNode.textContent = error.message; }
+  finally { submit.disabled = false; }
 }
 
 function navigate(name) {
@@ -690,6 +786,8 @@ async function resetPassword(email) {
 function wireUi() {
   $$('[data-nav]').forEach((button) => button.addEventListener("click", () => navigate(button.dataset.nav)));
   $("#sale-form").addEventListener("submit", createSale);
+  $("#model-balance-form").addEventListener("submit", saveModelBalances);
+  $("#model-dialog-close").addEventListener("click", () => $("#model-dialog").close());
   $("#stock-operation-form").addEventListener("submit", applyStockOperation);
   $("#stock-dialog-close").addEventListener("click", () => $("#stock-dialog").close());
 
@@ -699,13 +797,9 @@ function wireUi() {
     errorNode.textContent = "";
     const submit = event.submitter;
     submit.disabled = true;
-    try {
-      await signInWithEmailAndPassword(state.auth, $("#email").value.trim(), $("#password").value);
-    } catch (error) {
-      errorNode.textContent = error.code === "auth/invalid-credential" ? "Неверный email или пароль." : error.message;
-    } finally {
-      submit.disabled = false;
-    }
+    try { await signInWithEmailAndPassword(state.auth, $("#email").value.trim(), $("#password").value); }
+    catch (error) { errorNode.textContent = error.code === "auth/invalid-credential" ? "Неверный email или пароль." : error.message; }
+    finally { submit.disabled = false; }
   });
 
   $("#reset-password-login").addEventListener("click", async () => {
@@ -723,7 +817,6 @@ function wireUi() {
 async function boot() {
   wireUi();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
-
   const cfg = config();
   if (!cfg?.apiKey || !cfg?.authDomain || !cfg?.projectId || !cfg?.appId) {
     showOnly("#login");
@@ -736,9 +829,7 @@ async function boot() {
     const app = initializeApp(cfg);
     state.auth = getAuth(app);
     await setPersistence(state.auth, browserLocalPersistence);
-    state.db = initializeFirestore(app, {
-      localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-    });
+    state.db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
 
     onAuthStateChanged(state.auth, (user) => {
       state.user = user;
@@ -747,7 +838,11 @@ async function boot() {
         showOnly("#login");
         return;
       }
+      const employee = currentEmployeeName();
       showOnly("#app");
+      $("#current-user-name").textContent = employee;
+      $("#current-user-email").textContent = user.email || "";
+      $("#settings-name").textContent = employee;
       $("#settings-email").textContent = user.email || user.uid;
       $("#settings-project").textContent = cfg.projectId;
       startRealtime();
@@ -757,9 +852,7 @@ async function boot() {
   } catch (error) {
     showOnly("#login");
     $("#login-error").textContent = `Firebase: ${error.message}`;
-  } finally {
-    hideBoot();
-  }
+  } finally { hideBoot(); }
 }
 
 boot();
