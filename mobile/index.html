@@ -13,11 +13,11 @@
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js" crossorigin>
-  <link rel="modulepreload" href="./app.js?v=18">
+  <link rel="modulepreload" href="./app.js?v=20">
   <link rel="manifest" href="./manifest.webmanifest?v=15">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css?v=15">
-  <link rel="stylesheet" href="./warehouse.css?v=17">
+  <link rel="stylesheet" href="./warehouse.css?v=18">
 </head>
 <body>
   <div id="boot" class="boot">
@@ -97,7 +97,10 @@
       </section>
 
       <section id="view-sale" class="view">
-        <div class="section-head"><h1>Новая продажа</h1></div>
+        <div class="section-head sticky-head sale-sticky-head">
+          <h1>Новая продажа</h1>
+          <div class="sale-head-total"><span>Отмечено</span><b id="sale-header-total">0 ₸</b></div>
+        </div>
         <form id="sale-form" class="panel form-stack">
           <div class="section-label">Товары и цвета</div>
           <div id="sale-products" class="sale-products"></div>
@@ -186,7 +189,7 @@
     }, 1000);
   </script>
   <script src="./firebase-config.js?v=21"></script>
-  <script type="module" src="./app.js?v=19"></script>
+  <script type="module" src="./app.js?v=20"></script>
   <script type="module" src="./firestore-error-help.js?v=16"></script>
 </body>
 </html>

@@ -11,6 +11,7 @@ const pages = {
 const mobileApp = new URL("../mobile/app.js", import.meta.url);
 const mobileHtml = new URL("../mobile/index.html", import.meta.url);
 const mobileWorker = new URL("../mobile/sw.js", import.meta.url);
+const warehouseCss = new URL("../mobile/warehouse.css", import.meta.url);
 const inventoryState = new URL("../mobile/inventory-state.js", import.meta.url);
 const publicPriceModule = new URL("../assets/public-prices.js", import.meta.url);
 
@@ -51,9 +52,9 @@ test("the warehouse model card renders the saved Firestore price", async () => {
   assert.match(app, /Number\(item\.stock \|\| 0\) \* modelSalePrice/);
   assert.doesNotMatch(app, /stockValue\(\).*avgCost/);
   assert.match(html, /Потенциальная стоимость/);
-  assert.match(html, /app\.js\?v=19/);
-  assert.match(worker, /conductor-mobile-v28/);
-  assert.match(worker, /app\.js\?v=19/);
+  assert.match(html, /app\.js\?v=20/);
+  assert.match(worker, /conductor-mobile-v29/);
+  assert.match(worker, /app\.js\?v=20/);
 });
 
 test("Firestore is initialized once before any asynchronous auth setup", async () => {
@@ -119,5 +120,24 @@ test("the warehouse header has one logout button wired to Firebase sign-out", as
   assert.match(html, /<button id="logout" class="site-btn logout-btn"[^>]*>Выйти<\/button>/);
   assert.equal((html.match(/id="logout"/g) || []).length, 1);
   assert.match(app, /\$\("#logout"\)\.addEventListener\("click", \(\) => signOut\(state\.auth\)\)/);
-  assert.match(worker, /warehouse\.css\?v=17/);
+  assert.match(worker, /warehouse\.css\?v=18/);
+});
+
+test("new sale groups variants by model and keeps the selected total visible", async () => {
+  const [app, html, css] = await Promise.all([
+    readFile(mobileApp, "utf8"),
+    readFile(mobileHtml, "utf8"),
+    readFile(warehouseCss, "utf8")
+  ]);
+
+  assert.match(html, /class="section-head sticky-head sale-sticky-head"/);
+  assert.match(html, /id="sale-header-total"/);
+  assert.match(app, /saleOpenModelId: null/);
+  assert.match(app, /saleQuantities: new Map\(\)/);
+  assert.match(app, /data-sale-model="\$\{model\.id\}"/);
+  assert.match(app, /if \(isOpen\) html \+= `<div class="sale-model-variants"/);
+  assert.match(app, /state\.saleQuantities\.get\(product\.id\)/);
+  assert.match(app, /\$\("#sale-header-total"\).*textContent = formatted/);
+  assert.match(css, /\.sale-sticky-head\{top:70px/);
+  assert.match(css, /\.sale-model-toggle\{/);
 });

@@ -111,6 +111,8 @@ const state = {
   products: [],
   sales: [],
   movements: [],
+  saleOpenModelId: null,
+  saleQuantities: new Map(),
   operation: null,
   modelDialogId: null,
   unsubs: []
@@ -403,39 +405,73 @@ function bindSaleActions(root) {
 }
 
 function renderProducts() {
-  let html = "";
+  for (const [inventoryId, qty] of state.saleQuantities) {
+    const product = state.products.find((item) => item.id === inventoryId && item.active !== false);
+    const available = Number(product?.stock || 0);
+    if (!product || available <= 0) state.saleQuantities.delete(inventoryId);
+    else if (qty > available) state.saleQuantities.set(inventoryId, available);
+  }
+
+  let html = `<div class="sale-model-list">`;
   for (const model of MODELS) {
     const variants = modelVariants(model.id);
     if (!variants.length) continue;
-    html += `<div class="variant-group-label"><b>${escapeHtml(model.id)}</b><span>${variants.reduce((sum, item) => sum + Number(item.stock || 0), 0)} ед. · выберите цвет</span></div>`;
-    html += variants.map((product) => `<div class="sale-product">
+    const isOpen = state.saleOpenModelId === model.id;
+    const totalStock = variants.reduce((sum, item) => sum + Number(item.stock || 0), 0);
+    const selectedQty = variants.reduce((sum, item) => sum + Number(state.saleQuantities.get(item.id) || 0), 0);
+    const selectedTotal = selectedQty * modelSalePrice(model.id);
+    html += `<section class="sale-model-card${isOpen ? " active" : ""}">
+      <button class="sale-model-toggle" type="button" data-sale-model="${model.id}" aria-expanded="${isOpen}" aria-controls="sale-model-${model.id}">
+        <span class="sale-model-title"><b>${escapeHtml(model.name)}</b><small>${variants.length} цветов · ${totalStock} ед. на складе</small></span>
+        <span class="sale-model-price"><b>${KZT.format(modelSalePrice(model.id))}</b><small data-sale-model-selected="${model.id}">${selectedQty ? `${selectedQty} ед. · ${KZT.format(selectedTotal)}` : "Выбрать цвет"}</small></span>
+        <span class="sale-model-arrow" aria-hidden="true">${isOpen ? "−" : "+"}</span>
+      </button>`;
+    if (isOpen) html += `<div class="sale-model-variants" id="sale-model-${model.id}">${variants.map((product) => {
+      const stock = Number(product.stock || 0);
+      const qty = Number(state.saleQuantities.get(product.id) || 0);
+      return `<div class="sale-product">
       <div class="sale-product-name"><b>${colorDot(product)}${escapeHtml(product.colorName)}</b><small>${KZT.format(modelSalePrice(model.id))} · остаток ${Number(product.stock || 0)}</small></div>
       <div class="qty-control">
-        <button type="button" data-qty-minus="${product.id}">−</button>
-        <input type="number" min="0" max="${Number(product.stock || 0)}" value="0" inputmode="numeric" data-qty="${product.id}">
-        <button type="button" data-qty-plus="${product.id}">+</button>
+        <button type="button" data-qty-minus="${product.id}"${stock ? "" : " disabled"}>−</button>
+        <input type="number" min="0" max="${stock}" value="${qty}" inputmode="numeric" data-qty="${product.id}" aria-label="Количество: ${escapeHtml(product.colorName)}"${stock ? "" : " disabled"}>
+        <button type="button" data-qty-plus="${product.id}"${stock ? "" : " disabled"}>+</button>
       </div>
-    </div>`).join("");
+    </div>`;
+    }).join("")}</div>`;
+    html += `</section>`;
   }
-  $("#sale-products").innerHTML = html || `<div class="empty">Товары загружаются…</div>`;
+  html += `</div>`;
+  $("#sale-products").innerHTML = html === `<div class="sale-model-list"></div>` ? `<div class="empty">Товары загружаются…</div>` : html;
+  $$('[data-sale-model]').forEach((button) => button.addEventListener("click", () => {
+    state.saleOpenModelId = state.saleOpenModelId === button.dataset.saleModel ? null : button.dataset.saleModel;
+    renderProducts();
+  }));
   $$('[data-qty-minus]').forEach((button) => button.addEventListener("click", () => changeSaleQty(button.dataset.qtyMinus, -1)));
   $$('[data-qty-plus]').forEach((button) => button.addEventListener("click", () => changeSaleQty(button.dataset.qtyPlus, 1)));
-  $$('[data-qty]').forEach((input) => input.addEventListener("input", updateSaleTotal));
+  $$('[data-qty]').forEach((input) => input.addEventListener("input", () => setSaleQty(input.dataset.qty, input.value)));
+  updateSaleTotal();
+}
+
+function setSaleQty(inventoryId, rawQty) {
+  const product = state.products.find((item) => item.id === inventoryId);
+  if (!product) return;
+  const qty = Math.max(0, Math.min(Number(product.stock || 0), Math.trunc(Number(rawQty) || 0)));
+  if (qty) state.saleQuantities.set(inventoryId, qty);
+  else state.saleQuantities.delete(inventoryId);
+  const input = document.querySelector(`[data-qty="${CSS.escape(inventoryId)}"]`);
+  if (input && Number(input.value) !== qty) input.value = String(qty);
   updateSaleTotal();
 }
 
 function changeSaleQty(inventoryId, delta) {
-  const input = document.querySelector(`[data-qty="${CSS.escape(inventoryId)}"]`);
   const product = state.products.find((item) => item.id === inventoryId);
-  if (!input || !product) return;
-  input.value = String(Math.max(0, Math.min(Number(product.stock || 0), Number(input.value || 0) + delta)));
-  updateSaleTotal();
+  if (!product) return;
+  setSaleQty(inventoryId, Number(state.saleQuantities.get(inventoryId) || 0) + delta);
 }
 
 function selectedItems() {
   return state.products.map((product) => {
-    const input = document.querySelector(`[data-qty="${CSS.escape(product.id)}"]`);
-    const qty = Number(input?.value || 0);
+    const qty = Number(state.saleQuantities.get(product.id) || 0);
     if (qty <= 0) return null;
     const price = modelSalePrice(product.modelId || product.id);
     return {
@@ -452,7 +488,18 @@ function selectedItems() {
 }
 
 function updateSaleTotal() {
-  $("#sale-total").textContent = KZT.format(selectedItems().reduce((sum, item) => sum + item.lineTotal, 0));
+  const items = selectedItems();
+  const total = items.reduce((sum, item) => sum + item.lineTotal, 0);
+  const formatted = KZT.format(total);
+  $("#sale-total").textContent = formatted;
+  if ($("#sale-header-total")) $("#sale-header-total").textContent = formatted;
+  for (const model of MODELS) {
+    const modelItems = items.filter((item) => item.productId === model.id);
+    const qty = modelItems.reduce((sum, item) => sum + item.qty, 0);
+    const subtotal = modelItems.reduce((sum, item) => sum + item.lineTotal, 0);
+    const summary = document.querySelector(`[data-sale-model-selected="${model.id}"]`);
+    if (summary) summary.textContent = qty ? `${qty} ед. · ${KZT.format(subtotal)}` : "Выбрать цвет";
+  }
 }
 
 async function createSale(event) {
@@ -525,8 +572,9 @@ async function createSale(event) {
     });
 
     event.target.reset();
-    $$('[data-qty]').forEach((input) => input.value = "0");
-    updateSaleTotal();
+    state.saleQuantities.clear();
+    state.saleOpenModelId = null;
+    renderProducts();
     toast(`Продажа записана · ${employee}`);
     navigate("sales");
   } catch (error) { errorNode.textContent = error.message; }
@@ -810,6 +858,7 @@ function navigate(name) {
   $(`#view-${name}`)?.classList.add("active");
   const subtitles = { dashboard: "Склад сегодня", sales: "История продаж", sale: "Фиксация продажи", stock: "Остатки и движения", settings: "Приложение" };
   $("#page-subtitle").textContent = subtitles[name] || "";
+  if (name === "sale") renderProducts();
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
