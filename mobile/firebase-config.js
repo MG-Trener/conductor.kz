@@ -20,7 +20,7 @@ if (location.pathname.startsWith("/mobile/")) {
       if (document.querySelector('script[data-conductor-inventory-state]')) return;
       const inventoryState = document.createElement("script");
       inventoryState.type = "module";
-      inventoryState.src = "./inventory-state.js?v=23";
+      inventoryState.src = "./inventory-state.js?v=24";
       inventoryState.dataset.conductorInventoryState = "1";
       document.head.append(inventoryState);
     }, 1000);

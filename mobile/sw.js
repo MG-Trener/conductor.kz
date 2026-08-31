@@ -1,12 +1,12 @@
-const CACHE = "conductor-mobile-v27";
+const CACHE = "conductor-mobile-v28";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css?v=15",
   "./warehouse.css?v=17",
-  "./app.js?v=18",
-  "./firebase-config.js?v=20",
-  "./inventory-state.js?v=23",
+  "./app.js?v=19",
+  "./firebase-config.js?v=21",
+  "./inventory-state.js?v=24",
   "./firestore-error-help.js?v=16",
   "./manifest.webmanifest?v=15",
   "./icon.svg"

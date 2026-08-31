@@ -1,7 +1,6 @@
 import { getApps } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
 import { getAuth } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 import {
-  getFirestore,
   collection,
   doc,
   onSnapshot,
@@ -353,13 +352,13 @@ function bindUi() {
 
 async function start() {
   let attempts = 0;
-  while (!getApps().length && attempts < 100) {
+  while (!window.CONDUCTOR_FIRESTORE && attempts < 100) {
     await new Promise((resolve) => setTimeout(resolve, 100));
     attempts += 1;
   }
-  if (!getApps().length) return;
+  if (!getApps().length || !window.CONDUCTOR_FIRESTORE) return;
 
-  db = getFirestore(getApps()[0]);
+  db = window.CONDUCTOR_FIRESTORE;
   bindUi();
   scheduleApply();
 

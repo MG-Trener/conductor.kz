@@ -862,9 +862,10 @@ async function boot() {
 
   try {
     const app = initializeApp(cfg);
+    state.db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+    window.CONDUCTOR_FIRESTORE = state.db;
     state.auth = getAuth(app);
     await setPersistence(state.auth, browserLocalPersistence);
-    state.db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
 
     onAuthStateChanged(state.auth, (user) => {
       state.user = user;

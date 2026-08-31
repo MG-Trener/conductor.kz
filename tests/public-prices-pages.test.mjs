@@ -11,6 +11,7 @@ const pages = {
 const mobileApp = new URL("../mobile/app.js", import.meta.url);
 const mobileHtml = new URL("../mobile/index.html", import.meta.url);
 const mobileWorker = new URL("../mobile/sw.js", import.meta.url);
+const inventoryState = new URL("../mobile/inventory-state.js", import.meta.url);
 const publicPriceModule = new URL("../assets/public-prices.js", import.meta.url);
 
 test("all public product pages load the shared live price module", async () => {
@@ -50,9 +51,26 @@ test("the warehouse model card renders the saved Firestore price", async () => {
   assert.match(app, /Number\(item\.stock \|\| 0\) \* modelSalePrice/);
   assert.doesNotMatch(app, /stockValue\(\).*avgCost/);
   assert.match(html, /Потенциальная стоимость/);
-  assert.match(html, /app\.js\?v=18/);
-  assert.match(worker, /conductor-mobile-v27/);
-  assert.match(worker, /app\.js\?v=18/);
+  assert.match(html, /app\.js\?v=19/);
+  assert.match(worker, /conductor-mobile-v28/);
+  assert.match(worker, /app\.js\?v=19/);
+});
+
+test("Firestore is initialized once before any asynchronous auth setup", async () => {
+  const [app, helper, html, worker] = await Promise.all([
+    readFile(mobileApp, "utf8"),
+    readFile(inventoryState, "utf8"),
+    readFile(mobileHtml, "utf8"),
+    readFile(mobileWorker, "utf8")
+  ]);
+  const initializeIndex = app.indexOf("state.db = initializeFirestore(");
+  const firstAwaitIndex = app.indexOf("await setPersistence(");
+  assert.ok(initializeIndex >= 0 && initializeIndex < firstAwaitIndex);
+  assert.match(app, /window\.CONDUCTOR_FIRESTORE = state\.db/);
+  assert.match(helper, /db = window\.CONDUCTOR_FIRESTORE/);
+  assert.doesNotMatch(helper, /\bgetFirestore\s*\(/);
+  assert.match(html, /firebase-config\.js\?v=21/);
+  assert.match(worker, /inventory-state\.js\?v=24/);
 });
 
 test("the header contains a visible warehouse login and no hidden hotspot", async () => {
