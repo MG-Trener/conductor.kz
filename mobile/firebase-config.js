@@ -11,10 +11,18 @@ if (location.pathname.startsWith("/mobile/")) {
     appId: "1:249591037242:web:e534b60202dca9245ee403"
   };
 
-  const inventoryState = document.createElement("script");
-  inventoryState.type = "module";
-  inventoryState.src = "./inventory-state.js?v=17";
-  document.head.append(inventoryState);
+  // app.js initializes Firestore with the application's cache settings.
+  // Load the inventory helper only after all module scripts have finished,
+  // otherwise it can call getFirestore() first and lock Firestore to default
+  // settings, causing initializeFirestore() in app.js to fail during login.
+  window.addEventListener("load", () => {
+    if (document.querySelector('script[data-conductor-inventory-state]')) return;
+    const inventoryState = document.createElement("script");
+    inventoryState.type = "module";
+    inventoryState.src = "./inventory-state.js?v=18";
+    inventoryState.dataset.conductorInventoryState = "1";
+    document.head.append(inventoryState);
+  }, { once: true });
 } else {
   window.CONDUCTOR_FIREBASE_CONFIG = null;
   try { localStorage.removeItem("conductor.firebaseConfig"); } catch {}
