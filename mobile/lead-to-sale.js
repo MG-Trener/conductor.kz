@@ -3,6 +3,7 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-aut
 import { getFirestore, collection, doc, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 let activeLead = null;
+window.CONDUCTOR_ACTIVE_LEAD_ID = null;
 
 function toast(message) {
   const node = document.querySelector("#toast");
@@ -13,8 +14,21 @@ function toast(message) {
   toast.timer = setTimeout(() => node.classList.remove("show"), 2200);
 }
 
+function clearLeadState(clearForm = false) {
+  activeLead = null;
+  window.CONDUCTOR_ACTIVE_LEAD_ID = null;
+  if (!clearForm) return;
+  const form = document.querySelector("#sale-form");
+  form?.reset();
+  document.querySelectorAll("[data-qty]").forEach((input) => input.value = "0");
+  document.querySelector("[data-qty]")?.dispatchEvent(new Event("input", { bubbles: true }));
+  const error = document.querySelector("#sale-error");
+  if (error) error.textContent = "";
+}
+
 function selectLead(lead) {
   activeLead = lead;
+  window.CONDUCTOR_ACTIVE_LEAD_ID = lead.id || null;
   document.querySelector('[data-nav="sale"]')?.click();
 
   const customer = document.querySelector("#sale-customer");
@@ -48,19 +62,12 @@ function selectedItems() {
     const meta = row?.querySelector(".sale-product-name small")?.textContent || "";
     const priceText = meta.split("·")[0] || "0";
     const price = Number(priceText.replace(/[^0-9]/g, "")) || 0;
-    return {
-      productId: input.dataset.qty,
-      name: title,
-      qty,
-      price,
-      lineTotal: qty * price
-    };
+    return { productId: input.dataset.qty, name: title, qty, price, lineTotal: qty * price };
   }).filter(Boolean);
 }
 
 async function submitLeadOrder(event) {
   if (!activeLead) return;
-
   event.preventDefault();
   event.stopImmediatePropagation();
 
@@ -68,7 +75,6 @@ async function submitLeadOrder(event) {
   const submit = event.submitter || form.querySelector('button[type="submit"]');
   const errorNode = document.querySelector("#sale-error");
   if (errorNode) errorNode.textContent = "";
-
   const items = selectedItems();
   if (!items.length) {
     if (errorNode) errorNode.textContent = "Добавьте хотя бы один товар.";
@@ -80,7 +86,6 @@ async function submitLeadOrder(event) {
   const city = document.querySelector("#sale-city")?.value.trim() || "";
   const notes = document.querySelector("#sale-notes")?.value.trim() || "";
   const total = items.reduce((sum, item) => sum + item.lineTotal, 0);
-
   const app = getApps()[0];
   const auth = app ? getAuth(app) : null;
   const user = auth?.currentUser;
@@ -100,7 +105,6 @@ async function submitLeadOrder(event) {
     await runTransaction(db, async (tx) => {
       const productSnaps = [];
       for (const ref of productRefs) productSnaps.push(await tx.get(ref));
-
       productSnaps.forEach((snap, index) => {
         if (!snap.exists()) throw new Error(`${items[index].productId}: товар не найден`);
         const stock = Number(snap.data().stock || 0);
@@ -112,11 +116,7 @@ async function submitLeadOrder(event) {
         const before = Number(data.stock || 0);
         const after = before - items[index].qty;
         const avgCost = Number(data.averagePurchasePrice || 0);
-        tx.update(productRefs[index], {
-          stock: after,
-          updatedAt: serverTimestamp(),
-          updatedBy: user.uid
-        });
+        tx.update(productRefs[index], { stock: after, updatedAt: serverTimestamp(), updatedBy: user.uid });
         tx.set(movementRefs[index], {
           productId: items[index].productId,
           productName: data.name || items[index].name,
@@ -137,12 +137,7 @@ async function submitLeadOrder(event) {
       });
 
       tx.set(orderRef, {
-        customer,
-        phone,
-        city,
-        notes,
-        items,
-        total,
+        customer, phone, city, notes, items, total,
         status: "new",
         source: "website-lead",
         leadId: activeLead.id,
@@ -152,7 +147,6 @@ async function submitLeadOrder(event) {
         createdBy: user.uid,
         createdByEmail: user.email || ""
       });
-
       tx.update(leadRef, {
         status: "converted",
         orderId: orderRef.id,
@@ -162,10 +156,7 @@ async function submitLeadOrder(event) {
       });
     });
 
-    form.reset();
-    document.querySelectorAll("[data-qty]").forEach((input) => input.value = "0");
-    document.querySelector("[data-qty]")?.dispatchEvent(new Event("input", { bubbles: true }));
-    activeLead = null;
+    clearLeadState(true);
     toast("Заявка оформлена в заказ, товар списан");
     document.querySelector('[data-nav="orders"]')?.click();
   } catch (error) {
@@ -178,5 +169,13 @@ async function submitLeadOrder(event) {
 window.addEventListener("conductor:convert-lead", (event) => {
   if (event.detail?.id && event.detail?.productId) selectLead(event.detail);
 });
+
+// A real user click on "Продажа" means a fresh manual sale. Programmatic click
+// from selectLead() is not trusted, so the active lead stays intact there.
+document.addEventListener("click", (event) => {
+  const saleNav = event.target.closest('[data-nav="sale"]');
+  if (!saleNav || !event.isTrusted || !activeLead) return;
+  clearLeadState(true);
+}, true);
 
 document.querySelector("#sale-form")?.addEventListener("submit", submitLeadOrder, true);
