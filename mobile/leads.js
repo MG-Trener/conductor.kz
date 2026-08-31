@@ -23,7 +23,7 @@ function dateOf(lead) {
 }
 
 function statusLabel(status) {
-  return ({ new: "Новая", contacted: "В работе", closed: "Закрыта" })[status] || status;
+  return ({ new: "Новая", contacted: "В работе", converted: "Заказ создан", closed: "Закрыта" })[status] || status;
 }
 
 function ensureUi() {
@@ -49,35 +49,32 @@ function ensureUi() {
 function leadCard(lead) {
   const product = PRODUCT_LABELS[lead.productId] || lead.productId;
   const date = dateOf(lead);
-  const actions = lead.status === "new"
+  const statusClass = lead.status === "new" ? "new" : lead.status === "contacted" ? "confirmed" : lead.status === "converted" ? "done" : "done";
+  const workflowAction = lead.status === "new"
     ? `<button data-lead-action="contacted" data-lead-id="${lead.id}">В работу</button>`
     : lead.status === "contacted"
       ? `<button data-lead-action="closed" data-lead-id="${lead.id}">Закрыть</button>`
       : "";
+  const convertAction = ["new", "contacted"].includes(lead.status)
+    ? `<button data-convert-lead="${lead.id}">Оформить заказ</button>`
+    : "";
+  const linkedOrder = lead.status === "converted" && lead.orderId
+    ? `<span class="order-meta">Заказ #${escapeHtml(lead.orderId.slice(0, 8))}</span>`
+    : "";
+
   return `<article class="order-card" style="border-color:rgba(255,61,117,.22);background:linear-gradient(145deg,rgba(255,61,117,.08),transparent 46%),var(--panel)">
     <div class="order-top">
       <div><div class="order-customer">${escapeHtml(lead.customer)}</div><div class="order-phone">${escapeHtml(product)}</div></div>
-      <span class="status ${lead.status === "new" ? "new" : lead.status === "contacted" ? "confirmed" : "done"}">${statusLabel(lead.status)}</span>
+      <span class="status ${statusClass}">${statusLabel(lead.status)}</span>
     </div>
     <div class="order-items">☎ ${escapeHtml(lead.phone)}</div>
     <div class="order-bottom"><span class="order-meta">Заявка с conductor.kz</span><span class="order-meta">${date.getTime() ? date.toLocaleString("ru-KZ", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "только что"}</span></div>
-    <div class="order-actions"><a href="tel:${escapeHtml(lead.phone.replace(/[^+\d]/g, ""))}" style="border:1px solid var(--line);background:#0a0f18;color:#fff;border-radius:10px;padding:7px 9px;font-size:10px;font-weight:800;text-decoration:none">Позвонить</a>${actions}</div>
+    ${linkedOrder}
+    <div class="order-actions"><a href="tel:${escapeHtml(lead.phone.replace(/[^+\d]/g, ""))}" style="border:1px solid var(--line);background:#0a0f18;color:#fff;border-radius:10px;padding:7px 9px;font-size:10px;font-weight:800;text-decoration:none">Позвонить</a>${workflowAction}${convertAction}</div>
   </article>`;
 }
 
-function render(db) {
-  ensureUi();
-  const open = leads.filter((lead) => lead.status !== "closed");
-  const fresh = leads.filter((lead) => lead.status === "new");
-  const dashboard = document.querySelector("#website-leads-dashboard");
-  const orders = document.querySelector("#website-leads-orders");
-  const badge = document.querySelector("#website-leads-badge");
-  const count = document.querySelector("#website-leads-orders-count");
-  if (badge) badge.textContent = String(fresh.length);
-  if (count) count.textContent = `${open.length} активных`;
-  if (dashboard) dashboard.innerHTML = open.length ? open.slice(0, 3).map(leadCard).join("") : `<div class="empty">Новых заявок с сайта пока нет.</div>`;
-  if (orders) orders.innerHTML = leads.length ? leads.map(leadCard).join("") : `<div class="empty">Заявок с сайта пока нет.</div>`;
-
+function bindActions(db) {
   document.querySelectorAll("[data-lead-action]").forEach((button) => {
     if (button.dataset.bound === "1") return;
     button.dataset.bound = "1";
@@ -93,6 +90,37 @@ function render(db) {
       }
     });
   });
+
+  document.querySelectorAll("[data-convert-lead]").forEach((button) => {
+    if (button.dataset.bound === "1") return;
+    button.dataset.bound = "1";
+    button.addEventListener("click", () => {
+      const lead = leads.find((item) => item.id === button.dataset.convertLead);
+      if (!lead) return;
+      window.dispatchEvent(new CustomEvent("conductor:convert-lead", { detail: {
+        id: lead.id,
+        customer: lead.customer,
+        phone: lead.phone,
+        productId: lead.productId
+      }}));
+    });
+  });
+}
+
+function render(db) {
+  ensureUi();
+  const open = leads.filter((lead) => !["closed", "converted"].includes(lead.status));
+  const fresh = leads.filter((lead) => lead.status === "new");
+  const dashboard = document.querySelector("#website-leads-dashboard");
+  const orders = document.querySelector("#website-leads-orders");
+  const badge = document.querySelector("#website-leads-badge");
+  const count = document.querySelector("#website-leads-orders-count");
+  if (badge) badge.textContent = String(fresh.length);
+  if (count) count.textContent = `${open.length} активных`;
+  if (dashboard) dashboard.innerHTML = open.length ? open.slice(0, 3).map(leadCard).join("") : `<div class="empty">Новых заявок с сайта пока нет.</div>`;
+  if (orders) orders.innerHTML = leads.length ? leads.map(leadCard).join("") : `<div class="empty">Заявок с сайта пока нет.</div>`;
+
+  bindActions(db);
 
   const metricNew = document.querySelector("#metric-new");
   if (metricNew) {
