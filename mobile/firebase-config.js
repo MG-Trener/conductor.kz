@@ -1,7 +1,6 @@
-// Firebase Web App configuration for the internal CONDUCTOR mobile app.
-// The values are not passwords, but keep server/admin secrets out of this file.
-// You may paste the config here later; until then the app can save it locally
-// through the first-run setup screen.
+// Firebase Web App configuration shared by the internal CONDUCTOR mobile app
+// and the public order form. Firebase Web Config is not a server secret.
+// Never place service-account JSON, private keys or admin credentials here.
 window.CONDUCTOR_FIREBASE_CONFIG = {
   apiKey: "",
   authDomain: "",
@@ -10,3 +9,11 @@ window.CONDUCTOR_FIREBASE_CONFIG = {
   messagingSenderId: "",
   appId: ""
 };
+
+// Keep website-lead UI isolated to the internal mobile workspace.
+if (location.pathname.startsWith("/mobile/")) {
+  const script = document.createElement("script");
+  script.type = "module";
+  script.src = "./leads.js";
+  document.head.append(script);
+}
