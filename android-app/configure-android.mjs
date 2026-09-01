@@ -50,8 +50,6 @@ if (System.getenv("WAREHOUSE_KEYSTORE_PATH")) {
 }
 fs.writeFileSync(gradlePath, gradle);
 
-// The repository can live in a Windows folder with Cyrillic characters.
-// AGP blocks such paths by default even though the project builds correctly.
 const gradlePropertiesPath = path.join(androidDir, "gradle.properties");
 if (fs.existsSync(gradlePropertiesPath)) {
   let gradleProperties = fs.readFileSync(gradlePropertiesPath, "utf8");
@@ -62,7 +60,6 @@ if (fs.existsSync(gradlePropertiesPath)) {
 }
 
 const brandingDir = path.join(here, "branding");
-
 function isJpeg(buffer) {
   return buffer.length >= 1000
     && buffer[0] === 0xff
@@ -82,20 +79,11 @@ function reviveAsset(prefix) {
     .replace(/\s+/g, "")
     .replace(/[^A-Za-z0-9+/=]/g, ""));
 
-  // First support parts that are slices of one continuous Base64 string.
   const joined = Buffer.from(encodedParts.join(""), "base64");
   if (isJpeg(joined)) return joined;
 
-  // Some branding files were produced by encoding each binary chunk separately.
-  // In that case every fragment can contain its own Base64 padding, so text-level
-  // concatenation truncates the JPEG at the first padding marker. Decode each
-  // fragment independently and concatenate the resulting binary chunks instead.
   const concatenated = Buffer.concat(encodedParts.map((encoded) => Buffer.from(encoded, "base64")));
-  if (isJpeg(concatenated)) {
-    console.log(`Ресурс ${prefix} восстановлен из независимо закодированных Base64-частей.`);
-    return concatenated;
-  }
-
+  if (isJpeg(concatenated)) return concatenated;
   throw new Error(`Повреждён JPEG-ресурс ${prefix}`);
 }
 
@@ -106,26 +94,20 @@ const splashPng = fs.readFileSync(sharedSplashPath);
 if (splashPng.length < 100_000 || !splashPng.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
   throw new Error("Повреждён общий PNG-ресурс заставки");
 }
-const resDir = path.join(androidDir, "app", "src", "main", "res");
 
-// Replace all density-specific launcher images with the front-facing locomotive artwork.
+const resDir = path.join(androidDir, "app", "src", "main", "res");
 for (const density of ["mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"]) {
   const dir = path.join(resDir, `mipmap-${density}`);
   fs.mkdirSync(dir, { recursive: true });
   for (const base of ["ic_launcher", "ic_launcher_round", "ic_launcher_foreground"]) {
-    for (const ext of ["png", "webp", "jpg", "jpeg"]) {
-      fs.rmSync(path.join(dir, `${base}.${ext}`), { force: true });
-    }
+    for (const ext of ["png", "webp", "jpg", "jpeg"]) fs.rmSync(path.join(dir, `${base}.${ext}`), { force: true });
     fs.writeFileSync(path.join(dir, `${base}.jpg`), iconJpeg);
   }
 }
 
-// Portrait startup artwork with a vintage caption baked into the image.
 const splashDir = path.join(resDir, "drawable-nodpi");
 fs.mkdirSync(splashDir, { recursive: true });
-for (const ext of ["png", "webp", "jpg", "jpeg"]) {
-  fs.rmSync(path.join(splashDir, `warehouse_splash.${ext}`), { force: true });
-}
+for (const ext of ["png", "webp", "jpg", "jpeg"]) fs.rmSync(path.join(splashDir, `warehouse_splash.${ext}`), { force: true });
 fs.writeFileSync(path.join(splashDir, "warehouse_splash.png"), splashPng);
 
 const iconBackgroundPath = path.join(resDir, "values", "ic_launcher_background.xml");
@@ -138,8 +120,6 @@ if (fs.existsSync(iconBackgroundPath)) {
   fs.writeFileSync(iconBackgroundPath, iconBackground);
 }
 
-// Android 12 shows its short system splash first. The custom cinematic splash below
-// then stays above the warehouse WebView for six full seconds.
 const stylesPath = path.join(resDir, "values", "styles.xml");
 if (fs.existsSync(stylesPath)) {
   let styles = fs.readFileSync(stylesPath, "utf8");
@@ -167,122 +147,9 @@ const mainActivityPath = path.join(
 );
 if (!fs.existsSync(mainActivityPath)) throw new Error(`Не найден ${mainActivityPath}`);
 
-const mainActivity = `package ${packageName};
-
-import android.animation.ObjectAnimator;
-import android.animation.PropertyValuesHolder;
-import android.graphics.Color;
-import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
-import android.view.View;
-import android.view.ViewGroup;
-import android.view.WindowManager;
-import android.widget.ImageView;
-
-import com.getcapacitor.BridgeActivity;
-
-public class MainActivity extends BridgeActivity {
-    private static final long SPLASH_HOLD_MS = 6000L;
-    private static final long SPLASH_FADE_MS = 650L;
-
-    private ImageView warehouseSplash;
-    private int previousSystemUiVisibility;
-    private int previousStatusBarColor;
-    private int previousNavigationBarColor;
-    private int previousWindowFlags;
-    private boolean returningFromBackground;
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        showWarehouseSplash();
-    }
-
-    @Override
-    public void onResume() {
-        super.onResume();
-        if (returningFromBackground && warehouseSplash == null) {
-            showWarehouseSplash();
-        }
-        returningFromBackground = false;
-    }
-
-    @Override
-    public void onPause() {
-        returningFromBackground = true;
-        super.onPause();
-    }
-
-    private void showWarehouseSplash() {
-        if (warehouseSplash != null) return;
-        previousSystemUiVisibility = getWindow().getDecorView().getSystemUiVisibility();
-        previousStatusBarColor = getWindow().getStatusBarColor();
-        previousNavigationBarColor = getWindow().getNavigationBarColor();
-        previousWindowFlags = getWindow().getAttributes().flags;
-
-        // Keep Android's time, notifications and battery row visible. Removing
-        // all fullscreen layout flags makes the splash content start below it.
-        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        getWindow().setStatusBarColor(Color.rgb(7, 10, 18));
-        getWindow().setNavigationBarColor(Color.rgb(7, 10, 18));
-        getWindow().getDecorView().setSystemUiVisibility(
-            previousSystemUiVisibility
-                & ~View.SYSTEM_UI_FLAG_FULLSCREEN
-                & ~View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                & ~View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                & ~View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                & ~View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
-                & ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
-        );
-
-        warehouseSplash = new ImageView(this);
-        warehouseSplash.setImageResource(R.drawable.warehouse_splash);
-        warehouseSplash.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        warehouseSplash.setBackgroundColor(Color.rgb(7, 10, 18));
-        warehouseSplash.setAlpha(1f);
-        warehouseSplash.setClickable(true);
-        warehouseSplash.setFocusable(true);
-
-        addContentView(
-            warehouseSplash,
-            new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
-        );
-        warehouseSplash.bringToFront();
-
-        // Slow camera push makes the locomotive feel as though it is entering the warehouse.
-        PropertyValuesHolder scaleX = PropertyValuesHolder.ofFloat("scaleX", 1.00f, 1.085f);
-        PropertyValuesHolder scaleY = PropertyValuesHolder.ofFloat("scaleY", 1.00f, 1.085f);
-        ObjectAnimator driveIn = ObjectAnimator.ofPropertyValuesHolder(warehouseSplash, scaleX, scaleY);
-        driveIn.setDuration(5600L);
-        driveIn.start();
-
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            if (warehouseSplash == null) return;
-            warehouseSplash.animate()
-                .alpha(0f)
-                .setDuration(SPLASH_FADE_MS)
-                .withEndAction(() -> {
-                    if (warehouseSplash != null && warehouseSplash.getParent() instanceof ViewGroup) {
-                        ((ViewGroup) warehouseSplash.getParent()).removeView(warehouseSplash);
-                    }
-                    warehouseSplash = null;
-                    getWindow().getDecorView().setSystemUiVisibility(previousSystemUiVisibility);
-                    getWindow().setStatusBarColor(previousStatusBarColor);
-                    getWindow().setNavigationBarColor(previousNavigationBarColor);
-                    if ((previousWindowFlags & WindowManager.LayoutParams.FLAG_FULLSCREEN) != 0) {
-                        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-                    }
-                })
-                .start();
-        }, SPLASH_HOLD_MS);
-    }
-}
-`;
-
+const templatePath = path.join(here, "MainActivity.template.java");
+if (!fs.existsSync(templatePath)) throw new Error(`Не найден ${templatePath}`);
+const mainActivity = fs.readFileSync(templatePath, "utf8").replaceAll("__PACKAGE_NAME__", packageName);
 fs.writeFileSync(mainActivityPath, mainActivity);
-console.log(`Android configured: ${packageJson.version} (${versionCode}), 6-second locomotive splash enabled, signing=${process.env.WAREHOUSE_SIGNING_ENABLED === "true"}`);
+
+console.log(`Android configured: ${packageJson.version} (${versionCode}), animated 6.2-second locomotive splash enabled, signing=${process.env.WAREHOUSE_SIGNING_ENABLED === "true"}`);
