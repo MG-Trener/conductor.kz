@@ -54,7 +54,7 @@ jobs:
         working-directory: android-app
         run: npx cap add android
 
-      - name: Prepare optional release signing
+      - name: Prepare release signing
         id: signing
         shell: bash
         env:
@@ -68,7 +68,11 @@ jobs:
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-            echo "Release signing secrets are not configured; building a debug-signed APK."
+            if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+              echo "::error::Permanent Android signing secrets are required for main releases. Refusing to publish an APK with an ephemeral debug signature."
+              exit 1
+            fi
+            echo "Signing secrets are absent; a debug APK may be built only on non-main branches."
           fi
 
       - name: Configure Android version
@@ -89,14 +93,15 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease
 
-      - name: Build debug APK fallback
-        if: steps.signing.outputs.enabled != 'true'
+      - name: Build debug APK for non-main branches
+        if: steps.signing.outputs.enabled != 'true' && github.ref != 'refs/heads/main'
         working-directory: android-app/android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
 
       - name: Prepare APK file
+        if: steps.signing.outputs.enabled == 'true' || github.ref != 'refs/heads/main'
         shell: bash
         run: |
           mkdir -p dist
@@ -107,6 +112,7 @@ jobs:
           fi
 
       - name: Upload APK artifact
+        if: steps.signing.outputs.enabled == 'true' || github.ref != 'refs/heads/main'
         uses: actions/upload-artifact@v4
         with:
           name: CONDUCTOR-Warehouse-APK
@@ -115,7 +121,7 @@ jobs:
           retention-days: 30
 
       - name: Publish permanent warehouse release
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && steps.signing.outputs.enabled == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
