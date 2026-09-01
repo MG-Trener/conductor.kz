@@ -161,9 +161,15 @@ fs.writeFileSync(pluginPath, pluginSource);
 const mainActivityPath = path.join(javaDir, "MainActivity.java");
 let mainActivity = fs.readFileSync(mainActivityPath, "utf8");
 if (!mainActivity.includes("registerPlugin(AppUpdaterPlugin.class)")) {
+  // Inject immediately after onCreate opens. Do not depend on the exact statements that
+  // happen before super.onCreate(), because MainActivity also configures system bars.
+  const onCreatePattern = /(protected\s+void\s+onCreate\s*\(\s*Bundle\s+savedInstanceState\s*\)\s*\{\s*)/;
+  if (!onCreatePattern.test(mainActivity)) {
+    throw new Error("Не найден метод onCreate(Bundle savedInstanceState) в MainActivity");
+  }
   mainActivity = mainActivity.replace(
-    "protected void onCreate(Bundle savedInstanceState) {\n        super.onCreate(savedInstanceState);",
-    "protected void onCreate(Bundle savedInstanceState) {\n        registerPlugin(AppUpdaterPlugin.class);\n        super.onCreate(savedInstanceState);",
+    onCreatePattern,
+    `$1        registerPlugin(AppUpdaterPlugin.class);\n`,
   );
   if (!mainActivity.includes("registerPlugin(AppUpdaterPlugin.class)")) {
     throw new Error("Не удалось зарегистрировать AppUpdaterPlugin в MainActivity");
