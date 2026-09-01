@@ -61,10 +61,10 @@ jobs:
           KEYSTORE_BASE64: ${{ secrets.WAREHOUSE_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.WAREHOUSE_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.WAREHOUSE_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.WAREHOUSE_KEY_PASSWORD }}
         run: |
-          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ] && [ -n "$KEY_PASSWORD" ]; then
+          if [ -n "$KEYSTORE_BASE64" ] && [ -n "$KEYSTORE_PASSWORD" ] && [ -n "$KEY_ALIAS" ]; then
             printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$GITHUB_WORKSPACE/android-app/warehouse-release.jks"
+            keytool -list -keystore "$GITHUB_WORKSPACE/android-app/warehouse-release.jks" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
             echo "enabled=true" >> "$GITHUB_OUTPUT"
           else
             echo "enabled=false" >> "$GITHUB_OUTPUT"
@@ -88,7 +88,9 @@ jobs:
           WAREHOUSE_KEYSTORE_PATH: ${{ github.workspace }}/android-app/warehouse-release.jks
           WAREHOUSE_KEYSTORE_PASSWORD: ${{ secrets.WAREHOUSE_KEYSTORE_PASSWORD }}
           WAREHOUSE_KEY_ALIAS: ${{ secrets.WAREHOUSE_KEY_ALIAS }}
-          WAREHOUSE_KEY_PASSWORD: ${{ secrets.WAREHOUSE_KEY_PASSWORD }}
+          # The generated keystore is PKCS12. Its private key uses the store password.
+          # Keeping one source of truth prevents a mismatched key password from breaking releases.
+          WAREHOUSE_KEY_PASSWORD: ${{ secrets.WAREHOUSE_KEYSTORE_PASSWORD }}
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease
