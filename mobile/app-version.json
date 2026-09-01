@@ -1,7 +1,7 @@
 {
-  "version": "0.3.0",
-  "versionCode": 300,
+  "version": "0.4.0",
+  "versionCode": 400,
   "downloadUrl": "https://github.com/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk",
-  "notes": "Новый фирменный значок с ретро-паровозом и цветным дымом. Добавлена полноэкранная заставка с локомотивом, въезжающим на склад, с плавным эффектом движения.",
+  "notes": "Новая полноэкранная заставка CONDUCTOR Склад: ретро-локомотив въезжает на склад, показ 6 секунд перед открытием приложения, затем плавное исчезновение.",
   "publishedAt": "2026-09-01"
 }

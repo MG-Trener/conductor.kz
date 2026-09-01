@@ -3,7 +3,7 @@
   "appName": "CONDUCTOR Склад",
   "webDir": "www",
   "server": {
-    "url": "https://conductor.kz/mobile/?native=1&appVersion=0.3.0",
+    "url": "https://conductor.kz/mobile/?native=1&appVersion=0.4.0",
     "cleartext": false
   }
 }

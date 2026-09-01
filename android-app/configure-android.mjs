@@ -67,10 +67,10 @@ function reviveAsset(prefix) {
 }
 
 const iconJpeg = reviveAsset("icon");
-const splashJpeg = reviveAsset("splashq");
+const splashJpeg = reviveAsset("splashv4");
 const resDir = path.join(androidDir, "app", "src", "main", "res");
 
-// Replace all density-specific legacy launcher images with the new front-facing locomotive artwork.
+// Replace all density-specific launcher images with the front-facing locomotive artwork.
 for (const density of ["mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"]) {
   const dir = path.join(resDir, `mipmap-${density}`);
   fs.mkdirSync(dir, { recursive: true });
@@ -82,7 +82,7 @@ for (const density of ["mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"]) {
   }
 }
 
-// Full-screen vertical splash artwork. drawable-nodpi prevents Android from resampling it as a density asset.
+// Full-screen vertical startup artwork with the "CONDUCTOR Склад" title baked into the image.
 const splashDir = path.join(resDir, "drawable-nodpi");
 fs.mkdirSync(splashDir, { recursive: true });
 for (const ext of ["png", "webp", "jpg", "jpeg"]) {
@@ -100,8 +100,8 @@ if (fs.existsSync(iconBackgroundPath)) {
   fs.writeFileSync(iconBackgroundPath, iconBackground);
 }
 
-// Android 12 shows a short system splash first; it uses the locomotive icon.
-// Immediately afterwards MainActivity overlays our requested full-screen cinematic warehouse scene.
+// Android 12 shows its short system splash first. The custom cinematic splash below
+// then stays above the warehouse WebView for six full seconds.
 const stylesPath = path.join(resDir, "values", "styles.xml");
 if (fs.existsSync(stylesPath)) {
   let styles = fs.readFileSync(stylesPath, "utf8");
@@ -137,13 +137,18 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+    private static final long SPLASH_HOLD_MS = 6000L;
+    private static final long SPLASH_FADE_MS = 650L;
+
     private ImageView warehouseSplash;
+    private int previousSystemUiVisibility;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -152,11 +157,23 @@ public class MainActivity extends BridgeActivity {
     }
 
     private void showWarehouseSplash() {
+        previousSystemUiVisibility = getWindow().getDecorView().getSystemUiVisibility();
+        getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+        );
+
         warehouseSplash = new ImageView(this);
         warehouseSplash.setImageResource(R.drawable.warehouse_splash);
         warehouseSplash.setScaleType(ImageView.ScaleType.CENTER_CROP);
         warehouseSplash.setBackgroundColor(Color.rgb(7, 10, 18));
         warehouseSplash.setAlpha(1f);
+        warehouseSplash.setClickable(true);
+        warehouseSplash.setFocusable(true);
 
         addContentView(
             warehouseSplash,
@@ -167,28 +184,30 @@ public class MainActivity extends BridgeActivity {
         );
         warehouseSplash.bringToFront();
 
-        PropertyValuesHolder scaleX = PropertyValuesHolder.ofFloat("scaleX", 1.00f, 1.065f);
-        PropertyValuesHolder scaleY = PropertyValuesHolder.ofFloat("scaleY", 1.00f, 1.065f);
+        // Slow camera push makes the locomotive feel as though it is entering the warehouse.
+        PropertyValuesHolder scaleX = PropertyValuesHolder.ofFloat("scaleX", 1.00f, 1.085f);
+        PropertyValuesHolder scaleY = PropertyValuesHolder.ofFloat("scaleY", 1.00f, 1.085f);
         ObjectAnimator driveIn = ObjectAnimator.ofPropertyValuesHolder(warehouseSplash, scaleX, scaleY);
-        driveIn.setDuration(2600L);
+        driveIn.setDuration(5600L);
         driveIn.start();
 
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
             if (warehouseSplash == null) return;
             warehouseSplash.animate()
                 .alpha(0f)
-                .setDuration(520L)
+                .setDuration(SPLASH_FADE_MS)
                 .withEndAction(() -> {
                     if (warehouseSplash != null && warehouseSplash.getParent() instanceof ViewGroup) {
                         ((ViewGroup) warehouseSplash.getParent()).removeView(warehouseSplash);
                     }
                     warehouseSplash = null;
+                    getWindow().getDecorView().setSystemUiVisibility(previousSystemUiVisibility);
                 })
                 .start();
-        }, 2200L);
+        }, SPLASH_HOLD_MS);
     }
 }
 `;
 
 fs.writeFileSync(mainActivityPath, mainActivity);
-console.log(`Android configured: ${packageJson.version} (${versionCode}), locomotive branding enabled, signing=${process.env.WAREHOUSE_SIGNING_ENABLED === "true"}`);
+console.log(`Android configured: ${packageJson.version} (${versionCode}), 6-second locomotive splash enabled, signing=${process.env.WAREHOUSE_SIGNING_ENABLED === "true"}`);
