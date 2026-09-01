@@ -100,7 +100,7 @@ function reviveAsset(prefix) {
 }
 
 const iconJpeg = reviveAsset("icon");
-const sharedSplashPath = path.join(here, "..", "mobile", "warehouse-splash.png");
+const sharedSplashPath = path.join(here, "..", "mobile", "warehouse-splash-vintage.png");
 if (!fs.existsSync(sharedSplashPath)) throw new Error(`Не найден ${sharedSplashPath}`);
 const splashPng = fs.readFileSync(sharedSplashPath);
 if (splashPng.length < 100_000 || !splashPng.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
@@ -120,7 +120,7 @@ for (const density of ["mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"]) {
   }
 }
 
-// Full-screen vertical startup artwork with the "CONDUCTOR Склад" title baked into the image.
+// Portrait startup artwork with a vintage caption baked into the image.
 const splashDir = path.join(resDir, "drawable-nodpi");
 fs.mkdirSync(splashDir, { recursive: true });
 for (const ext of ["png", "webp", "jpg", "jpeg"]) {
@@ -177,6 +177,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.ImageView;
 
 import com.getcapacitor.BridgeActivity;
@@ -187,6 +188,9 @@ public class MainActivity extends BridgeActivity {
 
     private ImageView warehouseSplash;
     private int previousSystemUiVisibility;
+    private int previousStatusBarColor;
+    private int previousNavigationBarColor;
+    private int previousWindowFlags;
     private boolean returningFromBackground;
 
     @Override
@@ -213,13 +217,24 @@ public class MainActivity extends BridgeActivity {
     private void showWarehouseSplash() {
         if (warehouseSplash != null) return;
         previousSystemUiVisibility = getWindow().getDecorView().getSystemUiVisibility();
+        previousStatusBarColor = getWindow().getStatusBarColor();
+        previousNavigationBarColor = getWindow().getNavigationBarColor();
+        previousWindowFlags = getWindow().getAttributes().flags;
+
+        // Keep Android's time, notifications and battery row visible. Removing
+        // all fullscreen layout flags makes the splash content start below it.
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().setStatusBarColor(Color.rgb(7, 10, 18));
+        getWindow().setNavigationBarColor(Color.rgb(7, 10, 18));
         getWindow().getDecorView().setSystemUiVisibility(
-            View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                | View.SYSTEM_UI_FLAG_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            previousSystemUiVisibility
+                & ~View.SYSTEM_UI_FLAG_FULLSCREEN
+                & ~View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                & ~View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                & ~View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                & ~View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                & ~View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+                & ~View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
         );
 
         warehouseSplash = new ImageView(this);
@@ -257,6 +272,11 @@ public class MainActivity extends BridgeActivity {
                     }
                     warehouseSplash = null;
                     getWindow().getDecorView().setSystemUiVisibility(previousSystemUiVisibility);
+                    getWindow().setStatusBarColor(previousStatusBarColor);
+                    getWindow().setNavigationBarColor(previousNavigationBarColor);
+                    if ((previousWindowFlags & WindowManager.LayoutParams.FLAG_FULLSCREEN) != 0) {
+                        getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+                    }
                 })
                 .start();
         }, SPLASH_HOLD_MS);

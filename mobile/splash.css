@@ -1,9 +1,9 @@
 /* Startup artwork shared by the installed PWA and the Android wrapper. */
 .boot {
   overflow: hidden;
-  place-content: end center;
-  padding: 0 24px calc(54px + env(safe-area-inset-bottom, 0px));
-  background: #070a12 url("./warehouse-splash.png?v=1") center / cover no-repeat;
+  inset: env(safe-area-inset-top, 0px) 0 0;
+  padding: 0;
+  background: #070a12 url("./warehouse-splash-vintage.png?v=1") center bottom / cover no-repeat;
   opacity: 1;
   visibility: visible;
   transition: opacity .45s ease, visibility 0s linear 0s;
@@ -16,46 +16,8 @@
   transition: opacity .45s ease, visibility 0s linear .45s;
 }
 
-.boot-shade {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(7, 10, 18, .03) 42%, rgba(7, 10, 18, .9) 84%, #070a12 100%);
-}
-
-.boot-copy {
-  position: relative;
-  z-index: 1;
-  text-shadow: 0 4px 22px rgba(0, 0, 0, .75);
-  animation: boot-rise .7s ease both;
-}
-
-.boot-logo {
-  font-size: clamp(27px, 8vw, 38px);
-}
-
-.boot-title {
-  margin-top: 5px;
-  color: #fff;
-  font-size: clamp(38px, 12vw, 58px);
-  font-weight: 1000;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
-.boot-sub {
-  color: #d9dfeb;
-  font-weight: 800;
-}
-
-@keyframes boot-rise {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .boot,
-  .boot-copy {
+  .boot {
     transition: none;
-    animation: none;
   }
 }

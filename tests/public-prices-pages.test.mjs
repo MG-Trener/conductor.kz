@@ -55,7 +55,7 @@ test("the warehouse model card renders the saved Firestore price", async () => {
   assert.doesNotMatch(app, /stockValue\(\).*avgCost/);
   assert.match(html, /Потенциальная стоимость/);
   assert.match(html, /app\.js\?v=24/);
-  assert.match(worker, /conductor-mobile-v34/);
+  assert.match(worker, /conductor-mobile-v35/);
   assert.match(worker, /app\.js\?v=24/);
 });
 
