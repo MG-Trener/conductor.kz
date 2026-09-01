@@ -264,9 +264,14 @@ async function downloadUpdate() {
 
 function start() {
   addStyles();
-  ensureDirectDownloadButton();
+  const nativeAndroid = isAndroidApp();
 
-  if (!isAndroidApp()) return;
+  if (!nativeAndroid) {
+    ensureDirectDownloadButton();
+    return;
+  }
+
+  document.querySelector("#apk-direct-download")?.remove();
   ensureUi();
 
   document.querySelector("#app-update-check")?.addEventListener("click", () => checkForUpdate());
