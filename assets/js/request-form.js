@@ -2,7 +2,6 @@
 // Customer requests are no longer stored: order buttons now open WhatsApp directly.
 
 const SALES_WHATSAPP = "77018709384";
-const APK_URL = "https://github.com/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk";
 
 const products = {
   DM30: "цветной дым DM30",
@@ -34,19 +33,3 @@ document.querySelectorAll("details").forEach((details) => {
     if (text) text.textContent = "Нажмите кнопку «Заказать» у нужного товара — откроется WhatsApp с готовым сообщением продавцу.";
   }
 });
-
-// The release uses a stable warehouse-latest URL, so this button always downloads
-// the APK currently published by the Android release workflow.
-const contacts = document.querySelector(".contacts");
-if (contacts && !document.querySelector(".apk-download")) {
-  const apk = document.createElement("a");
-  apk.className = "contact warehouse-login apk-download";
-  apk.href = APK_URL;
-  apk.setAttribute("aria-label", "Скачать актуальную версию приложения CONDUCTOR Склад для Android");
-  apk.title = "Скачать актуальную версию APK";
-  apk.textContent = "↓ Скачать APK";
-
-  const warehouseLogin = contacts.querySelector('a[href="/mobile/"]');
-  if (warehouseLogin) contacts.insertBefore(apk, warehouseLogin);
-  else contacts.append(apk);
-}
