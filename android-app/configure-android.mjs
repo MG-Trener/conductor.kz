@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -18,7 +17,9 @@ if (!fs.existsSync(gradlePath)) throw new Error(`Не найден ${gradlePath}
 
 let gradle = fs.readFileSync(gradlePath, "utf8");
 const versionCode = Number(updateManifest.versionCode);
-if (!Number.isInteger(versionCode) || versionCode < 1) throw new Error("versionCode должен быть положительным целым числом");
+if (!Number.isInteger(versionCode) || versionCode < 1) {
+  throw new Error("versionCode должен быть положительным целым числом");
+}
 
 gradle = gradle
   .replace(/versionCode\s+\d+/, `versionCode ${versionCode}`)
@@ -47,25 +48,60 @@ if (System.getenv("WAREHOUSE_KEYSTORE_PATH")) {
 }
 `;
 }
-
 fs.writeFileSync(gradlePath, gradle);
 
-// Install branded Android resources generated from the approved locomotive artwork.
-const brandingZip = path.join(here, "branding", "android-branding.zip");
+const brandingDir = path.join(here, "branding");
+function reviveAsset(prefix) {
+  const parts = fs.readdirSync(brandingDir)
+    .filter((name) => name.startsWith(`${prefix}.part`) && name.endsWith(".b64"))
+    .sort();
+  if (!parts.length) throw new Error(`Не найдены части ресурса ${prefix}`);
+  const encoded = parts
+    .map((name) => fs.readFileSync(path.join(brandingDir, name), "utf8").trim())
+    .join("");
+  const result = Buffer.from(encoded, "base64");
+  if (result.length < 1000 || result[0] !== 0xff || result[1] !== 0xd8 || result.at(-2) !== 0xff || result.at(-1) !== 0xd9) {
+    throw new Error(`Повреждён JPEG-ресурс ${prefix}`);
+  }
+  return result;
+}
+
+const iconJpeg = reviveAsset("icon");
+const splashJpeg = reviveAsset("splashq");
 const resDir = path.join(androidDir, "app", "src", "main", "res");
-if (!fs.existsSync(brandingZip)) throw new Error(`Не найден архив фирменных ресурсов: ${brandingZip}`);
-const unzip = spawnSync("unzip", ["-o", brandingZip, "-d", resDir], { stdio: "inherit" });
-if (unzip.status !== 0) throw new Error("Не удалось распаковать Android branding resources");
+
+// Replace all density-specific legacy launcher images with the new front-facing locomotive artwork.
+for (const density of ["mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"]) {
+  const dir = path.join(resDir, `mipmap-${density}`);
+  fs.mkdirSync(dir, { recursive: true });
+  for (const base of ["ic_launcher", "ic_launcher_round", "ic_launcher_foreground"]) {
+    for (const ext of ["png", "webp", "jpg", "jpeg"]) {
+      fs.rmSync(path.join(dir, `${base}.${ext}`), { force: true });
+    }
+    fs.writeFileSync(path.join(dir, `${base}.jpg`), iconJpeg);
+  }
+}
+
+// Full-screen vertical splash artwork. drawable-nodpi prevents Android from resampling it as a density asset.
+const splashDir = path.join(resDir, "drawable-nodpi");
+fs.mkdirSync(splashDir, { recursive: true });
+for (const ext of ["png", "webp", "jpg", "jpeg"]) {
+  fs.rmSync(path.join(splashDir, `warehouse_splash.${ext}`), { force: true });
+}
+fs.writeFileSync(path.join(splashDir, "warehouse_splash.jpg"), splashJpeg);
 
 const iconBackgroundPath = path.join(resDir, "values", "ic_launcher_background.xml");
 if (fs.existsSync(iconBackgroundPath)) {
   let iconBackground = fs.readFileSync(iconBackgroundPath, "utf8");
-  iconBackground = iconBackground.replace(/<color name="ic_launcher_background">[^<]+<\/color>/, '<color name="ic_launcher_background">#070A12</color>');
+  iconBackground = iconBackground.replace(
+    /<color name="ic_launcher_background">[^<]+<\/color>/,
+    '<color name="ic_launcher_background">#070A12</color>',
+  );
   fs.writeFileSync(iconBackgroundPath, iconBackground);
 }
 
-// Android 12+ only permits a centered icon in the OS splash. We use the new locomotive icon there,
-// then show our own full-screen warehouse artwork inside the Activity for the cinematic splash requested.
+// Android 12 shows a short system splash first; it uses the locomotive icon.
+// Immediately afterwards MainActivity overlays our requested full-screen cinematic warehouse scene.
 const stylesPath = path.join(resDir, "values", "styles.xml");
 if (fs.existsSync(stylesPath)) {
   let styles = fs.readFileSync(stylesPath, "utf8");
@@ -82,7 +118,15 @@ if (fs.existsSync(stylesPath)) {
 }
 
 const packageName = capacitorConfig.appId;
-const mainActivityPath = path.join(androidDir, "app", "src", "main", "java", ...packageName.split("."), "MainActivity.java");
+const mainActivityPath = path.join(
+  androidDir,
+  "app",
+  "src",
+  "main",
+  "java",
+  ...packageName.split("."),
+  "MainActivity.java",
+);
 if (!fs.existsSync(mainActivityPath)) throw new Error(`Не найден ${mainActivityPath}`);
 
 const mainActivity = `package ${packageName};
