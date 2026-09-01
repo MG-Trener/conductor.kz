@@ -16,6 +16,42 @@
   transition: opacity .45s ease, visibility 0s linear .45s;
 }
 
+/*
+ * The splash artwork is portrait-oriented for the Android app. On a desktop
+ * monitor a plain `cover` background zooms it too aggressively and crops the
+ * composition. Keep the mobile behaviour unchanged, but on wide screens show
+ * the whole poster in the centre and use a soft copy of it as an ambient fill.
+ */
+@media (min-width: 900px) and (min-aspect-ratio: 4 / 3) {
+  .boot {
+    isolation: isolate;
+    background: #070a12;
+  }
+
+  .boot::before,
+  .boot::after {
+    content: "";
+    position: absolute;
+    pointer-events: none;
+  }
+
+  .boot::before {
+    inset: -36px;
+    z-index: -2;
+    background: url("./warehouse-splash-vintage.png?v=1") center / cover no-repeat;
+    filter: blur(28px) brightness(.45) saturate(.85);
+    transform: scale(1.04);
+    opacity: .72;
+  }
+
+  .boot::after {
+    inset: clamp(12px, 2vh, 28px) clamp(24px, 5vw, 96px);
+    z-index: -1;
+    background: url("./warehouse-splash-vintage.png?v=1") center / contain no-repeat;
+    filter: drop-shadow(0 28px 70px rgba(0, 0, 0, .58));
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .boot {
     transition: none;
