@@ -1,0 +1,27 @@
+.bottom-nav{grid-template-columns:repeat(6,1fr)}
+.request-metric,.request-quick{cursor:pointer;color:#fff;text-align:left}
+.request-metric{background:linear-gradient(145deg,rgba(56,166,255,.14),transparent 58%),var(--panel)}
+.request-metric small{display:block;margin-top:5px;color:var(--muted);font-size:10px;text-transform:none;letter-spacing:0}
+.request-quick{background:linear-gradient(145deg,rgba(56,166,255,.13),transparent 55%),var(--panel)}
+.request-nav>span{position:relative}
+.nav-badge{position:absolute;top:-9px;right:-13px;min-width:18px;height:18px;padding:0 5px;border-radius:999px;display:grid;place-items:center;background:var(--pink);color:#fff;font-size:9px;font-style:normal;font-weight:900;box-shadow:0 4px 14px rgba(255,61,117,.38)}
+.requests-new-label{padding:6px 9px;border-radius:999px;background:rgba(255,61,117,.12);color:#ff96b4;font-size:11px;font-weight:900}
+.requests-filters{margin-top:0}
+.request-card{border:1px solid var(--line);border-radius:19px;padding:15px;background:var(--panel)}
+.request-card.is-new{border-color:rgba(255,61,117,.34);background:linear-gradient(145deg,rgba(255,61,117,.07),transparent 48%),var(--panel)}
+.request-card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.request-customer b,.request-customer small{display:block}
+.request-customer b{font-size:17px}
+.request-customer small{margin-top:4px;color:var(--muted);font-size:11px}
+.request-product{margin:12px 0;padding:11px 12px;border-radius:13px;background:#090e16;border:1px solid var(--line);font-size:12px;line-height:1.45}
+.request-product b{display:block;font-size:14px}
+.request-product span{color:var(--muted)}
+.request-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+.request-call,.request-status-button{min-height:44px;display:flex;align-items:center;justify-content:center;border-radius:12px;font-size:12px;font-weight:900;text-decoration:none}
+.request-call{background:linear-gradient(135deg,#39d36e,#13a94a);color:#041008}
+.request-status-button{border:1px solid var(--line);background:#111827;color:#fff}
+.request-comment{display:grid;gap:7px;color:#c8d0db;font-size:11px;font-weight:800}
+.request-comment textarea{width:100%;resize:vertical;min-height:66px;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:#080c14;color:#fff;outline:none}
+.request-comment textarea:focus{border-color:rgba(56,166,255,.7);box-shadow:0 0 0 3px rgba(56,166,255,.1)}
+.request-comment button{justify-self:end;border:1px solid var(--line);border-radius:10px;padding:9px 12px;background:#111827;color:#fff;font-size:11px;font-weight:900}
+@media(max-width:430px){.bottom-nav{padding-left:2px;padding-right:2px}.nav-btn small{font-size:8px}.request-actions{grid-template-columns:1fr}}

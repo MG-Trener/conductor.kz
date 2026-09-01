@@ -13,12 +13,13 @@
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js" crossorigin>
-  <link rel="modulepreload" href="./app.js?v=23">
+  <link rel="modulepreload" href="./app.js?v=24">
   <link rel="preload" href="./warehouse-splash.png?v=1" as="image" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest?v=16">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css?v=15">
   <link rel="stylesheet" href="./warehouse.css?v=20">
+  <link rel="stylesheet" href="./requests.css?v=1">
   <link rel="stylesheet" href="./splash.css?v=1">
 </head>
 <body>
@@ -69,6 +70,7 @@
         <div class="metric-grid">
           <article class="metric"><span>Стоимость склада</span><b id="metric-stock-value">0 ₸</b></article>
           <article class="metric"><span>Продажи сегодня</span><b id="metric-sales">0 ₸</b></article>
+          <button class="metric request-metric" type="button" data-nav="requests"><span>Новые заявки</span><b id="metric-requests">0</b><small>Открыть заявки покупателей</small></button>
           <button id="open-cash-dialog" class="metric cash-metric" type="button"><span>Доступно в кассе</span><b id="metric-cash">0 ₸</b><small>Нажмите, чтобы вывести средства</small></button>
         </div>
 
@@ -80,6 +82,7 @@
           <button class="quick pink" data-nav="sale"><span>＋</span><b>Зафиксировать продажу</b><small>Списать конкретный цвет</small></button>
           <button class="quick green" data-nav="stock"><span>▦</span><b>Актуальные остатки</b><small>Все модели и цвета</small></button>
           <button class="quick blue" data-nav="sales"><span>≡</span><b>Продажи</b><small>Кто и когда внёс</small></button>
+          <button class="quick request-quick" data-nav="requests"><span>●</span><b>Заявки покупателей</b><small>Позвонить и обработать</small></button>
         </div>
 
         <div class="section-head"><h2>Последние продажи</h2><button class="link-btn" data-nav="sales">Все</button></div>
@@ -119,6 +122,16 @@
         <div id="movement-list" class="list"></div>
       </section>
 
+      <section id="view-requests" class="view">
+        <div class="section-head sticky-head"><h1>Заявки</h1><span id="requests-new-label" class="requests-new-label">0 новых</span></div>
+        <div class="chips requests-filters" role="group" aria-label="Фильтр заявок">
+          <button class="chip active" type="button" data-request-filter="new">Новые</button>
+          <button class="chip" type="button" data-request-filter="all">Все</button>
+          <button class="chip" type="button" data-request-filter="processed">Обработанные</button>
+        </div>
+        <div id="requests-list" class="list requests-list"></div>
+      </section>
+
       <section id="view-settings" class="view">
         <div class="section-head"><h1>Настройки</h1></div>
         <div class="panel settings-panel">
@@ -141,6 +154,7 @@
       <button class="nav-btn" data-nav="sales"><span>≡</span><small>Продажи</small></button>
       <button class="nav-btn sale-nav" data-nav="sale"><span>＋</span><small>Продажа</small></button>
       <button class="nav-btn" data-nav="stock"><span>▦</span><small>Склад</small></button>
+      <button class="nav-btn request-nav" data-nav="requests"><span>☎<i id="requests-nav-badge" class="nav-badge hidden">0</i></span><small>Заявки</small></button>
       <button class="nav-btn" data-nav="settings"><span>⚙</span><small>Ещё</small></button>
     </nav>
   </div>
@@ -199,7 +213,7 @@
     }, 2500);
   </script>
   <script src="./firebase-config.js?v=21"></script>
-  <script type="module" src="./app.js?v=23"></script>
+  <script type="module" src="./app.js?v=24"></script>
   <script type="module" src="./firestore-error-help.js?v=17"></script>
 </body>
 </html>

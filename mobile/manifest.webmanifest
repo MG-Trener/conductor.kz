@@ -1,7 +1,7 @@
 {
-  "name": "CONDUCTOR — склад и продажи",
+  "name": "CONDUCTOR — склад, продажи и заявки",
   "short_name": "CONDUCTOR",
-  "description": "Остатки, движения склада и фиксация продаж CONDUCTOR.KZ",
+  "description": "Заявки покупателей, звонки, остатки склада и продажи CONDUCTOR.KZ",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

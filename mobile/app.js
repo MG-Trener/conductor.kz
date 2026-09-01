@@ -17,6 +17,7 @@ import {
   getDoc,
   getDocs,
   setDoc,
+  updateDoc,
   query,
   orderBy,
   limit,
@@ -114,6 +115,8 @@ const state = {
   movements: [],
   cashBalance: null,
   cashWithdrawals: [],
+  requests: [],
+  requestFilter: "new",
   saleOpenModelId: null,
   saleQuantities: new Map(),
   operation: null,
@@ -367,7 +370,7 @@ function stopRealtime() {
 
 function startRealtime(onInitialData) {
   stopRealtime();
-  const initialCollections = new Set(["catalog", "products", "orders", "movements", "cash", "withdrawals"]);
+  const initialCollections = new Set(["catalog", "products", "orders", "movements", "cash", "withdrawals", "requests"]);
   let initialDataDelivered = false;
   const markInitialCollection = (name) => {
     initialCollections.delete(name);
@@ -418,6 +421,12 @@ function startRealtime(onInitialData) {
     renderCash();
     markInitialCollection("withdrawals");
   }, (error) => { toast(`Выводы: ${error.message}`); markInitialCollection("withdrawals"); }));
+
+  state.unsubs.push(onSnapshot(query(collection(state.db, "requests"), orderBy("createdAt", "desc"), limit(100)), (snap) => {
+    state.requests = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
+    renderRequests();
+    markInitialCollection("requests");
+  }, (error) => { toast(`Заявки: ${error.message}`); markInitialCollection("requests"); }));
 }
 
 function modelTotal(modelId) {
@@ -553,6 +562,75 @@ function renderSales() {
   $("#sales-summary").innerHTML = `<div class="summary-line"><span>Всего записей</span><b>${state.sales.length}</b></div><div class="summary-line"><span>Продаж сегодня</span><b>${today.length}</b></div><div class="summary-line"><span>Сумма активных продаж</span><b>${KZT.format(total)}</b></div>`;
   $("#sales-list").innerHTML = state.sales.length ? state.sales.map(saleCard).join("") : `<div class="empty">Продаж пока нет.</div>`;
   bindSaleActions($("#sales-list"));
+}
+
+function requestPhoneHref(phone = "") {
+  const normalized = String(phone).replace(/[^\d+]/g, "");
+  return normalized ? `tel:${normalized}` : "#";
+}
+
+function requestCard(item) {
+  const processed = item.status === "processed";
+  return `<article class="request-card${processed ? "" : " is-new"}">
+    <div class="request-card-head">
+      <div class="request-customer"><b>${escapeHtml(item.customerName || "Без имени")}</b><small>${escapeHtml(item.phone || "Телефон не указан")} · ${formatDate(dateOf(item))}</small></div>
+      <span class="status ${processed ? "done" : "new"}">${processed ? "Обработана" : "Новая"}</span>
+    </div>
+    <div class="request-product"><b>${escapeHtml(item.productName || item.productId || "Товар")}</b><span>${escapeHtml(item.productPrice || "Цена не указана")}</span></div>
+    <div class="request-actions">
+      <a class="request-call" href="${escapeHtml(requestPhoneHref(item.phone))}">☎ Позвонить</a>
+      <button class="request-status-button" type="button" data-request-status="${escapeHtml(item.id)}" data-next-status="${processed ? "new" : "processed"}">${processed ? "Вернуть в новые" : "Отметить обработанной"}</button>
+    </div>
+    <form class="request-comment" data-request-comment="${escapeHtml(item.id)}">
+      <label for="request-comment-${escapeHtml(item.id)}">Комментарий сотрудника</label>
+      <textarea id="request-comment-${escapeHtml(item.id)}" name="comment" maxlength="500" placeholder="Результат звонка, договорённость…">${escapeHtml(item.managerComment || "")}</textarea>
+      <button type="submit">Сохранить комментарий</button>
+    </form>
+  </article>`;
+}
+
+async function updateRequest(requestId, changes) {
+  if (!state.user) throw new Error("Требуется вход сотрудника");
+  await updateDoc(doc(state.db, "requests", requestId), {
+    ...changes,
+    updatedAt: serverTimestamp(),
+    updatedBy: state.user.uid
+  });
+}
+
+function renderRequests() {
+  const newCount = state.requests.filter((item) => item.status !== "processed").length;
+  if ($("#metric-requests")) $("#metric-requests").textContent = String(newCount);
+  if ($("#requests-new-label")) $("#requests-new-label").textContent = `${newCount} ${newCount === 1 ? "новая" : "новых"}`;
+  const badge = $("#requests-nav-badge");
+  if (badge) {
+    badge.textContent = newCount > 99 ? "99+" : String(newCount);
+    badge.classList.toggle("hidden", newCount === 0);
+  }
+  $$('[data-request-filter]').forEach((button) => button.classList.toggle("active", button.dataset.requestFilter === state.requestFilter));
+  const filtered = state.requests.filter((item) => state.requestFilter === "all"
+    || (state.requestFilter === "processed" ? item.status === "processed" : item.status !== "processed"));
+  const root = $("#requests-list");
+  if (!root) return;
+  root.innerHTML = filtered.length ? filtered.map(requestCard).join("") : `<div class="empty">${state.requestFilter === "new" ? "Новых заявок нет." : "Заявок в этом разделе нет."}</div>`;
+  root.querySelectorAll("[data-request-status]").forEach((button) => button.addEventListener("click", async () => {
+    button.disabled = true;
+    try {
+      await updateRequest(button.dataset.requestStatus, { status: button.dataset.nextStatus });
+      toast(button.dataset.nextStatus === "processed" ? "Заявка обработана" : "Заявка возвращена в новые");
+    } catch (error) { toast(error.message); }
+    finally { button.disabled = false; }
+  }));
+  root.querySelectorAll("[data-request-comment]").forEach((form) => form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      await updateRequest(form.dataset.requestComment, { managerComment: form.elements.comment.value.trim() });
+      toast("Комментарий сохранён");
+    } catch (error) { toast(error.message); }
+    finally { button.disabled = false; }
+  }));
 }
 
 function bindSaleActions(root) {
@@ -1045,7 +1123,7 @@ function navigate(name) {
   $$(".view").forEach((view) => view.classList.remove("active"));
   $$(".nav-btn").forEach((button) => button.classList.toggle("active", button.dataset.nav === name));
   $(`#view-${name}`)?.classList.add("active");
-  const subtitles = { dashboard: "Склад сегодня", sales: "История продаж", sale: "Фиксация продажи", stock: "Остатки и движения", settings: "Приложение" };
+  const subtitles = { dashboard: "Склад сегодня", sales: "История продаж", sale: "Фиксация продажи", stock: "Остатки и движения", requests: "Заявки покупателей", settings: "Приложение" };
   $("#page-subtitle").textContent = subtitles[name] || "";
   if (name === "sale") renderProducts();
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1059,6 +1137,10 @@ async function resetPassword(email) {
 
 function wireUi() {
   $$('[data-nav]').forEach((button) => button.addEventListener("click", () => navigate(button.dataset.nav)));
+  $$('[data-request-filter]').forEach((button) => button.addEventListener("click", () => {
+    state.requestFilter = button.dataset.requestFilter;
+    renderRequests();
+  }));
   $("#sale-form").addEventListener("submit", createSale);
   $("#model-balance-form").addEventListener("submit", saveModelBalances);
   $("#model-dialog-close").addEventListener("click", () => $("#model-dialog").close());

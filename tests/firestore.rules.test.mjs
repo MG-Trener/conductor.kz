@@ -71,6 +71,26 @@ function movement(overrides = {}) {
   };
 }
 
+function publicRequest(overrides = {}) {
+  return {
+    customerName: "Иван",
+    phone: "+7 700 123 45 67",
+    productId: "DM30",
+    productName: "Цветной дым DM30",
+    productPrice: "2 700 ₸",
+    status: "new",
+    managerComment: "",
+    source: "conductor.kz",
+    sourcePage: "/cvetnoy-dym/",
+    consent: true,
+    formVersion: 1,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    updatedBy: null,
+    ...overrides
+  };
+}
+
 before(async () => {
   testEnv = await initializeTestEnvironment({
     projectId,
@@ -129,6 +149,56 @@ test("public visitors can read the single catalog price but only approved staff 
     updatedAt: serverTimestamp(),
     updatedBy: staffUid,
     updatedByName: "Сотрудник"
+  }));
+});
+
+test("public visitor can create a validated request and approved staff can read it", async () => {
+  const publicDb = testEnv.unauthenticatedContext().firestore();
+  const requestRef = doc(publicDb, "requests", "request-1");
+  await assertSucceeds(setDoc(requestRef, publicRequest()));
+
+  const snapshot = await assertSucceeds(getDoc(doc(staffDb(), "requests", "request-1")));
+  assert.equal(snapshot.data().status, "new");
+  assert.equal(snapshot.data().customerName, "Иван");
+  await assertFails(getDoc(requestRef));
+});
+
+test("public request rejects forged status, extra fields and unknown products", async () => {
+  const publicDb = testEnv.unauthenticatedContext().firestore();
+  await assertFails(setDoc(doc(publicDb, "requests", "processed"), publicRequest({ status: "processed" })));
+  await assertFails(setDoc(doc(publicDb, "requests", "extra"), publicRequest({ admin: true })));
+  await assertFails(setDoc(doc(publicDb, "requests", "unknown"), publicRequest({
+    productId: "OTHER",
+    productName: "Другой товар"
+  })));
+  await assertFails(setDoc(doc(publicDb, "requests", "short-phone"), publicRequest({ phone: "123" })));
+});
+
+test("approved staff can process and comment on a request without rewriting customer data", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "requests", "request-2"), {
+      ...publicRequest(),
+      createdAt: new Date("2026-09-01T09:00:00Z"),
+      updatedAt: new Date("2026-09-01T09:00:00Z")
+    });
+  });
+
+  const requestRef = doc(staffDb(), "requests", "request-2");
+  await assertSucceeds(updateDoc(requestRef, {
+    status: "processed",
+    managerComment: "Клиенту позвонили",
+    updatedAt: serverTimestamp(),
+    updatedBy: staffUid
+  }));
+  await assertFails(updateDoc(requestRef, {
+    phone: "+7 777 000 00 00",
+    updatedAt: serverTimestamp(),
+    updatedBy: staffUid
+  }));
+  await assertFails(updateDoc(requestRef, {
+    status: "deleted",
+    updatedAt: serverTimestamp(),
+    updatedBy: staffUid
   }));
 });
 

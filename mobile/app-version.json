@@ -1,8 +1,8 @@
 {
-  "version": "0.4.3",
-  "versionCode": 403,
+  "version": "0.5.0",
+  "versionCode": 500,
   "downloadUrl": "https://github.com/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk",
-  "notes": "Исправлена заставка склада: восстановлено полное изображение, оно показывается в PWA и APK, а также при возврате приложения из фона.",
+  "notes": "Добавлены заявки покупателей: новые обращения с сайта, звонок по номеру, статусы обработки и комментарии сотрудников.",
   "publishedAt": "2026-09-01",
   "releaseReady": true
 }

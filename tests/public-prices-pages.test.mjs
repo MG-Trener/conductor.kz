@@ -14,6 +14,8 @@ const mobileWorker = new URL("../mobile/sw.js", import.meta.url);
 const warehouseCss = new URL("../mobile/warehouse.css", import.meta.url);
 const inventoryState = new URL("../mobile/inventory-state.js", import.meta.url);
 const publicPriceModule = new URL("../assets/public-prices.js", import.meta.url);
+const publicRequestModule = new URL("../assets/js/request-form.js", import.meta.url);
+const requestsCss = new URL("../mobile/requests.css", import.meta.url);
 
 test("all public product pages load the shared live price module", async () => {
   for (const [name, url] of Object.entries(pages)) {
@@ -52,9 +54,9 @@ test("the warehouse model card renders the saved Firestore price", async () => {
   assert.match(app, /Number\(item\.stock \|\| 0\) \* modelSalePrice/);
   assert.doesNotMatch(app, /stockValue\(\).*avgCost/);
   assert.match(html, /Потенциальная стоимость/);
-  assert.match(html, /app\.js\?v=23/);
-  assert.match(worker, /conductor-mobile-v33/);
-  assert.match(worker, /app\.js\?v=23/);
+  assert.match(html, /app\.js\?v=24/);
+  assert.match(worker, /conductor-mobile-v34/);
+  assert.match(worker, /app\.js\?v=24/);
 });
 
 test("Firestore is initialized once before any asynchronous auth setup", async () => {
@@ -129,7 +131,7 @@ test("warehouse stays behind the boot screen until initial live data is ready", 
     readFile(mobileHtml, "utf8")
   ]);
 
-  assert.match(app, /const initialCollections = new Set\(\["catalog", "products", "orders", "movements", "cash", "withdrawals"\]\)/);
+  assert.match(app, /const initialCollections = new Set\(\["catalog", "products", "orders", "movements", "cash", "withdrawals", "requests"\]\)/);
   assert.match(app, /if \(!initialCollections\.size && !initialDataDelivered\)/);
   assert.match(app, /initialDataDelivered = true/);
   assert.match(app, /startRealtime\(\(\) => \{/);
@@ -186,12 +188,41 @@ test("dashboard cash balance is updated by sales, cancellations and withdrawals"
   assert.match(css, /\.cash-metric\{/);
 });
 
-test("smoke product orders use the requested WhatsApp number", async () => {
-  const [home, smoke] = await Promise.all([readFile(pages.home, "utf8"), readFile(pages.smoke, "utf8")]);
-  for (const html of [home, smoke]) {
-    for (const modelId of ["DM30", "DM60", "DM90"]) {
-      assert.match(html, new RegExp(`https://wa\\.me/77756511100\\?text=[^\"']*${modelId}`));
-      assert.doesNotMatch(html, new RegExp(`https://wa\\.me/77018709384\\?text=[^\"']*${modelId}`));
-    }
+test("product order buttons open the shared request form while contact links keep WhatsApp", async () => {
+  const [home, smoke, holi, requestScript] = await Promise.all([
+    readFile(pages.home, "utf8"),
+    readFile(pages.smoke, "utf8"),
+    readFile(pages.holi, "utf8"),
+    readFile(publicRequestModule, "utf8")
+  ]);
+  for (const [name, html] of Object.entries({ home, smoke, holi })) {
+    assert.match(html, /assets\/css\/request-form\.css\?v=1/, `${name} has no request form styles`);
+    assert.match(html, /assets\/js\/request-form\.js\?v=1/, `${name} has no request form module`);
+    assert.match(html, /href="#request-form" data-request-product-id=/, `${name} has no request button`);
   }
+  assert.match(home, /https:\/\/wa\.me\//, "home lost the WhatsApp contact link");
+  for (const modelId of ["DM30", "DM60", "DM90", "HOLI"]) {
+    assert.match(home, new RegExp(`data-request-product-id="${modelId}"`));
+  }
+  assert.match(requestScript, /addDoc\(collection\(db, "requests"\)/);
+  assert.match(requestScript, /status: "new"/);
+  assert.match(requestScript, /managerComment: ""/);
+});
+
+test("warehouse app lists requests, starts phone calls and saves processing fields", async () => {
+  const [app, html, worker, css] = await Promise.all([
+    readFile(mobileApp, "utf8"),
+    readFile(mobileHtml, "utf8"),
+    readFile(mobileWorker, "utf8"),
+    readFile(requestsCss, "utf8")
+  ]);
+  assert.match(html, /id="view-requests"/);
+  assert.match(html, /data-nav="requests"/);
+  assert.match(html, /id="requests-nav-badge"/);
+  assert.match(app, /collection\(state\.db, "requests"\)/);
+  assert.match(app, /return normalized \? `tel:\$\{normalized\}`/);
+  assert.match(app, /status: button\.dataset\.nextStatus/);
+  assert.match(app, /managerComment: form\.elements\.comment\.value\.trim\(\)/);
+  assert.match(worker, /requests\.css\?v=1/);
+  assert.match(css, /\.request-card/);
 });

@@ -20,6 +20,47 @@ service cloud.firestore {
       return productId.matches('^(DM30|DM60|DM90|HOLI)_[A-Z0-9]+$');
     }
 
+    function validRequestProduct(productId, productName) {
+      return (productId == 'DM30' && productName == 'Цветной дым DM30')
+        || (productId == 'DM60' && productName == 'Цветной дым DM60')
+        || (productId == 'DM90' && productName == 'Цветной дым DM90')
+        || (productId == 'HOLI' && productName == 'Краски Холи');
+    }
+
+    function validPublicRequest(data) {
+      return request.auth == null
+        && data.keys().hasAll([
+          'customerName', 'phone', 'productId', 'productName', 'productPrice',
+          'status', 'managerComment', 'source', 'sourcePage', 'consent',
+          'formVersion', 'createdAt', 'updatedAt', 'updatedBy'
+        ])
+        && data.keys().hasOnly([
+          'customerName', 'phone', 'productId', 'productName', 'productPrice',
+          'status', 'managerComment', 'source', 'sourcePage', 'consent',
+          'formVersion', 'createdAt', 'updatedAt', 'updatedBy'
+        ])
+        && data.customerName is string
+        && data.customerName.size() >= 2
+        && data.customerName.size() <= 80
+        && data.phone is string
+        && data.phone.size() >= 10
+        && data.phone.size() <= 30
+        && validRequestProduct(data.productId, data.productName)
+        && data.productPrice is string
+        && data.productPrice.size() > 0
+        && data.productPrice.size() <= 30
+        && data.status == 'new'
+        && data.managerComment == ''
+        && data.source == 'conductor.kz'
+        && data.sourcePage is string
+        && data.sourcePage.size() <= 120
+        && data.consent == true
+        && data.formVersion == 1
+        && data.createdAt == request.time
+        && data.updatedAt == request.time
+        && data.updatedBy == null;
+    }
+
     function validProductState(data, productId) {
       return data.keys().hasAll(['name', 'stock'])
         && isModel(data.get('modelId', productId))
@@ -231,6 +272,23 @@ service cloud.firestore {
         && request.resource.data.createdByName.size() <= 80
         && getAfter(/databases/$(database)/documents/finance/cash).data.balance == request.resource.data.after;
       allow update, delete: if false;
+    }
+
+    // Visitors can only create a tightly validated request. The two staff
+    // accounts can read it and change only its processing fields.
+    match /requests/{requestId} {
+      allow read: if isStaff();
+      allow create: if validPublicRequest(request.resource.data);
+      allow update: if isStaff()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'managerComment', 'updatedAt', 'updatedBy'
+        ])
+        && request.resource.data.status in ['new', 'processed']
+        && request.resource.data.managerComment is string
+        && request.resource.data.managerComment.size() <= 500
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.updatedBy == request.auth.uid;
+      allow delete: if false;
     }
 
     // Obsolete CRM data and every unlisted path remain completely closed.
