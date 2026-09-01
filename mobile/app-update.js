@@ -1,5 +1,6 @@
 const UPDATE_MANIFEST_URL = "./app-version.json";
 const UPDATE_RELEASE_API_URL = "https://api.github.com/repos/MG-Trener/conductor.kz/releases/tags/warehouse-latest";
+const APK_DOWNLOAD_URL = "https://github.com/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk";
 const LEGACY_ANDROID_VERSION = "0.1.0";
 
 function parseVersion(value = "0") {
@@ -32,8 +33,6 @@ function isAndroidApp() {
 }
 
 async function currentAppVersion() {
-  // New builds read the real installed APK version directly from Android.
-  // The URL parameter is retained only as a fallback for older builds.
   try {
     const app = window.Capacitor?.Plugins?.App;
     if (app?.getInfo) {
@@ -62,6 +61,7 @@ function addStyles() {
     .app-update-actions .btn { margin:0; }
     .app-update-badge { position:absolute; width:9px; height:9px; border-radius:50%; background:#ffb52e; top:7px; right:calc(50% - 19px); box-shadow:0 0 0 3px #0b0f18; }
     .nav-btn[data-nav="settings"] { position:relative; }
+    .apk-direct-download { margin-top:14px; text-decoration:none; display:flex; align-items:center; justify-content:center; }
   `;
   document.head.appendChild(style);
 }
@@ -77,6 +77,25 @@ function openDownload(url) {
   } catch {}
   const opened = window.open(url, "_blank", "noopener,noreferrer");
   if (!opened) window.location.href = url;
+}
+
+function ensureDirectDownloadButton() {
+  const settings = document.querySelector("#view-settings");
+  if (!settings || document.querySelector("#apk-direct-download")) return;
+
+  const link = document.createElement("a");
+  link.id = "apk-direct-download";
+  link.className = "btn primary full apk-direct-download";
+  link.href = APK_DOWNLOAD_URL;
+  link.target = "_blank";
+  link.rel = "noopener";
+  link.download = "CONDUCTOR-Sklad.apk";
+  link.textContent = "↓ Скачать APK для Android";
+  link.setAttribute("aria-label", "Скачать актуальный APK приложения CONDUCTOR Склад");
+
+  const siteButton = settings.querySelector(".site-settings-btn");
+  if (siteButton) siteButton.insertAdjacentElement("afterend", link);
+  else settings.prepend(link);
 }
 
 function ensureUi() {
@@ -103,7 +122,6 @@ function ensureUi() {
     settingsPanel?.insertAdjacentElement("afterend", card);
   }
 
-  // Remove the old duplicate global update banner if it was created by a cached script.
   document.querySelector("#app-update-banner")?.remove();
   return { card };
 }
@@ -166,7 +184,6 @@ async function checkForUpdate({ quiet = false } = {}) {
       return;
     }
 
-    // The release title is the source of truth for the APK that is actually published.
     lastManifest = { ...manifest, version: publishedVersion };
     const available = compareVersions(publishedVersion, currentVersion) > 0;
 
@@ -223,7 +240,6 @@ async function downloadUpdate() {
       return;
     }
 
-    // Compatibility path for old APKs that do not yet contain the native updater.
     downloadInProgress = false;
     if (button) {
       button.disabled = false;
@@ -247,8 +263,10 @@ async function downloadUpdate() {
 }
 
 function start() {
-  if (!isAndroidApp()) return;
   addStyles();
+  ensureDirectDownloadButton();
+
+  if (!isAndroidApp()) return;
   ensureUi();
 
   document.querySelector("#app-update-check")?.addEventListener("click", () => checkForUpdate());
