@@ -1,59 +1,146 @@
-/* Startup artwork shared by the installed PWA and the Android wrapper. */
 .boot {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
   overflow: hidden;
-  inset: env(safe-area-inset-top, 0px) 0 0;
-  padding: 0;
-  background: #070a12 url("./warehouse-splash-vintage.png?v=1") center bottom / cover no-repeat;
+  background: #05070d;
   opacity: 1;
   visibility: visible;
-  transition: opacity .45s ease, visibility 0s linear 0s;
+  transition: opacity 0.65s ease, visibility 0.65s ease;
 }
 
 .boot.hide {
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  transition: opacity .45s ease, visibility 0s linear .45s;
 }
 
-/*
- * The splash artwork is portrait-oriented for the Android app. On a desktop
- * monitor a plain `cover` background zooms it too aggressively and crops the
- * composition. Keep the mobile behaviour unchanged, but on wide screens show
- * the whole poster in the centre and use a soft copy of it as an ambient fill.
- */
-@media (min-width: 900px) and (min-aspect-ratio: 4 / 3) {
-  .boot {
-    isolation: isolate;
-    background: #070a12;
-  }
+.boot-bg {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.34)),
+    url("./warehouse-splash-clean.png?v=1") center center / cover no-repeat;
+  transform: scale(1);
+  animation: bootPush 6.2s ease-out forwards;
+  will-change: transform;
+}
 
-  .boot::before,
-  .boot::after {
-    content: "";
-    position: absolute;
-    pointer-events: none;
-  }
+.boot-smoke {
+  position: absolute;
+  border-radius: 999px;
+  filter: blur(48px);
+  opacity: 0.45;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
 
-  .boot::before {
-    inset: -36px;
-    z-index: -2;
-    background: url("./warehouse-splash-vintage.png?v=1") center / cover no-repeat;
-    filter: blur(28px) brightness(.45) saturate(.85);
-    transform: scale(1.04);
-    opacity: .72;
-  }
+.boot-smoke-left {
+  width: 46vw;
+  height: 46vw;
+  left: -8vw;
+  top: 20vh;
+  background: radial-gradient(circle, rgba(67, 182, 255, 0.95) 0%, rgba(67, 182, 255, 0.25) 48%, rgba(67, 182, 255, 0) 74%);
+  animation: smokeFloatLeft 5.2s ease-in-out infinite alternate;
+}
 
-  .boot::after {
-    inset: clamp(12px, 2vh, 28px) clamp(24px, 5vw, 96px);
-    z-index: -1;
-    background: url("./warehouse-splash-vintage.png?v=1") center / contain no-repeat;
-    filter: drop-shadow(0 28px 70px rgba(0, 0, 0, .58));
+.boot-smoke-right {
+  width: 52vw;
+  height: 52vw;
+  right: -10vw;
+  top: 18vh;
+  background: radial-gradient(circle, rgba(255, 94, 173, 0.95) 0%, rgba(255, 136, 63, 0.28) 48%, rgba(255, 136, 63, 0) 74%);
+  animation: smokeFloatRight 5.6s ease-in-out infinite alternate;
+}
+
+.boot-title-wrap {
+  position: absolute;
+  left: 50%;
+  bottom: max(28px, env(safe-area-inset-bottom) + 18px);
+  transform: translateX(-50%);
+  width: min(92vw, 820px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+}
+
+.boot-title {
+  display: block;
+  width: 100%;
+  height: auto;
+  position: relative;
+  z-index: 1;
+  filter:
+    drop-shadow(0 10px 26px rgba(0, 0, 0, 0.7))
+    drop-shadow(0 0 18px rgba(255, 179, 64, 0.26));
+}
+
+.boot-title-shine {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  border-radius: 24px;
+}
+
+.boot-title-shine::before {
+  content: "";
+  position: absolute;
+  top: -18%;
+  bottom: -18%;
+  width: 22%;
+  left: -30%;
+  background: linear-gradient(
+    105deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 248, 220, 0.08) 28%,
+    rgba(255, 255, 255, 0.72) 50%,
+    rgba(255, 220, 120, 0.16) 72%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  filter: blur(6px);
+  transform: skewX(-18deg);
+  animation: titleShine 2.6s linear infinite;
+  mix-blend-mode: screen;
+}
+
+@keyframes bootPush {
+  0% {
+    transform: scale(1) translateY(0);
+  }
+  100% {
+    transform: scale(1.07) translateY(6px);
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .boot {
-    transition: none;
+@keyframes smokeFloatLeft {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.36;
+  }
+  100% {
+    transform: translate3d(4vw, -5vh, 0) scale(1.14);
+    opacity: 0.54;
+  }
+}
+
+@keyframes smokeFloatRight {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.34;
+  }
+  100% {
+    transform: translate3d(-5vw, -6vh, 0) scale(1.16);
+    opacity: 0.52;
+  }
+}
+
+@keyframes titleShine {
+  0% {
+    left: -30%;
+  }
+  100% {
+    left: 110%;
   }
 }
