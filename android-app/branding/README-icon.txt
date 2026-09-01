@@ -1,0 +1,1 @@
+Launcher icon source is stored as a binary PNG and consumed directly by configure-android.mjs. Do not split or re-encode it as JPEG/base64 parts.
