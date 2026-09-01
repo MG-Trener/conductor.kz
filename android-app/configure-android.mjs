@@ -51,26 +51,41 @@ if (System.getenv("WAREHOUSE_KEYSTORE_PATH")) {
 fs.writeFileSync(gradlePath, gradle);
 
 const brandingDir = path.join(here, "branding");
+
+function isJpeg(buffer) {
+  return buffer.length >= 1000
+    && buffer[0] === 0xff
+    && buffer[1] === 0xd8
+    && buffer.at(-2) === 0xff
+    && buffer.at(-1) === 0xd9;
+}
+
 function reviveAsset(prefix) {
   const parts = fs.readdirSync(brandingDir)
     .filter((name) => name.startsWith(`${prefix}.part`) && name.endsWith(".b64"))
     .sort();
   if (!parts.length) throw new Error(`Не найдены части ресурса ${prefix}`);
 
-  // Base64 fragments can be created by different clients/editors. Strip BOMs,
-  // whitespace and any accidental non-base64 characters before joining them.
-  const encoded = parts
-    .map((name) => fs.readFileSync(path.join(brandingDir, name), "utf8")
-      .replace(/\uFEFF/g, "")
-      .replace(/\s+/g, ""))
-    .join("")
-    .replace(/[^A-Za-z0-9+/=]/g, "");
+  const encodedParts = parts.map((name) => fs.readFileSync(path.join(brandingDir, name), "utf8")
+    .replace(/\uFEFF/g, "")
+    .replace(/\s+/g, "")
+    .replace(/[^A-Za-z0-9+/=]/g, ""));
 
-  const result = Buffer.from(encoded, "base64");
-  if (result.length < 1000 || result[0] !== 0xff || result[1] !== 0xd8 || result.at(-2) !== 0xff || result.at(-1) !== 0xd9) {
-    throw new Error(`Повреждён JPEG-ресурс ${prefix}`);
+  // First support parts that are slices of one continuous Base64 string.
+  const joined = Buffer.from(encodedParts.join(""), "base64");
+  if (isJpeg(joined)) return joined;
+
+  // Some branding files were produced by encoding each binary chunk separately.
+  // In that case every fragment can contain its own Base64 padding, so text-level
+  // concatenation truncates the JPEG at the first padding marker. Decode each
+  // fragment independently and concatenate the resulting binary chunks instead.
+  const concatenated = Buffer.concat(encodedParts.map((encoded) => Buffer.from(encoded, "base64")));
+  if (isJpeg(concatenated)) {
+    console.log(`Ресурс ${prefix} восстановлен из независимо закодированных Base64-частей.`);
+    return concatenated;
   }
-  return result;
+
+  throw new Error(`Повреждён JPEG-ресурс ${prefix}`);
 }
 
 function reviveAssetWithFallback(primaryPrefix, fallbackPrefix) {
