@@ -13,16 +13,22 @@
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js" crossorigin>
-  <link rel="modulepreload" href="./app.js?v=22">
-  <link rel="manifest" href="./manifest.webmanifest?v=15">
+  <link rel="modulepreload" href="./app.js?v=23">
+  <link rel="preload" href="./warehouse-splash.png?v=1" as="image" type="image/png">
+  <link rel="manifest" href="./manifest.webmanifest?v=16">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css?v=15">
   <link rel="stylesheet" href="./warehouse.css?v=20">
+  <link rel="stylesheet" href="./splash.css?v=1">
 </head>
 <body>
-  <div id="boot" class="boot">
-    <div class="boot-logo">CONDUCTOR<span>.KZ</span></div>
-    <div class="boot-sub">Склад и продажи</div>
+  <div id="boot" class="boot" data-min-display-ms="2200" aria-label="CONDUCTOR Склад загружается">
+    <div class="boot-shade"></div>
+    <div class="boot-copy">
+      <div class="boot-logo">CONDUCTOR<span>.KZ</span></div>
+      <div class="boot-title">Склад</div>
+      <div class="boot-sub">Склад и продажи</div>
+    </div>
   </div>
 
   <div id="login" class="screen hidden">
@@ -193,7 +199,7 @@
     }, 2500);
   </script>
   <script src="./firebase-config.js?v=21"></script>
-  <script type="module" src="./app.js?v=22"></script>
+  <script type="module" src="./app.js?v=23"></script>
   <script type="module" src="./firestore-error-help.js?v=17"></script>
 </body>
 </html>

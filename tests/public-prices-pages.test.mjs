@@ -52,9 +52,9 @@ test("the warehouse model card renders the saved Firestore price", async () => {
   assert.match(app, /Number\(item\.stock \|\| 0\) \* modelSalePrice/);
   assert.doesNotMatch(app, /stockValue\(\).*avgCost/);
   assert.match(html, /Потенциальная стоимость/);
-  assert.match(html, /app\.js\?v=22/);
-  assert.match(worker, /conductor-mobile-v31/);
-  assert.match(worker, /app\.js\?v=22/);
+  assert.match(html, /app\.js\?v=23/);
+  assert.match(worker, /conductor-mobile-v33/);
+  assert.match(worker, /app\.js\?v=23/);
 });
 
 test("Firestore is initialized once before any asynchronous auth setup", async () => {

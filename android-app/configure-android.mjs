@@ -50,6 +50,17 @@ if (System.getenv("WAREHOUSE_KEYSTORE_PATH")) {
 }
 fs.writeFileSync(gradlePath, gradle);
 
+// The repository can live in a Windows folder with Cyrillic characters.
+// AGP blocks such paths by default even though the project builds correctly.
+const gradlePropertiesPath = path.join(androidDir, "gradle.properties");
+if (fs.existsSync(gradlePropertiesPath)) {
+  let gradleProperties = fs.readFileSync(gradlePropertiesPath, "utf8");
+  if (!/^android\.overridePathCheck=true$/m.test(gradleProperties)) {
+    gradleProperties = `${gradleProperties.trimEnd()}\nandroid.overridePathCheck=true\n`;
+    fs.writeFileSync(gradlePropertiesPath, gradleProperties);
+  }
+}
+
 const brandingDir = path.join(here, "branding");
 
 function isJpeg(buffer) {
@@ -88,17 +99,13 @@ function reviveAsset(prefix) {
   throw new Error(`Повреждён JPEG-ресурс ${prefix}`);
 }
 
-function reviveAssetWithFallback(primaryPrefix, fallbackPrefix) {
-  try {
-    return reviveAsset(primaryPrefix);
-  } catch (error) {
-    console.warn(`${error.message}. Используется резервный ресурс ${fallbackPrefix}.`);
-    return reviveAsset(fallbackPrefix);
-  }
-}
-
 const iconJpeg = reviveAsset("icon");
-const splashJpeg = reviveAssetWithFallback("splashv4", "splashq");
+const sharedSplashPath = path.join(here, "..", "mobile", "warehouse-splash.png");
+if (!fs.existsSync(sharedSplashPath)) throw new Error(`Не найден ${sharedSplashPath}`);
+const splashPng = fs.readFileSync(sharedSplashPath);
+if (splashPng.length < 100_000 || !splashPng.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
+  throw new Error("Повреждён общий PNG-ресурс заставки");
+}
 const resDir = path.join(androidDir, "app", "src", "main", "res");
 
 // Replace all density-specific launcher images with the front-facing locomotive artwork.
@@ -119,7 +126,7 @@ fs.mkdirSync(splashDir, { recursive: true });
 for (const ext of ["png", "webp", "jpg", "jpeg"]) {
   fs.rmSync(path.join(splashDir, `warehouse_splash.${ext}`), { force: true });
 }
-fs.writeFileSync(path.join(splashDir, "warehouse_splash.jpg"), splashJpeg);
+fs.writeFileSync(path.join(splashDir, "warehouse_splash.png"), splashPng);
 
 const iconBackgroundPath = path.join(resDir, "values", "ic_launcher_background.xml");
 if (fs.existsSync(iconBackgroundPath)) {
@@ -180,6 +187,7 @@ public class MainActivity extends BridgeActivity {
 
     private ImageView warehouseSplash;
     private int previousSystemUiVisibility;
+    private boolean returningFromBackground;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -187,7 +195,23 @@ public class MainActivity extends BridgeActivity {
         showWarehouseSplash();
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (returningFromBackground && warehouseSplash == null) {
+            showWarehouseSplash();
+        }
+        returningFromBackground = false;
+    }
+
+    @Override
+    public void onPause() {
+        returningFromBackground = true;
+        super.onPause();
+    }
+
     private void showWarehouseSplash() {
+        if (warehouseSplash != null) return;
         previousSystemUiVisibility = getWindow().getDecorView().getSystemUiVisibility();
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_LAYOUT_STABLE

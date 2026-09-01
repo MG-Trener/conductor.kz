@@ -169,12 +169,45 @@ function showOnly(selector) {
   $(selector)?.classList.remove("hidden");
 }
 
+let bootHideTimer = 0;
+let bootVisibleAt = performance.now();
+let backgroundedAt = 0;
+
+function showBoot(minDisplayMs = 1800) {
+  const boot = $("#boot");
+  if (!boot) return;
+  clearTimeout(bootHideTimer);
+  boot.dataset.minDisplayMs = String(minDisplayMs);
+  bootVisibleAt = performance.now();
+  boot.classList.remove("hide");
+}
+
 function hideBoot() {
   const boot = $("#boot");
   if (!boot) return;
-  boot.classList.add("hide");
-  setTimeout(() => boot.remove(), 280);
+  const minDisplayMs = Number(boot.dataset.minDisplayMs || 0);
+  const delay = Math.max(0, minDisplayMs - (performance.now() - bootVisibleAt));
+  clearTimeout(bootHideTimer);
+  bootHideTimer = window.setTimeout(() => boot.classList.add("hide"), delay);
 }
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    backgroundedAt = Date.now();
+    return;
+  }
+  if (backgroundedAt && Date.now() - backgroundedAt >= 800) {
+    showBoot(1800);
+    hideBoot();
+  }
+  backgroundedAt = 0;
+});
+
+window.addEventListener("pageshow", (event) => {
+  if (!event.persisted) return;
+  showBoot(1800);
+  hideBoot();
+});
 
 function modelById(modelId) { return MODELS.find((model) => model.id === modelId); }
 function variantDefaults(modelId) { return defaults.filter((item) => item.modelId === modelId); }
