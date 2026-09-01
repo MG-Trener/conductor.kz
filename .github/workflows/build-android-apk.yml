@@ -32,6 +32,7 @@ jobs:
         run: |
           node --check mobile/app-update.js
           node --check android-app/configure-android.mjs
+          node --check android-app/configure-updater.mjs
           node -e "const p=require('./android-app/package.json'); const m=require('./mobile/app-version.json'); if(p.version!==m.version) throw new Error('Android and update manifest versions differ')"
 
       - name: Setup Java
@@ -75,11 +76,13 @@ jobs:
             echo "Signing secrets are absent; a debug APK may be built only on non-main branches."
           fi
 
-      - name: Configure Android version
+      - name: Configure Android version and native updater
         working-directory: android-app
         env:
           WAREHOUSE_SIGNING_ENABLED: ${{ steps.signing.outputs.enabled }}
-        run: node configure-android.mjs
+        run: |
+          node configure-android.mjs
+          node configure-updater.mjs
 
       - name: Build signed release APK
         if: steps.signing.outputs.enabled == 'true'

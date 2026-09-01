@@ -31,7 +31,17 @@ function isAndroidApp() {
   }
 }
 
-function currentAppVersion() {
+async function currentAppVersion() {
+  // New builds read the real installed APK version directly from Android.
+  // The URL parameter is retained only as a fallback for older builds.
+  try {
+    const app = window.Capacitor?.Plugins?.App;
+    if (app?.getInfo) {
+      const info = await app.getInfo();
+      if (info?.version) return String(info.version);
+    }
+  } catch {}
+
   const params = new URLSearchParams(window.location.search);
   return params.get("appVersion") || LEGACY_ANDROID_VERSION;
 }
@@ -52,12 +62,6 @@ function addStyles() {
     .app-update-actions .btn { margin:0; }
     .app-update-badge { position:absolute; width:9px; height:9px; border-radius:50%; background:#ffb52e; top:7px; right:calc(50% - 19px); box-shadow:0 0 0 3px #0b0f18; }
     .nav-btn[data-nav="settings"] { position:relative; }
-    .app-update-banner { display:none; margin:0 0 14px; padding:12px 14px; border:1px solid rgba(255,190,70,.42); border-radius:16px; background:rgba(255,181,46,.09); gap:10px; align-items:center; justify-content:space-between; }
-    .app-update-banner.show { display:flex; }
-    .app-update-banner b { display:block; color:#ffd27a; }
-    .app-update-banner small { display:block; margin-top:2px; opacity:.72; }
-    .app-update-banner .btn { width:auto; min-width:112px; margin:0; }
-    @media (max-width:560px) { .app-update-banner { align-items:flex-start; flex-direction:column; } .app-update-banner .btn { width:100%; } }
   `;
   document.head.appendChild(style);
 }
@@ -77,8 +81,7 @@ function openDownload(url) {
 
 function ensureUi() {
   const settings = document.querySelector("#view-settings");
-  const content = document.querySelector("main.content");
-  if (!settings || !content) return null;
+  if (!settings) return null;
 
   let card = document.querySelector("#app-update-card");
   if (!card) {
@@ -92,7 +95,7 @@ function ensureUi() {
       </div>
       <p id="app-update-status" class="app-update-status muted">Проверяем обновления…</p>
       <div class="app-update-actions">
-        <button id="app-update-download" class="btn primary full hidden" type="button">Скачать обновление</button>
+        <button id="app-update-download" class="btn primary full hidden" type="button">Обновить</button>
         <button id="app-update-check" class="btn full" type="button">Проверить ещё раз</button>
       </div>
     `;
@@ -100,19 +103,9 @@ function ensureUi() {
     settingsPanel?.insertAdjacentElement("afterend", card);
   }
 
-  let banner = document.querySelector("#app-update-banner");
-  if (!banner) {
-    banner = document.createElement("div");
-    banner.id = "app-update-banner";
-    banner.className = "app-update-banner";
-    banner.innerHTML = `
-      <div><b id="app-update-banner-title">Доступно обновление</b><small id="app-update-banner-text"></small></div>
-      <button id="app-update-banner-download" class="btn primary" type="button">Скачать</button>
-    `;
-    content.prepend(banner);
-  }
-
-  return { card, banner };
+  // Remove the old duplicate global update banner if it was created by a cached script.
+  document.querySelector("#app-update-banner")?.remove();
+  return { card };
 }
 
 async function getPublishedVersion() {
@@ -128,6 +121,11 @@ async function getPublishedVersion() {
 }
 
 let lastManifest = null;
+let downloadInProgress = false;
+
+function clearUpdateBadge() {
+  document.querySelector("#app-update-badge")?.remove();
+}
 
 async function checkForUpdate({ quiet = false } = {}) {
   if (!isAndroidApp()) return;
@@ -135,13 +133,14 @@ async function checkForUpdate({ quiet = false } = {}) {
   const ui = ensureUi();
   if (!ui) return;
 
-  const currentVersion = currentAppVersion();
+  const currentVersion = await currentAppVersion();
   const versionNode = document.querySelector("#app-current-version");
   const statusNode = document.querySelector("#app-update-status");
   const downloadButton = document.querySelector("#app-update-download");
   const navSettings = document.querySelector('.nav-btn[data-nav="settings"]');
+
   if (versionNode) versionNode.textContent = `v${currentVersion}`;
-  if (!quiet && statusNode) {
+  if (!quiet && statusNode && !downloadInProgress) {
     statusNode.textContent = "Проверяем обновления…";
     statusNode.classList.add("muted");
   }
@@ -155,15 +154,12 @@ async function checkForUpdate({ quiet = false } = {}) {
     const manifest = await manifestResponse.json();
     if (!manifest?.version || !manifest?.downloadUrl) throw new Error("Некорректный файл версии");
 
-    // Never offer an APK while its permanent Android signing key has not been applied.
-    // This prevents Android's "conflicts with another package" error from recurring.
     if (manifest.releaseReady === false) {
       lastManifest = null;
       ui.card.classList.remove("available");
-      ui.banner.classList.remove("show");
       downloadButton?.classList.add("hidden");
-      document.querySelector("#app-update-badge")?.remove();
-      if (statusNode) {
+      clearUpdateBadge();
+      if (statusNode && !downloadInProgress) {
         statusNode.textContent = `Установлена актуальная версия v${currentVersion}`;
         statusNode.classList.add("muted");
       }
@@ -171,16 +167,14 @@ async function checkForUpdate({ quiet = false } = {}) {
     }
 
     // The release title is the source of truth for the APK that is actually published.
-    // This prevents a failed Android build from advertising a newer manifest while the
-    // permanent download URL still points to an older APK.
     lastManifest = { ...manifest, version: publishedVersion };
-
     const available = compareVersions(publishedVersion, currentVersion) > 0;
+
     ui.card.classList.toggle("available", available);
     statusNode?.classList.toggle("muted", !available);
     downloadButton?.classList.toggle("hidden", !available);
 
-    document.querySelector("#app-update-badge")?.remove();
+    clearUpdateBadge();
     if (available && navSettings) {
       const badge = document.createElement("span");
       badge.id = "app-update-badge";
@@ -189,24 +183,64 @@ async function checkForUpdate({ quiet = false } = {}) {
       navSettings.appendChild(badge);
     }
 
-    ui.banner.classList.toggle("show", available);
-    if (available) {
-      if (statusNode) statusNode.textContent = `Доступна новая версия v${publishedVersion}`;
-      const title = document.querySelector("#app-update-banner-title");
-      const text = document.querySelector("#app-update-banner-text");
-      if (title) title.textContent = `Доступна новая версия v${publishedVersion}`;
-      if (text) text.textContent = "Можно скачать и установить обновление.";
-    } else if (statusNode) {
-      statusNode.textContent = `Установлена актуальная версия v${currentVersion}`;
+    if (!downloadInProgress && statusNode) {
+      statusNode.textContent = available
+        ? `Доступна новая версия v${publishedVersion}`
+        : `Установлена актуальная версия v${currentVersion}`;
     }
   } catch (error) {
     lastManifest = null;
     ui.card.classList.remove("available");
-    ui.banner.classList.remove("show");
     downloadButton?.classList.add("hidden");
-    document.querySelector("#app-update-badge")?.remove();
-    if (statusNode && !quiet) {
+    clearUpdateBadge();
+    if (statusNode && !quiet && !downloadInProgress) {
       statusNode.textContent = "Не удалось проверить обновления. Проверьте интернет и повторите.";
+      statusNode.classList.add("muted");
+    }
+  }
+}
+
+async function downloadUpdate() {
+  if (!lastManifest?.downloadUrl || downloadInProgress) return;
+
+  const statusNode = document.querySelector("#app-update-status");
+  const button = document.querySelector("#app-update-download");
+  const originalText = button?.textContent || "Обновить";
+  downloadInProgress = true;
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Скачивание…";
+  }
+  if (statusNode) {
+    statusNode.textContent = "Скачиваем обновление. После загрузки Android сразу откроет установку.";
+    statusNode.classList.remove("muted");
+  }
+
+  try {
+    const nativeUpdater = window.Capacitor?.Plugins?.AppUpdater;
+    if (nativeUpdater?.downloadAndInstall) {
+      await nativeUpdater.downloadAndInstall({ url: lastManifest.downloadUrl });
+      return;
+    }
+
+    // Compatibility path for old APKs that do not yet contain the native updater.
+    downloadInProgress = false;
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+    if (statusNode) {
+      statusNode.textContent = "Эта старая версия скачает APK обычным способом. После установки новой версии следующие обновления будут открывать установку автоматически.";
+    }
+    openDownload(lastManifest.downloadUrl);
+  } catch (error) {
+    downloadInProgress = false;
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+    if (statusNode) {
+      statusNode.textContent = "Не удалось начать обновление. Повторите попытку.";
       statusNode.classList.add("muted");
     }
   }
@@ -218,8 +252,7 @@ function start() {
   ensureUi();
 
   document.querySelector("#app-update-check")?.addEventListener("click", () => checkForUpdate());
-  document.querySelector("#app-update-download")?.addEventListener("click", () => openDownload(lastManifest?.downloadUrl));
-  document.querySelector("#app-update-banner-download")?.addEventListener("click", () => openDownload(lastManifest?.downloadUrl));
+  document.querySelector("#app-update-download")?.addEventListener("click", downloadUpdate);
 
   checkForUpdate();
   window.setInterval(() => checkForUpdate({ quiet: true }), 6 * 60 * 60 * 1000);

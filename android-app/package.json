@@ -1,6 +1,6 @@
 {
   "name": "conductor-warehouse-android",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",
+    "@capacitor/app": "^8.0.0",
     "@capacitor/browser": "^8.0.0",
     "@capacitor/core": "^8.0.0"
   },
