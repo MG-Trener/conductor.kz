@@ -26,6 +26,15 @@ document.querySelectorAll("[data-request-product-id]").forEach((button) => {
   button.removeAttribute("data-request-product-id");
 });
 
+// Remove obsolete request wording left in static FAQ copy.
+document.querySelectorAll("details").forEach((details) => {
+  const summary = details.querySelector("summary")?.textContent?.trim();
+  if (summary === "Как оформить заказ?") {
+    const text = details.querySelector("p");
+    if (text) text.textContent = "Нажмите кнопку «Заказать» у нужного товара — откроется WhatsApp с готовым сообщением продавцу.";
+  }
+});
+
 // The release uses a stable warehouse-latest URL, so this button always downloads
 // the APK currently published by the Android release workflow.
 const contacts = document.querySelector(".contacts");
