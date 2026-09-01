@@ -1,8 +1,8 @@
 {
-  "version": "0.6.4",
-  "versionCode": 604,
+  "version": "0.6.5",
+  "versionCode": 605,
   "downloadUrl": "https://github.com/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk",
-  "notes": "Новый яркий значок приложения CONDUCTOR: винтажный паровоз в золотой рамке C с сине-малиновым свечением. Значок подготовлен с безопасными отступами для круглой и адаптивной маски Android.",
+  "notes": "Исправлено наложение системных панелей Android на интерфейс приложения: верхняя строка состояния и нижняя навигационная область теперь занимают собственное место и не перекрывают CONDUCTOR.KZ и нижнее меню.",
   "publishedAt": "2026-09-01",
   "releaseReady": true
 }
