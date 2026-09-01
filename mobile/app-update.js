@@ -155,6 +155,21 @@ async function checkForUpdate({ quiet = false } = {}) {
     const manifest = await manifestResponse.json();
     if (!manifest?.version || !manifest?.downloadUrl) throw new Error("Некорректный файл версии");
 
+    // Never offer an APK while its permanent Android signing key has not been applied.
+    // This prevents Android's "conflicts with another package" error from recurring.
+    if (manifest.releaseReady === false) {
+      lastManifest = null;
+      ui.card.classList.remove("available");
+      ui.banner.classList.remove("show");
+      downloadButton?.classList.add("hidden");
+      document.querySelector("#app-update-badge")?.remove();
+      if (statusNode) {
+        statusNode.textContent = `Установлена актуальная версия v${currentVersion}`;
+        statusNode.classList.add("muted");
+      }
+      return;
+    }
+
     // The release title is the source of truth for the APK that is actually published.
     // This prevents a failed Android build from advertising a newer manifest while the
     // permanent download URL still points to an older APK.
