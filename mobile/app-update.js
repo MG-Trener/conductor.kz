@@ -1,4 +1,5 @@
 const UPDATE_MANIFEST_URL = "./app-version.json";
+const UPDATE_RELEASE_API_URL = "https://api.github.com/repos/MG-Trener/conductor.kz/releases/tags/warehouse-latest";
 const LEGACY_ANDROID_VERSION = "0.1.0";
 
 function parseVersion(value = "0") {
@@ -114,6 +115,18 @@ function ensureUi() {
   return { card, banner };
 }
 
+async function getPublishedVersion() {
+  const response = await fetch(`${UPDATE_RELEASE_API_URL}?t=${Date.now()}`, {
+    cache: "no-store",
+    headers: { Accept: "application/vnd.github+json" },
+  });
+  if (!response.ok) throw new Error(`Release HTTP ${response.status}`);
+  const release = await response.json();
+  const match = String(release?.name || "").match(/\bv?(\d+(?:\.\d+){1,3})\b/i);
+  if (!match) throw new Error("Не удалось определить опубликованную версию APK");
+  return match[1];
+}
+
 let lastManifest = null;
 
 async function checkForUpdate({ quiet = false } = {}) {
@@ -134,13 +147,20 @@ async function checkForUpdate({ quiet = false } = {}) {
   }
 
   try {
-    const response = await fetch(`${UPDATE_MANIFEST_URL}?t=${Date.now()}`, { cache: "no-store" });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const manifest = await response.json();
+    const [manifestResponse, publishedVersion] = await Promise.all([
+      fetch(`${UPDATE_MANIFEST_URL}?t=${Date.now()}`, { cache: "no-store" }),
+      getPublishedVersion(),
+    ]);
+    if (!manifestResponse.ok) throw new Error(`HTTP ${manifestResponse.status}`);
+    const manifest = await manifestResponse.json();
     if (!manifest?.version || !manifest?.downloadUrl) throw new Error("Некорректный файл версии");
-    lastManifest = manifest;
 
-    const available = compareVersions(manifest.version, currentVersion) > 0;
+    // The release title is the source of truth for the APK that is actually published.
+    // This prevents a failed Android build from advertising a newer manifest while the
+    // permanent download URL still points to an older APK.
+    lastManifest = { ...manifest, version: publishedVersion };
+
+    const available = compareVersions(publishedVersion, currentVersion) > 0;
     ui.card.classList.toggle("available", available);
     statusNode?.classList.toggle("muted", !available);
     downloadButton?.classList.toggle("hidden", !available);
@@ -156,15 +176,20 @@ async function checkForUpdate({ quiet = false } = {}) {
 
     ui.banner.classList.toggle("show", available);
     if (available) {
-      if (statusNode) statusNode.textContent = `Доступна новая версия v${manifest.version}${manifest.notes ? ` — ${manifest.notes}` : ""}`;
+      if (statusNode) statusNode.textContent = `Доступна новая версия v${publishedVersion}`;
       const title = document.querySelector("#app-update-banner-title");
       const text = document.querySelector("#app-update-banner-text");
-      if (title) title.textContent = `Новая версия v${manifest.version}`;
-      if (text) text.textContent = manifest.notes || "Можно скачать и установить обновление.";
+      if (title) title.textContent = `Доступна новая версия v${publishedVersion}`;
+      if (text) text.textContent = "Можно скачать и установить обновление.";
     } else if (statusNode) {
-      statusNode.textContent = `Установлена последняя версия v${currentVersion}`;
+      statusNode.textContent = `Установлена актуальная версия v${currentVersion}`;
     }
   } catch (error) {
+    lastManifest = null;
+    ui.card.classList.remove("available");
+    ui.banner.classList.remove("show");
+    downloadButton?.classList.add("hidden");
+    document.querySelector("#app-update-badge")?.remove();
     if (statusNode && !quiet) {
       statusNode.textContent = "Не удалось проверить обновления. Проверьте интернет и повторите.";
       statusNode.classList.add("muted");

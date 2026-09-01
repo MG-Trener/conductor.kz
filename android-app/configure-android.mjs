@@ -56,9 +56,16 @@ function reviveAsset(prefix) {
     .filter((name) => name.startsWith(`${prefix}.part`) && name.endsWith(".b64"))
     .sort();
   if (!parts.length) throw new Error(`Не найдены части ресурса ${prefix}`);
+
+  // Base64 fragments can be created by different clients/editors. Strip BOMs,
+  // whitespace and any accidental non-base64 characters before joining them.
   const encoded = parts
-    .map((name) => fs.readFileSync(path.join(brandingDir, name), "utf8").trim())
-    .join("");
+    .map((name) => fs.readFileSync(path.join(brandingDir, name), "utf8")
+      .replace(/\uFEFF/g, "")
+      .replace(/\s+/g, ""))
+    .join("")
+    .replace(/[^A-Za-z0-9+/=]/g, "");
+
   const result = Buffer.from(encoded, "base64");
   if (result.length < 1000 || result[0] !== 0xff || result[1] !== 0xd8 || result.at(-2) !== 0xff || result.at(-1) !== 0xd9) {
     throw new Error(`Повреждён JPEG-ресурс ${prefix}`);
@@ -66,8 +73,17 @@ function reviveAsset(prefix) {
   return result;
 }
 
+function reviveAssetWithFallback(primaryPrefix, fallbackPrefix) {
+  try {
+    return reviveAsset(primaryPrefix);
+  } catch (error) {
+    console.warn(`${error.message}. Используется резервный ресурс ${fallbackPrefix}.`);
+    return reviveAsset(fallbackPrefix);
+  }
+}
+
 const iconJpeg = reviveAsset("icon");
-const splashJpeg = reviveAsset("splashv4");
+const splashJpeg = reviveAssetWithFallback("splashv4", "splashq");
 const resDir = path.join(androidDir, "app", "src", "main", "res");
 
 // Replace all density-specific launcher images with the front-facing locomotive artwork.
