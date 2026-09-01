@@ -1,8 +1,8 @@
 {
-  "version": "0.4.0",
-  "versionCode": 400,
+  "version": "0.4.1",
+  "versionCode": 401,
   "downloadUrl": "https://github.com/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk",
-  "notes": "Новая полноэкранная заставка CONDUCTOR Склад: ретро-локомотив въезжает на склад, показ 6 секунд перед открытием приложения, затем плавное исчезновение.",
+  "notes": "Исправлена полноэкранная заставка при запуске: восстановлено корректное изображение ретро-локомотива вместо чёрного экрана. Пауза 6 секунд и плавное открытие склада сохранены.",
   "publishedAt": "2026-09-01",
   "releaseReady": true
 }
