@@ -1,8 +1,8 @@
 {
-  "version": "0.5.1",
-  "versionCode": 501,
+  "version": "0.6.0",
+  "versionCode": 600,
   "downloadUrl": "https://github.com/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk",
-  "notes": "Новая винтажная заставка «Поехали на склад»: надпись встроена в изображение и добавлен безопасный отступ под статус-бар Android.",
+  "notes": "Анимированная ретро-заставка CONDUCTOR.KZ: поезд движется вперёд, из трубы идёт цветной дым, фара пульсирует, а по надписи проходит световой блик.",
   "publishedAt": "2026-09-01",
   "releaseReady": true
 }
