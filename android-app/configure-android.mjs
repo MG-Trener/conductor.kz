@@ -60,42 +60,28 @@ if (fs.existsSync(gradlePropertiesPath)) {
 }
 
 const brandingDir = path.join(here, "branding");
-function isJpeg(buffer) {
-  return buffer.length >= 1000
-    && buffer[0] === 0xff
-    && buffer[1] === 0xd8
-    && buffer.at(-2) === 0xff
-    && buffer.at(-1) === 0xd9;
-}
+const iconPath = path.join(brandingDir, "icon.png");
+if (!fs.existsSync(iconPath)) throw new Error(`Не найден PNG-ресурс значка: ${iconPath}`);
 
-function reviveAsset(prefix) {
-  const parts = fs.readdirSync(brandingDir)
-    .filter((name) => name.startsWith(`${prefix}.part`) && name.endsWith(".b64"))
-    .sort();
-  if (!parts.length) throw new Error(`Не найдены части ресурса ${prefix}`);
+const iconPng = fs.readFileSync(iconPath);
+const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const isPng = iconPng.length > 1024 && pngSignature.every((byte, index) => iconPng[index] === byte);
+if (!isPng) throw new Error("branding/icon.png не является корректным PNG-файлом");
 
-  const encodedParts = parts.map((name) => fs.readFileSync(path.join(brandingDir, name), "utf8")
-    .replace(/\uFEFF/g, "")
-    .replace(/\s+/g, "")
-    .replace(/[^A-Za-z0-9+/=]/g, ""));
-
-  const joined = Buffer.from(encodedParts.join(""), "base64");
-  if (isJpeg(joined)) return joined;
-
-  const concatenated = Buffer.concat(encodedParts.map((encoded) => Buffer.from(encoded, "base64")));
-  if (isJpeg(concatenated)) return concatenated;
-  throw new Error(`Повреждён JPEG-ресурс ${prefix}`);
-}
-
-const iconJpeg = reviveAsset("icon");
 const resDir = path.join(androidDir, "app", "src", "main", "res");
 
+// The approved source image already contains safe margins for Android launcher masks.
+// Capacitor generates the density folders during `cap add android`; copying a valid PNG
+// into each launcher slot lets Android scale it for the target density without fragile
+// JPEG/base64 reconstruction.
 for (const density of ["mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"]) {
   const dir = path.join(resDir, `mipmap-${density}`);
   fs.mkdirSync(dir, { recursive: true });
   for (const base of ["ic_launcher", "ic_launcher_round", "ic_launcher_foreground"]) {
-    for (const ext of ["png", "webp", "jpg", "jpeg"]) fs.rmSync(path.join(dir, `${base}.${ext}`), { force: true });
-    fs.writeFileSync(path.join(dir, `${base}.jpg`), iconJpeg);
+    for (const ext of ["png", "webp", "jpg", "jpeg"]) {
+      fs.rmSync(path.join(dir, `${base}.${ext}`), { force: true });
+    }
+    fs.writeFileSync(path.join(dir, `${base}.png`), iconPng);
   }
 }
 
@@ -150,4 +136,4 @@ if (!fs.existsSync(templatePath)) throw new Error(`Не найден ${templateP
 const mainActivity = fs.readFileSync(templatePath, "utf8").replaceAll("__PACKAGE_NAME__", packageName);
 fs.writeFileSync(mainActivityPath, mainActivity);
 
-console.log(`Android configured: ${packageJson.version} (${versionCode}), duplicate native splash removed, signing=${process.env.WAREHOUSE_SIGNING_ENABLED === "true"}`);
+console.log(`Android configured: ${packageJson.version} (${versionCode}), launcher icon=PNG, duplicate native splash removed, signing=${process.env.WAREHOUSE_SIGNING_ENABLED === "true"}`);
