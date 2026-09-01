@@ -1,0 +1,70 @@
+/* Compact, stable topbar controls for phones. Loaded after warehouse.css. */
+.warehouse-topbar .topbar-actions{flex:0 0 auto}
+.warehouse-topbar .site-btn{box-sizing:border-box;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+@media (max-width:560px){
+  .warehouse-topbar{
+    min-height:72px;
+    padding:10px 12px;
+    gap:8px;
+  }
+  .warehouse-topbar .topbar-brand-block{flex:1 1 auto;min-width:112px}
+  .warehouse-topbar .mini-brand{font-size:15px;line-height:1.05;white-space:nowrap}
+  .warehouse-topbar .top-subtitle{font-size:9px;margin-top:5px}
+  .warehouse-topbar .topbar-actions{display:grid;grid-template-columns:auto 40px 40px;align-items:center;gap:6px;flex:0 0 auto}
+  .warehouse-topbar .user-chip{
+    width:auto;
+    max-width:88px;
+    min-height:40px;
+    padding:0 10px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:13px;
+    background:linear-gradient(180deg,rgba(18,25,38,.96),rgba(11,16,27,.96));
+    border:1px solid rgba(255,255,255,.11);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .warehouse-topbar .user-chip b{font-size:12px;line-height:1;max-width:68px}
+  .warehouse-topbar .user-chip small{display:none!important}
+
+  .warehouse-topbar .site-btn{
+    width:40px!important;
+    min-width:40px;
+    height:40px;
+    min-height:40px!important;
+    padding:0!important;
+    border-radius:13px;
+    font-size:0!important;
+    line-height:1;
+    flex:0 0 40px;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+  }
+  .warehouse-topbar .site-btn::after{
+    display:block;
+    font-size:17px;
+    line-height:1;
+    font-weight:800;
+  }
+  .warehouse-topbar a.site-btn::after{content:"↗"}
+  .warehouse-topbar .logout-btn::after{content:"⇥"}
+  .warehouse-topbar a.site-btn{
+    color:#a9dcff;
+    border-color:rgba(56,166,255,.30);
+    background:rgba(56,166,255,.09);
+  }
+  .warehouse-topbar .logout-btn{
+    color:#ff9caf;
+    border-color:rgba(255,89,111,.32);
+    background:rgba(255,89,111,.08);
+  }
+}
+
+@media (max-width:360px){
+  .warehouse-topbar{padding-left:9px;padding-right:9px;gap:5px}
+  .warehouse-topbar .mini-brand{font-size:13px}
+  .warehouse-topbar .topbar-actions{grid-template-columns:auto 38px 38px;gap:4px}
+  .warehouse-topbar .user-chip{max-width:72px;padding:0 8px;min-height:38px}
+  .warehouse-topbar .user-chip b{font-size:11px;max-width:56px}
+  .warehouse-topbar .site-btn{width:38px!important;min-width:38px;height:38px;min-height:38px!important;flex-basis:38px}
+}
