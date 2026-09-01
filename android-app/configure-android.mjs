@@ -88,14 +88,8 @@ function reviveAsset(prefix) {
 }
 
 const iconJpeg = reviveAsset("icon");
-const sharedSplashPath = path.join(here, "..", "mobile", "warehouse-splash-vintage.png");
-if (!fs.existsSync(sharedSplashPath)) throw new Error(`Не найден ${sharedSplashPath}`);
-const splashPng = fs.readFileSync(sharedSplashPath);
-if (splashPng.length < 100_000 || !splashPng.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
-  throw new Error("Повреждён общий PNG-ресурс заставки");
-}
-
 const resDir = path.join(androidDir, "app", "src", "main", "res");
+
 for (const density of ["mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"]) {
   const dir = path.join(resDir, `mipmap-${density}`);
   fs.mkdirSync(dir, { recursive: true });
@@ -104,11 +98,6 @@ for (const density of ["mdpi", "hdpi", "xhdpi", "xxhdpi", "xxxhdpi"]) {
     fs.writeFileSync(path.join(dir, `${base}.jpg`), iconJpeg);
   }
 }
-
-const splashDir = path.join(resDir, "drawable-nodpi");
-fs.mkdirSync(splashDir, { recursive: true });
-for (const ext of ["png", "webp", "jpg", "jpeg"]) fs.rmSync(path.join(splashDir, `warehouse_splash.${ext}`), { force: true });
-fs.writeFileSync(path.join(splashDir, "warehouse_splash.png"), splashPng);
 
 const iconBackgroundPath = path.join(resDir, "values", "ic_launcher_background.xml");
 if (fs.existsSync(iconBackgroundPath)) {
@@ -120,15 +109,24 @@ if (fs.existsSync(iconBackgroundPath)) {
   fs.writeFileSync(iconBackgroundPath, iconBackground);
 }
 
+// Android still requires a very short system launch screen. Keep it visually blank so
+// the only branded/animated splash the user sees is the web splash from mobile/index.html.
+const drawableDir = path.join(resDir, "drawable");
+fs.mkdirSync(drawableDir, { recursive: true });
+fs.writeFileSync(
+  path.join(drawableDir, "launch_blank.xml"),
+  `<?xml version="1.0" encoding="utf-8"?>\n<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">\n    <solid android:color="@android:color/transparent" />\n</shape>\n`,
+);
+
 const stylesPath = path.join(resDir, "values", "styles.xml");
 if (fs.existsSync(stylesPath)) {
   let styles = fs.readFileSync(stylesPath, "utf8");
   styles = styles.replace(
     /<style name="AppTheme\.NoActionBarLaunch"[\s\S]*?<\/style>/,
     `<style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
-        <item name="android:background">@drawable/warehouse_splash</item>
+        <item name="android:background">#070A12</item>
         <item name="windowSplashScreenBackground">#070A12</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/launch_blank</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
     </style>`,
   );
@@ -152,4 +150,4 @@ if (!fs.existsSync(templatePath)) throw new Error(`Не найден ${templateP
 const mainActivity = fs.readFileSync(templatePath, "utf8").replaceAll("__PACKAGE_NAME__", packageName);
 fs.writeFileSync(mainActivityPath, mainActivity);
 
-console.log(`Android configured: ${packageJson.version} (${versionCode}), animated 6.2-second locomotive splash enabled, signing=${process.env.WAREHOUSE_SIGNING_ENABLED === "true"}`);
+console.log(`Android configured: ${packageJson.version} (${versionCode}), duplicate native splash removed, signing=${process.env.WAREHOUSE_SIGNING_ENABLED === "true"}`);

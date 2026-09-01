@@ -1,8 +1,8 @@
 {
-  "version": "0.6.1",
-  "versionCode": 601,
+  "version": "0.6.2",
+  "versionCode": 602,
   "downloadUrl": "https://github.com/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk",
-  "notes": "Исправлено отображение заставки на широких экранах, сохранена мобильная анимация паровоза и добавлена постоянная кнопка скачивания APK в разделе склада.",
+  "notes": "Убрана дублирующая нативная заставка Android. При запуске остаётся только новая анимированная заставка CONDUCTOR.KZ с паровозом и световым переливом.",
   "publishedAt": "2026-09-01",
   "releaseReady": true
 }
