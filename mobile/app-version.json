@@ -1,8 +1,8 @@
 {
-  "version": "0.6.5",
-  "versionCode": 605,
+  "version": "0.6.6",
+  "versionCode": 606,
   "downloadUrl": "https://github.com/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk",
-  "notes": "Исправлено наложение системных панелей Android на интерфейс приложения: верхняя строка состояния и нижняя навигационная область теперь занимают собственное место и не перекрывают CONDUCTOR.KZ и нижнее меню.",
-  "publishedAt": "2026-09-01",
+  "notes": "Добавлены Android Push-уведомления о новых продажах для второго пользователя: уведомление показывает сумму продажи и текущий баланс кассы.",
+  "publishedAt": "2026-09-02",
   "releaseReady": true
 }
