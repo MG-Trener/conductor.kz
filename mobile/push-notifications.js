@@ -5,11 +5,25 @@ import { doc, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs
 let activeUser = null;
 let listenersInstalled = false;
 let registrationStartedForUid = "";
+let nativePushPlugin = null;
 
 function pushPlugin() {
   const capacitor = globalThis.Capacitor;
   if (!capacitor || capacitor.getPlatform?.() !== "android") return null;
-  return capacitor.Plugins?.PushNotifications || null;
+  if (nativePushPlugin) return nativePushPlugin;
+  if (capacitor.Plugins?.PushNotifications) {
+    nativePushPlugin = capacitor.Plugins.PushNotifications;
+    return nativePushPlugin;
+  }
+  if (typeof capacitor.registerPlugin === "function") {
+    try {
+      nativePushPlugin = capacitor.registerPlugin("PushNotifications");
+      return nativePushPlugin;
+    } catch (error) {
+      console.error("PushNotifications plugin registration failed", error);
+    }
+  }
+  return null;
 }
 
 async function waitForFirebase() {
