@@ -233,6 +233,26 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    function validPushDevice(data) {
+      return data.keys().hasAll(['uid', 'email', 'token', 'platform', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'email', 'token', 'platform', 'updatedAt'])
+        && data.uid == request.auth.uid
+        && data.email == request.auth.token.email
+        && data.token is string
+        && data.token.size() >= 20
+        && data.token.size() <= 4096
+        && data.platform == 'android'
+        && data.updatedAt == request.time;
+    }
+
+    // Each authenticated warehouse installation stores its current FCM token.
+    // Clients cannot read the collection; Cloud Functions use the Admin SDK.
+    match /pushDevices/{deviceId} {
+      allow read: if false;
+      allow create, update: if isStaff() && validPushDevice(request.resource.data);
+      allow delete: if isStaff() && resource.data.uid == request.auth.uid;
+    }
+
     // Historical request documents are read-only for staff. New customer
     // requests and all request edits are disabled.
     match /requests/{requestId} {
