@@ -12,17 +12,25 @@ if (location.pathname.startsWith("/mobile/")) {
   };
 
   // app.js initializes Firestore with the application's cache settings.
-  // The inventory helper must start later, otherwise it can call getFirestore()
-  // first and lock Firestore to default settings. That makes the subsequent
-  // initializeFirestore() call in app.js fail and prevents authorization.
+  // The inventory helper and native push registration must start later,
+  // otherwise they can race the main Firebase initialization.
   window.addEventListener("load", () => {
     window.setTimeout(() => {
-      if (document.querySelector('script[data-conductor-inventory-state]')) return;
-      const inventoryState = document.createElement("script");
-      inventoryState.type = "module";
-      inventoryState.src = "./inventory-state.js?v=24";
-      inventoryState.dataset.conductorInventoryState = "1";
-      document.head.append(inventoryState);
+      if (!document.querySelector('script[data-conductor-inventory-state]')) {
+        const inventoryState = document.createElement("script");
+        inventoryState.type = "module";
+        inventoryState.src = "./inventory-state.js?v=24";
+        inventoryState.dataset.conductorInventoryState = "1";
+        document.head.append(inventoryState);
+      }
+
+      if (!document.querySelector('script[data-conductor-push]')) {
+        const pushNotifications = document.createElement("script");
+        pushNotifications.type = "module";
+        pushNotifications.src = "./push-notifications.js?v=1";
+        pushNotifications.dataset.conductorPush = "1";
+        document.head.append(pushNotifications);
+      }
     }, 1000);
   }, { once: true });
 } else {
