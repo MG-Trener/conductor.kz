@@ -1,5 +1,6 @@
 import "./app-update.js?v=1";
 import "./analytics.js?v=2";
+import "./sales-history.js?v=1";
 
 const permissionPatterns = [
   /permission-denied/i,
@@ -34,11 +35,22 @@ function watchNode(node) {
 function normalizeAnalyticsSaleCards(root) {
   if (!root) return;
 
+  root.querySelectorAll(".analytics-sale-card").forEach((card) => {
+    if (card.querySelector(".analytics-sale-status.cancelled")) card.remove();
+  });
+
   root.querySelectorAll(".analytics-sale-title b").forEach((node) => {
     if (/^Продажа\s+#/i.test(node.textContent || "")) node.textContent = "Продажа";
   });
 
-  root.querySelectorAll(".analytics-sale-status:not(.cancelled)").forEach((node) => node.remove());
+  root.querySelectorAll(".analytics-sale-status").forEach((node) => node.remove());
+
+  const meta = document.querySelector("#analytics-journal-meta");
+  if (meta) meta.textContent = String(meta.textContent || "").replace(/\s*·\s*\d+\s+отменено/i, "");
+
+  if (!root.querySelector(".analytics-sale-card") && !root.querySelector(".empty") && !root.querySelector(".analytics-loading")) {
+    root.innerHTML = `<div class="empty">В этом месяце продаж нет.</div>`;
+  }
 }
 
 function watchAnalyticsSaleCards() {
