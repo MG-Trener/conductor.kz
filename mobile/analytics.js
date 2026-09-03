@@ -2,9 +2,11 @@ import { collection, onSnapshot, orderBy, query } from "https://www.gstatic.com/
 
 const KZT = new Intl.NumberFormat("ru-KZ", { style: "currency", currency: "KZT", maximumFractionDigits: 0 });
 const MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
+const START_YEAR = 2026;
+const START_MONTH_2026 = 8;
 
 let analyticsSales = [];
-let selectedYear = new Date().getFullYear();
+let selectedYear = Math.max(START_YEAR, new Date().getFullYear());
 let selectedMonth = new Date().getMonth();
 let unsubscribeOrders = null;
 let analyticsStarted = false;
@@ -39,6 +41,34 @@ function saleItemsText(sale) {
   }).join(" · ");
 }
 
+function isMonthEnabled(year, monthIndex) {
+  if (year > START_YEAR) return true;
+  return year === START_YEAR && monthIndex >= START_MONTH_2026;
+}
+
+function firstEnabledMonth(year) {
+  return year === START_YEAR ? START_MONTH_2026 : 0;
+}
+
+function normalizeSelectedMonth() {
+  if (isMonthEnabled(selectedYear, selectedMonth)) return;
+  selectedMonth = firstEnabledMonth(selectedYear);
+}
+
+function chooseMonthForYear(year) {
+  const now = new Date();
+  if (year === now.getFullYear() && isMonthEnabled(year, now.getMonth())) return now.getMonth();
+
+  const monthsWithSales = analyticsSales
+    .filter((sale) => {
+      const date = dateOf(sale);
+      return sale.status !== "cancelled" && date.getFullYear() === year && isMonthEnabled(year, date.getMonth());
+    })
+    .map((sale) => dateOf(sale).getMonth());
+
+  return monthsWithSales.length ? Math.max(...monthsWithSales) : firstEnabledMonth(year);
+}
+
 function injectStyles() {
   if (document.querySelector("#analytics-styles")) return;
   const style = document.createElement("style");
@@ -51,11 +81,13 @@ function injectStyles() {
     .analytics-year-select{min-width:104px;border:1px solid var(--line);border-radius:13px;background:#090e16;color:#fff;padding:11px 12px;font-weight:900;outline:none}
     .analytics-month-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
     .analytics-month{min-width:0;min-height:96px;padding:12px 10px;border:1px solid var(--line);border-radius:16px;background:var(--panel);color:#fff;text-align:left;cursor:pointer;transition:.16s ease}
-    .analytics-month:hover{transform:translateY(-1px);border-color:rgba(56,166,255,.3)}
+    .analytics-month:not(.is-disabled):hover{transform:translateY(-1px);border-color:rgba(56,166,255,.3)}
     .analytics-month-name,.analytics-month b,.analytics-month small{display:block}.analytics-month-name{font-size:11px;font-weight:900;color:#dce4ee}.analytics-month b{margin-top:9px;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.analytics-month small{margin-top:5px;color:var(--muted);font-size:9px}
     .analytics-month.is-current{border-color:rgba(255,195,77,.62);box-shadow:inset 0 0 0 1px rgba(255,195,77,.15);background:linear-gradient(145deg,rgba(255,195,77,.11),transparent 60%),var(--panel)}
     .analytics-month.is-current .analytics-month-name{color:#ffd57f}
     .analytics-month.is-selected{border-color:rgba(56,166,255,.75);box-shadow:0 0 0 2px rgba(56,166,255,.12);background:linear-gradient(145deg,rgba(56,166,255,.16),transparent 60%),var(--panel)}
+    .analytics-month.is-disabled{cursor:not-allowed;opacity:.34;filter:saturate(.35);background:#090c12;border-style:dashed}
+    .analytics-month.is-disabled .analytics-month-name,.analytics-month.is-disabled b,.analytics-month.is-disabled small{color:#6f7887}
     .analytics-journal-head{align-items:flex-end}.analytics-journal-meta{color:var(--muted);font-size:10px;text-align:right}
     .analytics-sale-card{border:1px solid var(--line);border-radius:18px;padding:14px;background:var(--panel)}
     .analytics-sale-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.analytics-sale-title b,.analytics-sale-title small{display:block}.analytics-sale-title b{font-size:13px}.analytics-sale-title small{margin-top:3px;color:var(--muted);font-size:10px}.analytics-sale-total{font-size:17px;font-weight:1000;white-space:nowrap}.analytics-sale-items{margin-top:9px;color:#d7dde6;font-size:11px;line-height:1.45}.analytics-sale-note{margin-top:5px;color:var(--muted)}.analytics-sale-status{display:inline-flex;margin-top:9px;border:1px solid var(--line);border-radius:999px;padding:5px 8px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:#8cf4a0;background:rgba(92,219,117,.08)}.analytics-sale-status.cancelled{color:#c3c8d0;background:transparent}.analytics-loading{padding:32px 14px;text-align:center;border:1px dashed var(--line);border-radius:18px;color:var(--muted);font-size:12px}
@@ -100,33 +132,26 @@ function injectUi() {
   button.addEventListener("click", openAnalytics);
   view.querySelector("#analytics-year")?.addEventListener("change", (event) => {
     const year = Number(event.target.value);
-    if (!Number.isFinite(year)) return;
+    if (!Number.isFinite(year) || year < START_YEAR || year > new Date().getFullYear()) return;
     selectedYear = year;
-    const now = new Date();
-    if (selectedYear === now.getFullYear()) selectedMonth = now.getMonth();
-    else {
-      const monthsWithSales = analyticsSales
-        .filter((sale) => sale.status !== "cancelled" && dateOf(sale).getFullYear() === selectedYear)
-        .map((sale) => dateOf(sale).getMonth());
-      selectedMonth = monthsWithSales.length ? Math.max(...monthsWithSales) : 0;
-    }
+    selectedMonth = chooseMonthForYear(selectedYear);
     renderAnalytics();
   });
   view.querySelector("#analytics-month-grid")?.addEventListener("click", (event) => {
     const monthButton = event.target.closest("[data-analytics-month]");
-    if (!monthButton) return;
-    selectedMonth = Number(monthButton.dataset.analyticsMonth);
+    if (!monthButton || monthButton.disabled) return;
+    const monthIndex = Number(monthButton.dataset.analyticsMonth);
+    if (!isMonthEnabled(selectedYear, monthIndex)) return;
+    selectedMonth = monthIndex;
     renderAnalytics();
     document.querySelector("#analytics-journal-title")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 }
 
 function availableYears() {
-  const currentYear = new Date().getFullYear();
-  const dataYears = analyticsSales.map((sale) => dateOf(sale).getFullYear()).filter((year) => year > 2000 && year <= currentYear);
-  const minYear = Math.min(currentYear - 5, ...(dataYears.length ? dataYears : [currentYear]));
+  const currentYear = Math.max(START_YEAR, new Date().getFullYear());
   const years = [];
-  for (let year = currentYear; year >= minYear; year -= 1) years.push(year);
+  for (let year = currentYear; year >= START_YEAR; year -= 1) years.push(year);
   return years;
 }
 
@@ -135,6 +160,7 @@ function renderYearSelect() {
   if (!select) return;
   const years = availableYears();
   if (!years.includes(selectedYear)) selectedYear = years[0];
+  normalizeSelectedMonth();
   select.innerHTML = years.map((year) => `<option value="${year}"${year === selectedYear ? " selected" : ""}>${year}</option>`).join("");
 }
 
@@ -143,6 +169,13 @@ function renderJournal(monthSales) {
   const title = document.querySelector("#analytics-journal-title");
   const meta = document.querySelector("#analytics-journal-meta");
   if (!root || !title || !meta) return;
+
+  if (!isMonthEnabled(selectedYear, selectedMonth)) {
+    title.textContent = "Журнал продаж";
+    meta.textContent = "";
+    root.innerHTML = `<div class="empty">За этот период данные не ведутся.</div>`;
+    return;
+  }
 
   title.textContent = `${MONTHS[selectedMonth]} ${selectedYear}`;
   const activeCount = monthSales.filter((sale) => sale.status !== "cancelled").length;
@@ -168,7 +201,14 @@ function renderAnalytics() {
   if (!document.querySelector("#view-analytics")) return;
   renderYearSelect();
   const now = new Date();
-  const activeYearSales = analyticsSales.filter((sale) => sale.status !== "cancelled" && dateOf(sale).getFullYear() === selectedYear);
+  normalizeSelectedMonth();
+
+  const activeYearSales = analyticsSales.filter((sale) => {
+    const date = dateOf(sale);
+    return sale.status !== "cancelled"
+      && date.getFullYear() === selectedYear
+      && isMonthEnabled(selectedYear, date.getMonth());
+  });
   const yearTotal = activeYearSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
   const totalNode = document.querySelector("#analytics-year-total");
   if (totalNode) totalNode.textContent = KZT.format(yearTotal);
@@ -176,19 +216,22 @@ function renderAnalytics() {
   const monthGrid = document.querySelector("#analytics-month-grid");
   if (monthGrid) {
     monthGrid.innerHTML = MONTHS.map((monthName, monthIndex) => {
-      const monthSales = activeYearSales.filter((sale) => dateOf(sale).getMonth() === monthIndex);
+      const enabled = isMonthEnabled(selectedYear, monthIndex);
+      const monthSales = enabled ? activeYearSales.filter((sale) => dateOf(sale).getMonth() === monthIndex) : [];
       const sum = monthSales.reduce((value, sale) => value + Number(sale.total || 0), 0);
-      const current = selectedYear === now.getFullYear() && monthIndex === now.getMonth();
-      const selected = monthIndex === selectedMonth;
-      return `<button type="button" class="analytics-month${current ? " is-current" : ""}${selected ? " is-selected" : ""}" data-analytics-month="${monthIndex}">
-        <span class="analytics-month-name">${monthName}</span><b>${KZT.format(sum)}</b><small>${monthSales.length} продаж</small>
+      const current = enabled && selectedYear === now.getFullYear() && monthIndex === now.getMonth();
+      const selected = enabled && monthIndex === selectedMonth;
+      return `<button type="button" class="analytics-month${current ? " is-current" : ""}${selected ? " is-selected" : ""}${enabled ? "" : " is-disabled"}"${enabled ? ` data-analytics-month="${monthIndex}"` : " disabled"} aria-disabled="${enabled ? "false" : "true"}">
+        <span class="analytics-month-name">${monthName}</span><b>${enabled ? KZT.format(sum) : "—"}</b><small>${enabled ? `${monthSales.length} продаж` : "Нет данных"}</small>
       </button>`;
     }).join("");
   }
 
   const journalSales = analyticsSales.filter((sale) => {
     const date = dateOf(sale);
-    return date.getFullYear() === selectedYear && date.getMonth() === selectedMonth;
+    return isMonthEnabled(selectedYear, selectedMonth)
+      && date.getFullYear() === selectedYear
+      && date.getMonth() === selectedMonth;
   });
   renderJournal(journalSales);
 }
