@@ -1,8 +1,8 @@
 {
-  "version": "0.6.6",
-  "versionCode": 606,
+  "version": "0.6.7",
+  "versionCode": 607,
   "downloadUrl": "https://github.com/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk",
-  "notes": "Добавлены Android Push-уведомления о новых продажах для второго пользователя: уведомление показывает сумму продажи и текущий баланс кассы.",
-  "publishedAt": "2026-09-02",
+  "notes": "Добавлена аналитика продаж по годам и месяцам: годовая сумма, календарь 3×4, подсветка текущего месяца и журнал продаж выбранного месяца.",
+  "publishedAt": "2026-09-03",
   "releaseReady": true
 }
