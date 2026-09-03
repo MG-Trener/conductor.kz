@@ -152,10 +152,18 @@ test("public visitors can read the single catalog price but only approved staff 
   }));
 });
 
-test("public visitor can create a validated request and approved staff can read it", async () => {
+test("historical requests are read-only for staff and closed to public visitors", async () => {
   const publicDb = testEnv.unauthenticatedContext().firestore();
   const requestRef = doc(publicDb, "requests", "request-1");
-  await assertSucceeds(setDoc(requestRef, publicRequest()));
+  await assertFails(setDoc(requestRef, publicRequest()));
+
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "requests", "request-1"), {
+      ...publicRequest(),
+      createdAt: new Date("2026-09-01T09:00:00Z"),
+      updatedAt: new Date("2026-09-01T09:00:00Z")
+    });
+  });
 
   const snapshot = await assertSucceeds(getDoc(doc(staffDb(), "requests", "request-1")));
   assert.equal(snapshot.data().status, "new");
@@ -163,18 +171,7 @@ test("public visitor can create a validated request and approved staff can read 
   await assertFails(getDoc(requestRef));
 });
 
-test("public request rejects forged status, extra fields and unknown products", async () => {
-  const publicDb = testEnv.unauthenticatedContext().firestore();
-  await assertFails(setDoc(doc(publicDb, "requests", "processed"), publicRequest({ status: "processed" })));
-  await assertFails(setDoc(doc(publicDb, "requests", "extra"), publicRequest({ admin: true })));
-  await assertFails(setDoc(doc(publicDb, "requests", "unknown"), publicRequest({
-    productId: "OTHER",
-    productName: "Другой товар"
-  })));
-  await assertFails(setDoc(doc(publicDb, "requests", "short-phone"), publicRequest({ phone: "123" })));
-});
-
-test("approved staff can process and comment on a request without rewriting customer data", async () => {
+test("staff cannot edit or create obsolete requests", async () => {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), "requests", "request-2"), {
       ...publicRequest(),
@@ -184,7 +181,7 @@ test("approved staff can process and comment on a request without rewriting cust
   });
 
   const requestRef = doc(staffDb(), "requests", "request-2");
-  await assertSucceeds(updateDoc(requestRef, {
+  await assertFails(updateDoc(requestRef, {
     status: "processed",
     managerComment: "Клиенту позвонили",
     updatedAt: serverTimestamp(),
@@ -199,6 +196,34 @@ test("approved staff can process and comment on a request without rewriting cust
     status: "deleted",
     updatedAt: serverTimestamp(),
     updatedBy: staffUid
+  }));
+  await assertFails(setDoc(doc(staffDb(), "requests", "request-3"), publicRequest()));
+});
+
+test("staff can register only its own Android push token and cannot read token documents", async () => {
+  const db = staffDb();
+  const tokenRef = doc(db, "pushDevices", "device-1");
+  await assertSucceeds(setDoc(tokenRef, {
+    uid: staffUid,
+    email: staffEmail,
+    token: "a-valid-firebase-device-token",
+    platform: "android",
+    updatedAt: serverTimestamp()
+  }));
+  await assertFails(getDoc(tokenRef));
+  await assertFails(setDoc(doc(db, "pushDevices", "forged-device"), {
+    uid: "employee-2",
+    email: secondStaffEmail,
+    token: "another-valid-firebase-device-token",
+    platform: "android",
+    updatedAt: serverTimestamp()
+  }));
+  await assertFails(setDoc(doc(db, "pushDevices", "web-device"), {
+    uid: staffUid,
+    email: staffEmail,
+    token: "a-valid-firebase-device-token",
+    platform: "web",
+    updatedAt: serverTimestamp()
   }));
 });
 

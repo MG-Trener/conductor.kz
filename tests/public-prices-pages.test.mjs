@@ -13,9 +13,9 @@ const mobileHtml = new URL("../mobile/index.html", import.meta.url);
 const mobileWorker = new URL("../mobile/sw.js", import.meta.url);
 const warehouseCss = new URL("../mobile/warehouse.css", import.meta.url);
 const inventoryState = new URL("../mobile/inventory-state.js", import.meta.url);
+const pushNotifications = new URL("../mobile/push-notifications.js", import.meta.url);
 const publicPriceModule = new URL("../assets/public-prices.js", import.meta.url);
 const publicRequestModule = new URL("../assets/js/request-form.js", import.meta.url);
-const requestsCss = new URL("../mobile/requests.css", import.meta.url);
 
 test("all public product pages load the shared live price module", async () => {
   for (const [name, url] of Object.entries(pages)) {
@@ -55,7 +55,7 @@ test("the warehouse model card renders the saved Firestore price", async () => {
   assert.doesNotMatch(app, /stockValue\(\).*avgCost/);
   assert.match(html, /Потенциальная стоимость/);
   assert.match(html, /app\.js\?v=24/);
-  assert.match(worker, /conductor-mobile-v35/);
+  assert.match(worker, /conductor-mobile-v40/);
   assert.match(worker, /app\.js\?v=24/);
 });
 
@@ -131,7 +131,7 @@ test("warehouse stays behind the boot screen until initial live data is ready", 
     readFile(mobileHtml, "utf8")
   ]);
 
-  assert.match(app, /const initialCollections = new Set\(\["catalog", "products", "orders", "movements", "cash", "withdrawals", "requests"\]\)/);
+  assert.match(app, /const initialCollections = new Set\(\["catalog", "products", "orders", "movements", "cash", "withdrawals"\]\)/);
   assert.match(app, /if \(!initialCollections\.size && !initialDataDelivered\)/);
   assert.match(app, /initialDataDelivered = true/);
   assert.match(app, /startRealtime\(\(\) => \{/);
@@ -188,7 +188,7 @@ test("dashboard cash balance is updated by sales, cancellations and withdrawals"
   assert.match(css, /\.cash-metric\{/);
 });
 
-test("product order buttons open the shared request form while contact links keep WhatsApp", async () => {
+test("product order buttons open WhatsApp directly", async () => {
   const [home, smoke, holi, requestScript] = await Promise.all([
     readFile(pages.home, "utf8"),
     readFile(pages.smoke, "utf8"),
@@ -204,25 +204,31 @@ test("product order buttons open the shared request form while contact links kee
   for (const modelId of ["DM30", "DM60", "DM90", "HOLI"]) {
     assert.match(home, new RegExp(`data-request-product-id="${modelId}"`));
   }
-  assert.match(requestScript, /addDoc\(collection\(db, "requests"\)/);
-  assert.match(requestScript, /status: "new"/);
-  assert.match(requestScript, /managerComment: ""/);
+  assert.match(requestScript, /https:\/\/wa\.me\/\$\{SALES_WHATSAPP\}/);
+  assert.match(requestScript, /button\.href = whatsappOrderUrl\(productId\)/);
+  assert.doesNotMatch(requestScript, /addDoc\(collection\(db, "requests"\)/);
 });
 
-test("warehouse app lists requests, starts phone calls and saves processing fields", async () => {
-  const [app, html, worker, css] = await Promise.all([
+test("warehouse app no longer loads the obsolete requests interface", async () => {
+  const [app, html, worker] = await Promise.all([
     readFile(mobileApp, "utf8"),
     readFile(mobileHtml, "utf8"),
-    readFile(mobileWorker, "utf8"),
-    readFile(requestsCss, "utf8")
+    readFile(mobileWorker, "utf8")
   ]);
-  assert.match(html, /id="view-requests"/);
-  assert.match(html, /data-nav="requests"/);
-  assert.match(html, /id="requests-nav-badge"/);
-  assert.match(app, /collection\(state\.db, "requests"\)/);
-  assert.match(app, /return normalized \? `tel:\$\{normalized\}`/);
-  assert.match(app, /status: button\.dataset\.nextStatus/);
-  assert.match(app, /managerComment: form\.elements\.comment\.value\.trim\(\)/);
-  assert.match(worker, /requests\.css\?v=1/);
-  assert.match(css, /\.request-card/);
+  assert.doesNotMatch(html, /id="view-requests"|data-nav="requests"|id="requests-nav-badge"/);
+  assert.doesNotMatch(app, /collection\(state\.db, "requests"\)|renderRequests|requestFilter/);
+  assert.doesNotMatch(worker, /requests\.css/);
+});
+
+test("warehouse Android build loads and registers sale push notifications", async () => {
+  const [html, worker, push] = await Promise.all([
+    readFile(mobileHtml, "utf8"),
+    readFile(mobileWorker, "utf8"),
+    readFile(pushNotifications, "utf8")
+  ]);
+  assert.match(html, /push-notifications\.js\?v=1/);
+  assert.match(worker, /push-notifications\.js\?v=1/);
+  assert.match(push, /registerPlugin\("PushNotifications"\)/);
+  assert.match(push, /"pushDevices"/);
+  assert.match(push, /platform: "android"/);
 });

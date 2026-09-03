@@ -1,4 +1,4 @@
-const CACHE = "conductor-mobile-v39";
+const CACHE = "conductor-mobile-v40";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -14,7 +14,8 @@ const APP_SHELL = [
   "./manifest.webmanifest?v=17",
   "./icon.svg",
   "./splash.css?v=3",
-  "./warehouse-splash-vintage.png?v=1"
+  "./warehouse-splash-clean.png?v=1",
+  "./conductor-vintage-title.png?v=1"
 ];
 
 self.addEventListener("install", (event) => {
