@@ -1,4 +1,5 @@
 import "./app-update.js?v=1";
+import "./analytics.js?v=2";
 
 const permissionPatterns = [
   /permission-denied/i,
