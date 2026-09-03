@@ -7,6 +7,7 @@ const APP_SHELL = [
   "./header-mobile.css?v=1",
   "./app.js?v=24",
   "./firebase-config.js?v=21",
+  "./push-config.js?v=1",
   "./inventory-state.js?v=24",
   "./push-notifications.js?v=1",
   "./firestore-error-help.js?v=17",

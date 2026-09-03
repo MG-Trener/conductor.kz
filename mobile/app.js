@@ -135,6 +135,31 @@ function currentEmployeeName() {
   return employeeNameFromEmail(state.user?.email || "");
 }
 
+async function requestSalePush(orderId) {
+  const endpoint = String(window.CONDUCTOR_PUSH_ENDPOINT || "").trim();
+  if (!endpoint || !state.user) return { configured: false, delivered: false };
+  const idToken = await state.user.getIdToken();
+  let lastError = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ orderId })
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return { configured: true, delivered: true };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  console.error("Sale push request failed", lastError);
+  return { configured: true, delivered: false };
+}
+
 function toast(message) {
   const node = $("#toast");
   if (!node) return;
@@ -755,11 +780,14 @@ async function createSale(event) {
       });
     });
 
+    const pushResult = await requestSalePush(saleRef.id);
     event.target.reset();
     state.saleQuantities.clear();
     state.saleOpenModelId = null;
     renderProducts();
-    toast(`Продажа записана · ${employee}`);
+    toast(pushResult.configured && !pushResult.delivered
+      ? `Продажа записана · push временно не отправлен`
+      : `Продажа записана · ${employee}`);
     navigate("sales");
   } catch (error) { errorNode.textContent = error.message; }
   finally { submit.disabled = false; }

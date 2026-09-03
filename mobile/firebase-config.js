@@ -24,13 +24,6 @@ if (location.pathname.startsWith("/mobile/")) {
         document.head.append(inventoryState);
       }
 
-      if (!document.querySelector('script[data-conductor-push]')) {
-        const pushNotifications = document.createElement("script");
-        pushNotifications.type = "module";
-        pushNotifications.src = "./push-notifications.js?v=1";
-        pushNotifications.dataset.conductorPush = "1";
-        document.head.append(pushNotifications);
-      }
     }, 1000);
   }, { once: true });
 } else {

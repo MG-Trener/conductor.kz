@@ -14,6 +14,7 @@ const mobileWorker = new URL("../mobile/sw.js", import.meta.url);
 const warehouseCss = new URL("../mobile/warehouse.css", import.meta.url);
 const inventoryState = new URL("../mobile/inventory-state.js", import.meta.url);
 const pushNotifications = new URL("../mobile/push-notifications.js", import.meta.url);
+const pushConfig = new URL("../mobile/push-config.js", import.meta.url);
 const publicPriceModule = new URL("../assets/public-prices.js", import.meta.url);
 const publicRequestModule = new URL("../assets/js/request-form.js", import.meta.url);
 
@@ -221,14 +222,21 @@ test("warehouse app no longer loads the obsolete requests interface", async () =
 });
 
 test("warehouse Android build loads and registers sale push notifications", async () => {
-  const [html, worker, push] = await Promise.all([
+  const [app, html, worker, push, endpointConfig] = await Promise.all([
+    readFile(mobileApp, "utf8"),
     readFile(mobileHtml, "utf8"),
     readFile(mobileWorker, "utf8"),
-    readFile(pushNotifications, "utf8")
+    readFile(pushNotifications, "utf8"),
+    readFile(pushConfig, "utf8")
   ]);
+  assert.match(html, /push-config\.js\?v=1/);
   assert.match(html, /push-notifications\.js\?v=1/);
+  assert.match(worker, /push-config\.js\?v=1/);
   assert.match(worker, /push-notifications\.js\?v=1/);
   assert.match(push, /registerPlugin\("PushNotifications"\)/);
   assert.match(push, /"pushDevices"/);
   assert.match(push, /platform: "android"/);
+  assert.match(endpointConfig, /CONDUCTOR_PUSH_ENDPOINT/);
+  assert.match(app, /state\.user\.getIdToken\(\)/);
+  assert.match(app, /JSON\.stringify\(\{ orderId \}\)/);
 });

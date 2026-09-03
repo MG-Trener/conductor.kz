@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "conductor-sale-push",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-03",
+  "workers_dev": true,
+  "vars": {
+    "FIREBASE_PROJECT_ID": "conductor-requests",
+    "FIREBASE_WEB_API_KEY": "AIzaSyDnH_Lp6JudyHw4bPbPptwnhRe6On23jCA"
+  },
+  "secrets": {
+    "required": ["FIREBASE_SERVICE_ACCOUNT_JSON"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}
