@@ -31,8 +31,29 @@ function watchNode(node) {
   });
 }
 
+function normalizeAnalyticsSaleCards(root) {
+  if (!root) return;
+
+  root.querySelectorAll(".analytics-sale-title b").forEach((node) => {
+    if (/^Продажа\s+#/i.test(node.textContent || "")) node.textContent = "Продажа";
+  });
+
+  root.querySelectorAll(".analytics-sale-status:not(.cancelled)").forEach((node) => node.remove());
+}
+
+function watchAnalyticsSaleCards() {
+  const root = document.querySelector("#analytics-sales-list");
+  if (!root) return;
+  normalizeAnalyticsSaleCards(root);
+  new MutationObserver(() => normalizeAnalyticsSaleCards(root)).observe(root, {
+    childList: true,
+    subtree: true
+  });
+}
+
 function start() {
   watchedSelectors.forEach((selector) => watchNode(document.querySelector(selector)));
+  watchAnalyticsSaleCards();
 }
 
 if (document.readyState === "loading") {
