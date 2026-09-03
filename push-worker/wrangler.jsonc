@@ -8,9 +8,6 @@
     "FIREBASE_PROJECT_ID": "conductor-requests",
     "FIREBASE_WEB_API_KEY": "AIzaSyDnH_Lp6JudyHw4bPbPptwnhRe6On23jCA"
   },
-  "secrets": {
-    "required": ["FIREBASE_SERVICE_ACCOUNT_JSON"]
-  },
   "observability": {
     "enabled": true
   }

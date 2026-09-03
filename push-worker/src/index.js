@@ -317,6 +317,12 @@ export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") return jsonResponse(request, { ok: true });
     const url = new URL(request.url);
+    if (request.method === "GET" && url.pathname === "/health") {
+      return jsonResponse(request, {
+        ok: true,
+        serviceAccountConfigured: Boolean(env.FIREBASE_SERVICE_ACCOUNT_JSON)
+      });
+    }
     if (request.method !== "POST" || url.pathname !== "/notify-sale") {
       return jsonResponse(request, { error: "not_found" }, 404);
     }

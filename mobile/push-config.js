@@ -1,2 +1,2 @@
-// Filled with the deployed Cloudflare Worker URL before the Android release is published.
-window.CONDUCTOR_PUSH_ENDPOINT = "";
+// The Worker authenticates both staff users through Firebase before sending FCM.
+window.CONDUCTOR_PUSH_ENDPOINT = "https://conductor-sale-push.hilarious-hallway.workers.dev/notify-sale";

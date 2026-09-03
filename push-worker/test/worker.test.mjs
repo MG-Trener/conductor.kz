@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { decodeFirestoreFields, decodeFirestoreValue, formatKzt } from "../src/index.js";
+import worker, { decodeFirestoreFields, decodeFirestoreValue, formatKzt } from "../src/index.js";
 
 test("Firestore REST values are converted to normal JavaScript data", () => {
   assert.deepEqual(decodeFirestoreFields({
@@ -19,4 +19,10 @@ test("Firestore REST values are converted to normal JavaScript data", () => {
 
 test("notification amounts use whole tenge", () => {
   assert.equal(formatKzt(12345.9).replaceAll(/\s/gu, " "), "12 345 ₸");
+});
+
+test("health endpoint reports whether the encrypted service account is configured", async () => {
+  const response = await worker.fetch(new Request("https://worker.example/health"), {});
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), { ok: true, serviceAccountConfigured: false });
 });
