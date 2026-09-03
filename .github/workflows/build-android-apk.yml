@@ -9,6 +9,7 @@ on:
     paths:
       - "android-app/**"
       - "mobile/app-update.js"
+      - "mobile/push-notifications.js"
       - "mobile/app-version.json"
       - ".github/workflows/build-android-apk.yml"
 
@@ -31,6 +32,7 @@ jobs:
       - name: Validate updater scripts
         run: |
           node --check mobile/app-update.js
+          node --check mobile/push-notifications.js
           node --check android-app/configure-android.mjs
           node --check android-app/configure-updater.mjs
           node -e "const p=require('./android-app/package.json'); const m=require('./mobile/app-version.json'); if(p.version!==m.version) throw new Error('Android and update manifest versions differ')"
@@ -54,6 +56,25 @@ jobs:
       - name: Generate Android project
         working-directory: android-app
         run: npx cap add android
+
+      - name: Install Firebase Android configuration
+        shell: bash
+        env:
+          GOOGLE_SERVICES_BASE64: ${{ secrets.FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          if [ -z "$GOOGLE_SERVICES_BASE64" ]; then
+            echo "::error::Missing FIREBASE_ANDROID_GOOGLE_SERVICES_JSON_BASE64. Register kz.conductor.warehouse in Firebase and store google-services.json as a Base64 GitHub Actions secret."
+            exit 1
+          fi
+          printf '%s' "$GOOGLE_SERVICES_BASE64" | base64 --decode > android-app/android/app/google-services.json
+          node - <<'NODE'
+          const fs = require('fs');
+          const json = JSON.parse(fs.readFileSync('android-app/android/app/google-services.json', 'utf8'));
+          const packages = (json.client || []).map((client) => client?.client_info?.android_client_info?.package_name).filter(Boolean);
+          if (!packages.includes('kz.conductor.warehouse')) {
+            throw new Error(`google-services.json does not contain kz.conductor.warehouse; found: ${packages.join(', ') || 'none'}`);
+          }
+          NODE
 
       - name: Prepare release signing
         id: signing

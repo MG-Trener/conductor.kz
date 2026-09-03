@@ -1,4 +1,4 @@
-const CACHE = "conductor-mobile-v38";
+const CACHE = "conductor-mobile-v40";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -7,13 +7,16 @@ const APP_SHELL = [
   "./header-mobile.css?v=1",
   "./app.js?v=24",
   "./firebase-config.js?v=21",
+  "./push-config.js?v=1",
   "./inventory-state.js?v=24",
+  "./push-notifications.js?v=1",
   "./firestore-error-help.js?v=17",
   "./app-update.js?v=1",
   "./manifest.webmanifest?v=17",
   "./icon.svg",
   "./splash.css?v=3",
-  "./warehouse-splash-vintage.png?v=1"
+  "./warehouse-splash-clean.png?v=1",
+  "./conductor-vintage-title.png?v=1"
 ];
 
 self.addEventListener("install", (event) => {

@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "npm run test:pages && npm run test:rules",
-    "test:pages": "node --test tests/public-prices-pages.test.mjs tests/splash-assets.test.mjs",
+    "test:pages": "node --test tests/public-prices-pages.test.mjs tests/splash-assets.test.mjs push-worker/test/*.test.mjs",
     "test:rules": "firebase emulators:exec --only firestore --project conductor-rules-test \"node --test tests/firestore.rules.test.mjs\""
   },
   "devDependencies": {
