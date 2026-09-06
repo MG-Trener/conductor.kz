@@ -6,7 +6,7 @@ function stripColorCount(text = "") {
 }
 
 function normalizeUi() {
-  document.querySelector("#view-sales .sticky-head > [data-nav=\"sale\"]")?.remove();
+  document.querySelectorAll('.bottom-nav [data-nav="sale"], #view-dashboard .quick[data-nav="sale"], #view-sales .sticky-head > [data-nav="sale"]').forEach((node) => node.remove());
 
   const salesTitle = document.querySelector("#view-sales .sticky-head h1");
   if (salesTitle && salesTitle.textContent !== "Операции") salesTitle.textContent = "Операции";
@@ -17,7 +17,7 @@ function normalizeUi() {
     const cleaned = stripColorCount(node.textContent);
     if (cleaned !== node.textContent.trim()) node.textContent = cleaned;
   });
-  document.querySelectorAll("#view-sale .sale-model-title > small:not(.sale-tier-hint)").forEach((node) => {
+  document.querySelectorAll("#sale-products .sale-model-title > small:not(.sale-tier-hint)").forEach((node) => {
     const cleaned = stripColorCount(node.textContent);
     if (cleaned !== node.textContent.trim()) node.textContent = cleaned;
   });
