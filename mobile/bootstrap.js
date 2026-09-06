@@ -7,7 +7,6 @@ import "./ui-fixes-070.js";
 import "./inventory-state.js";
 import "./push-notifications.js";
 import "./firestore-error-help.js";
-import "./release-20260906.js";
 
 function isNativeApp() {
   try {

@@ -5,6 +5,7 @@ let capturedSaleSubmit = null;
 let resolveCapturedSaleSubmit;
 const capturedSaleSubmitPromise = new Promise((resolve) => { resolveCapturedSaleSubmit = resolve; });
 let listenerPatchActive = true;
+let bypassEnhancedSubmit = false;
 
 function isCapture(options) {
   return options === true || Boolean(options && typeof options === "object" && options.capture);
@@ -59,9 +60,7 @@ function waitForProductsSnapshot(db, timeoutMs = 5000) {
     const timer = setTimeout(finish, timeoutMs);
     unsubscribe = onSnapshot(collection(db, "products"), () => {
       clearTimeout(timer);
-      // Listener склада из legacy-модуля подписывается раньше. Небольшая
-      // задержка гарантирует, что его локальный массив products уже заполнен.
-      setTimeout(finish, 60);
+      setTimeout(finish, 80);
     }, () => {
       clearTimeout(timer);
       finish();
@@ -69,16 +68,53 @@ function waitForProductsSnapshot(db, timeoutMs = 5000) {
   });
 }
 
-function syncSaleInputsBeforeSubmit(event) {
-  if (event.target?.id !== "sale-form") return;
-  document.querySelectorAll("#sale-form [data-qty]").forEach((input) => {
+function syncSaleInputsBeforeSubmit(form = document.getElementById("sale-form")) {
+  form?.querySelectorAll("[data-qty]").forEach((input) => {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
 
+function hasVisibleSelectedQuantity(form) {
+  return [...(form?.querySelectorAll("[data-qty]") || [])]
+    .some((input) => Math.trunc(Number(input.value) || 0) > 0);
+}
+
+function isFalseZeroQuantityError() {
+  return document.getElementById("sale-error")?.textContent?.includes("Укажите количество хотя бы одного товара");
+}
+
+function submitWithCoreHandler(form, submitter) {
+  const errorNode = document.getElementById("sale-error");
+  if (errorNode) errorNode.textContent = "";
+  bypassEnhancedSubmit = true;
+  try {
+    if (typeof form.requestSubmit === "function") {
+      if (submitter && submitter.form === form) form.requestSubmit(submitter);
+      else form.requestSubmit();
+    } else {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    }
+  } finally {
+    bypassEnhancedSubmit = false;
+  }
+}
+
+function resilientSaleSubmit(event) {
+  if (event.target?.id !== "sale-form" || bypassEnhancedSubmit) return;
+  const form = event.target;
+  syncSaleInputsBeforeSubmit(form);
+
+  if (!capturedSaleSubmit) return;
+  capturedSaleSubmit.call(document, event);
+
+  if (hasVisibleSelectedQuantity(form) && isFalseZeroQuantityError()) {
+    submitWithCoreHandler(form, event.submitter || null);
+  }
+}
+
 (async function loadWarehouseEnhancementsSafely() {
   try {
-    await import("./warehouse-enhancements-legacy.js?v=1");
+    await import("./warehouse-enhancements-legacy.js?v=2");
     const listener = capturedSaleSubmit || await Promise.race([
       capturedSaleSubmitPromise,
       delay(5000, null)
@@ -87,17 +123,9 @@ function syncSaleInputsBeforeSubmit(event) {
     restoreDocumentListener();
     if (!listener) return;
 
-    // Этот обработчик регистрируется раньше подтверждения продажи и перед
-    // каждым submit принудительно синхронизирует визуальные количества.
-    originalAddEventListener.call(document, "submit", syncSaleInputsBeforeSubmit, true);
-
     const db = await waitForDatabase();
     await waitForProductsSnapshot(db);
-
-    // Подключаем исходное расширенное подтверждение только после первой
-    // загрузки products. Это устраняет гонку, при которой сумма уже видна,
-    // а расширенный модуль ещё считает список выбранных товаров пустым.
-    originalAddEventListener.call(document, "submit", listener, true);
+    originalAddEventListener.call(document, "submit", resilientSaleSubmit, true);
   } catch (error) {
     console.error("Warehouse enhancements failed to load", error);
   } finally {

@@ -1,4 +1,4 @@
-const CACHE = "conductor-mobile-v50";
+const CACHE = "conductor-mobile-v51";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -13,13 +13,12 @@ const APP_SHELL = [
   "./analytics.js",
   "./sales-history.js",
   "./warehouse-enhancements.js",
-  "./warehouse-enhancements-legacy.js?v=1",
+  "./warehouse-enhancements-legacy.js?v=2",
   "./version-history.js",
   "./ui-fixes-070.js",
   "./inventory-state.js",
   "./push-notifications.js",
   "./firestore-error-help.js",
-  "./release-20260906.js",
   "./manifest.webmanifest?v=17",
   "./icon.svg",
   "./splash.css?v=3",
