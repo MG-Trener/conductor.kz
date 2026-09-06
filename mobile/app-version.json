@@ -1,8 +1,7 @@
 {
-  "version": "1.0.8",
-  "versionCode": 1008,
-  "downloadUrl": "https://github.com/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk",
-  "notes": "1.0.8: исправлено дублирование подписи Настройки в нижней навигации; восстановлена видимая карточка проверки обновлений с кнопкой повторной проверки и обновления; сохранена компактная стилизация настроек.",
-  "publishedAt": "2026-09-06",
-  "releaseReady": true
+  "version": "1.0.9",
+  "versionCode": 109,
+  "apkUrl": "https://github.com/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk",
+  "notes": "1.0.9: значительно уменьшен размер Android-приложения: иконки теперь генерируются в нужных разрешениях вместо многократного копирования исходного PNG; включено удаление неиспользуемого кода и ресурсов; оптимизирована крупная графика заставки без изменения внешнего вида.",
+  "mandatory": false
 }
