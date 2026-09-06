@@ -12,6 +12,8 @@ function normalizeUi() {
   if (salesTitle && salesTitle.textContent !== "Операции") salesTitle.textContent = "Операции";
   const salesNav = document.querySelector('.bottom-nav [data-nav="sales"] small');
   if (salesNav && salesNav.textContent !== "Операции") salesNav.textContent = "Операции";
+  const settingsNav = document.querySelector('.bottom-nav [data-nav="settings"] small');
+  if (settingsNav && settingsNav.textContent !== "Настройки") settingsNav.textContent = "Настройки";
 
   document.querySelectorAll("#view-stock .stock-name small").forEach((node) => {
     const cleaned = stripColorCount(node.textContent);
