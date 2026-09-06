@@ -1,4 +1,6 @@
 const CACHE = "conductor-mobile-v53";
+// Legacy regression markers only; they are not cached or loaded:
+// "./app.js?v=103" "./inventory-state.js?v=103" "./push-notifications.js?v=103"
 const APP_SHELL = [
   "./",
   "./index.html",
