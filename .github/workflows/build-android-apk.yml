@@ -45,7 +45,19 @@ jobs:
           node --check mobile/inventory-state.js
           node --check android-app/configure-android.mjs
           node --check android-app/configure-updater.mjs
-          node -e "const p=require('./android-app/package.json'); const m=require('./mobile/app-version.json'); if(p.version!==m.version) throw new Error('Android and update manifest versions differ')"
+          node - <<'NODE'
+          const p = require('./android-app/package.json');
+          const m = require('./mobile/app-version.json');
+          if (p.version !== m.version) throw new Error('Android and update manifest versions differ');
+          const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(p.version);
+          if (!match) throw new Error(`Android version must be semantic x.y.z: ${p.version}`);
+          const [, major, minor, patch] = match.map(Number);
+          if (minor > 99 || patch > 99) throw new Error('Android minor/patch version must fit two digits');
+          const expectedCode = major * 10000 + minor * 100 + patch;
+          if (m.versionCode !== expectedCode) {
+            throw new Error(`Invalid Android versionCode ${m.versionCode} for ${p.version}; expected ${expectedCode}. Lower codes make Android treat updates as downgrades.`);
+          }
+          NODE
 
       - name: Setup Java
         uses: actions/setup-java@v5
@@ -189,7 +201,7 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Prepare APK file
+      - name: Prepare and verify APK file
         if: steps.signing.outputs.enabled == 'true' || github.ref != 'refs/heads/main'
         shell: bash
         run: |
@@ -200,6 +212,9 @@ jobs:
             cp android-app/android/app/build/outputs/apk/debug/app-debug.apk dist/CONDUCTOR-Sklad.apk
           fi
           sha256sum dist/CONDUCTOR-Sklad.apk
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
+          "$BUILD_TOOLS/zipalign" -c -P 16 -v 4 dist/CONDUCTOR-Sklad.apk
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs dist/CONDUCTOR-Sklad.apk
 
       - name: Upload APK artifact
         if: steps.signing.outputs.enabled == 'true' || github.ref != 'refs/heads/main'
