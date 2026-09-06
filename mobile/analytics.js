@@ -41,6 +41,10 @@ function saleItemsText(sale) {
   }).join(" · ");
 }
 
+function isRealSale(sale) {
+  return sale.status !== "cancelled" && !sale.operationType;
+}
+
 function isMonthEnabled(year, monthIndex) {
   if (year > START_YEAR) return true;
   return year === START_YEAR && monthIndex >= START_MONTH_2026;
@@ -62,7 +66,7 @@ function chooseMonthForYear(year) {
   const monthsWithSales = analyticsSales
     .filter((sale) => {
       const date = dateOf(sale);
-      return sale.status !== "cancelled" && date.getFullYear() === year && isMonthEnabled(year, date.getMonth());
+      return isRealSale(sale) && date.getFullYear() === year && isMonthEnabled(year, date.getMonth());
     })
     .map((sale) => dateOf(sale).getMonth());
 
@@ -76,22 +80,21 @@ function injectStyles() {
   style.textContent = `
     .bottom-nav{grid-template-columns:repeat(6,1fr)}
     .analytics-nav span{font-size:19px}
-    .analytics-year-card{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:10px 0 14px;padding:16px;border:1px solid var(--line);border-radius:20px;background:linear-gradient(145deg,rgba(56,166,255,.12),transparent 58%),var(--panel)}
-    .analytics-year-copy span,.analytics-year-copy b{display:block}.analytics-year-copy span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.analytics-year-copy b{margin-top:5px;font-size:27px}
-    .analytics-year-select{min-width:104px;border:1px solid var(--line);border-radius:13px;background:#090e16;color:#fff;padding:11px 12px;font-weight:900;outline:none}
-    .analytics-month-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
-    .analytics-month{min-width:0;min-height:96px;padding:12px 10px;border:1px solid var(--line);border-radius:16px;background:var(--panel);color:#fff;text-align:left;cursor:pointer;transition:.16s ease}
-    .analytics-month:not(.is-disabled):hover{transform:translateY(-1px);border-color:rgba(56,166,255,.3)}
-    .analytics-month-name,.analytics-month b,.analytics-month small{display:block}.analytics-month-name{font-size:11px;font-weight:900;color:#dce4ee}.analytics-month b{margin-top:9px;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.analytics-month small{margin-top:5px;color:var(--muted);font-size:9px}
-    .analytics-month.is-current{border-color:rgba(255,195,77,.62);box-shadow:inset 0 0 0 1px rgba(255,195,77,.15);background:linear-gradient(145deg,rgba(255,195,77,.11),transparent 60%),var(--panel)}
+    .analytics-year-card{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:4px 0 12px;padding:14px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(145deg,rgba(56,166,255,.12),transparent 58%),var(--panel)}
+    .analytics-year-copy span,.analytics-year-copy b{display:block}.analytics-year-copy span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.analytics-year-copy b{margin-top:5px;font-size:25px}
+    .analytics-year-select{min-width:104px;border:1px solid var(--line);border-radius:13px;background:#090e16;color:#fff;padding:10px 11px;font-weight:900;outline:none}
+    .analytics-month-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+    .analytics-month{min-width:0;min-height:92px;padding:11px 9px;border:1px solid var(--line);border-radius:15px;background:var(--panel);color:#fff;text-align:left;cursor:pointer;transition:.16s ease}
+    .analytics-month-name,.analytics-month b,.analytics-month small{display:block}.analytics-month-name{font-size:11px;font-weight:900;color:#dce4ee}.analytics-month b{margin-top:8px;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.analytics-month small{margin-top:5px;color:var(--muted);font-size:9px}
+    .analytics-month.is-current{border-color:rgba(255,195,77,.62);background:linear-gradient(145deg,rgba(255,195,77,.11),transparent 60%),var(--panel)}
     .analytics-month.is-current .analytics-month-name{color:#ffd57f}
     .analytics-month.is-selected{border-color:rgba(56,166,255,.75);box-shadow:0 0 0 2px rgba(56,166,255,.12);background:linear-gradient(145deg,rgba(56,166,255,.16),transparent 60%),var(--panel)}
     .analytics-month.is-disabled{cursor:not-allowed;opacity:.34;filter:saturate(.35);background:#090c12;border-style:dashed}
     .analytics-month.is-disabled .analytics-month-name,.analytics-month.is-disabled b,.analytics-month.is-disabled small{color:#6f7887}
     .analytics-journal-head{align-items:flex-end}.analytics-journal-meta{color:var(--muted);font-size:10px;text-align:right}
     .analytics-sale-card{border:1px solid var(--line);border-radius:18px;padding:14px;background:var(--panel)}
-    .analytics-sale-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.analytics-sale-title b,.analytics-sale-title small{display:block}.analytics-sale-title b{font-size:13px}.analytics-sale-title small{margin-top:3px;color:var(--muted);font-size:10px}.analytics-sale-total{font-size:17px;font-weight:1000;white-space:nowrap}.analytics-sale-items{margin-top:9px;color:#d7dde6;font-size:11px;line-height:1.45}.analytics-sale-note{margin-top:5px;color:var(--muted)}.analytics-sale-status{display:inline-flex;margin-top:9px;border:1px solid var(--line);border-radius:999px;padding:5px 8px;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:#8cf4a0;background:rgba(92,219,117,.08)}.analytics-sale-status.cancelled{color:#c3c8d0;background:transparent}.analytics-loading{padding:32px 14px;text-align:center;border:1px dashed var(--line);border-radius:18px;color:var(--muted);font-size:12px}
-    @media(max-width:430px){.bottom-nav{padding-left:4px;padding-right:4px}.nav-btn small{font-size:9px}.analytics-month-grid{gap:7px}.analytics-month{min-height:90px;padding:11px 8px}.analytics-month b{font-size:14px}.analytics-year-copy b{font-size:24px}}
+    .analytics-sale-top{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.analytics-sale-title b,.analytics-sale-title small{display:block}.analytics-sale-title b{font-size:13px}.analytics-sale-title small{margin-top:3px;color:var(--muted);font-size:10px}.analytics-sale-total{font-size:17px;font-weight:1000;white-space:nowrap}.analytics-sale-items{margin-top:9px;color:#d7dde6;font-size:11px;line-height:1.45}.analytics-sale-note{margin-top:5px;color:var(--muted)}.analytics-loading{padding:32px 14px;text-align:center;border:1px dashed var(--line);border-radius:18px;color:var(--muted);font-size:12px}
+    @media(max-width:430px){.bottom-nav{padding-left:4px;padding-right:4px}.nav-btn small{font-size:9px}.analytics-month-grid{gap:7px}.analytics-month{min-height:88px;padding:10px 8px}.analytics-month b{font-size:14px}.analytics-year-copy b{font-size:23px}}
   `;
   document.head.append(style);
 }
@@ -110,7 +113,7 @@ function injectUi() {
       <select id="analytics-year" class="analytics-year-select" aria-label="Выберите год"></select>
     </div>
     <div id="analytics-month-grid" class="analytics-month-grid" aria-label="Продажи по месяцам"></div>
-    <div class="section-head analytics-journal-head"><h2 id="analytics-journal-title">Журнал продаж</h2><span id="analytics-journal-meta" class="analytics-journal-meta"></span></div>
+    <div class="section-head analytics-journal-head"><h2 id="analytics-journal-title">Операции</h2><span id="analytics-journal-meta" class="analytics-journal-meta"></span></div>
     <div id="analytics-sales-list" class="list"><div class="analytics-loading">Откройте аналитику, чтобы загрузить историю продаж.</div></div>
   `;
 
@@ -171,28 +174,24 @@ function renderJournal(monthSales) {
   if (!root || !title || !meta) return;
 
   if (!isMonthEnabled(selectedYear, selectedMonth)) {
-    title.textContent = "Журнал продаж";
+    title.textContent = "Операции";
     meta.textContent = "";
     root.innerHTML = `<div class="empty">За этот период данные не ведутся.</div>`;
     return;
   }
 
   title.textContent = `${MONTHS[selectedMonth]} ${selectedYear}`;
-  const activeCount = monthSales.filter((sale) => sale.status !== "cancelled").length;
-  const cancelledCount = monthSales.length - activeCount;
-  meta.textContent = `${activeCount} продаж${cancelledCount ? ` · ${cancelledCount} отменено` : ""}`;
+  meta.textContent = `${monthSales.length} продаж`;
 
   root.innerHTML = monthSales.length ? monthSales.map((sale) => {
-    const cancelled = sale.status === "cancelled";
     const items = saleItemsText(sale);
     const note = sale.note || sale.notes || "";
     return `<article class="analytics-sale-card">
       <div class="analytics-sale-top">
-        <div class="analytics-sale-title"><b>Продажа #${escapeHtml(String(sale.id || "").slice(0, 8))}</b><small>${escapeHtml(employeeName(sale))} · ${formatJournalDate(dateOf(sale))}</small></div>
+        <div class="analytics-sale-title"><b>Продажа</b><small>${escapeHtml(employeeName(sale))} · ${formatJournalDate(dateOf(sale))}</small></div>
         <div class="analytics-sale-total">${KZT.format(Number(sale.total || 0))}</div>
       </div>
       <div class="analytics-sale-items">${escapeHtml(items || "Без позиций")}${note ? `<div class="analytics-sale-note">${escapeHtml(note)}</div>` : ""}</div>
-      <span class="analytics-sale-status${cancelled ? " cancelled" : ""}">${cancelled ? "Отменена" : "Продажа"}</span>
     </article>`;
   }).join("") : `<div class="empty">В этом месяце продаж нет.</div>`;
 }
@@ -205,7 +204,7 @@ function renderAnalytics() {
 
   const activeYearSales = analyticsSales.filter((sale) => {
     const date = dateOf(sale);
-    return sale.status !== "cancelled"
+    return isRealSale(sale)
       && date.getFullYear() === selectedYear
       && isMonthEnabled(selectedYear, date.getMonth());
   });
@@ -229,7 +228,8 @@ function renderAnalytics() {
 
   const journalSales = analyticsSales.filter((sale) => {
     const date = dateOf(sale);
-    return isMonthEnabled(selectedYear, selectedMonth)
+    return isRealSale(sale)
+      && isMonthEnabled(selectedYear, selectedMonth)
       && date.getFullYear() === selectedYear
       && date.getMonth() === selectedMonth;
   });
