@@ -5,6 +5,7 @@ import "./warehouse-enhancements.js?v=104";
 import "./inventory-state.js?v=104";
 import "./push-notifications.js?v=104";
 import "./firestore-error-help.js?v=104";
+import "./ui-sounds.js?v=1";
 
 function isNativeApp() {
   try {
