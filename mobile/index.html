@@ -25,7 +25,7 @@
   <link rel="stylesheet" href="./header-mobile.css?v=1">
   <link rel="stylesheet" href="./splash.css?v=3">
   <link rel="stylesheet" href="./release-103.css">
-  <link rel="stylesheet" href="./release-105.css">
+  <link rel="stylesheet" href="./release-105.css?v=2">
   <!-- Legacy architecture test markers only; these files are NOT loaded: app.js?v=103 bootstrap-103.js core-ui-103.js version-history-103.js -->
 </head>
 <body>
@@ -80,12 +80,24 @@
           <button id="open-cash-dialog" class="metric cash-metric" type="button"><span>Доступно в кассе</span><b id="metric-cash">0 ₸</b><small>Нажмите, чтобы вывести средства</small></button>
         </div>
 
+        <div class="section-head">
+          <h2>Новая продажа</h2>
+          <div class="sale-head-total"><span>Отмечено</span><b id="sale-header-total">0 ₸</b></div>
+        </div>
+        <form id="sale-form" class="panel form-stack dashboard-sale-form">
+          <div class="section-label">Товары и цвета</div>
+          <div id="sale-products" class="sale-products"></div>
+          <label>Комментарий<textarea id="sale-notes" rows="3" maxlength="300" placeholder="Необязательно: канал продажи, примечание"></textarea></label>
+          <div class="sale-total"><span>Сумма продажи</span><b id="sale-total">0 ₸</b></div>
+          <button class="btn primary full" type="submit">Записать продажу и списать товар</button>
+          <p id="sale-error" class="error"></p>
+        </form>
+
         <div class="section-head"><h2>Картина склада</h2><button class="link-btn" data-nav="stock">Открыть склад</button></div>
         <div id="inventory-overview" class="inventory-overview"></div>
 
         <div class="section-head"><h2>Быстрые действия</h2></div>
         <div class="quick-grid">
-          <button class="quick pink" data-nav="sale"><span>＋</span><b>Зафиксировать продажу</b><small>Списать конкретный цвет</small></button>
           <button class="quick green" data-nav="stock"><span>▦</span><b>Актуальные остатки</b><small>Все модели и цвета</small></button>
           <button class="quick blue" data-nav="sales"><span>≡</span><b>Операции</b><small>Продажи и движение денег</small></button>
         </div>
@@ -98,21 +110,6 @@
         <div class="section-head sticky-head"><h1>Операции</h1></div>
         <div id="sales-summary" class="panel mini-summary"></div>
         <div id="sales-list" class="list"></div>
-      </section>
-
-      <section id="view-sale" class="view">
-        <div class="section-head sticky-head sale-sticky-head">
-          <h1>Новая продажа</h1>
-          <div class="sale-head-total"><span>Отмечено</span><b id="sale-header-total">0 ₸</b></div>
-        </div>
-        <form id="sale-form" class="panel form-stack">
-          <div class="section-label">Товары и цвета</div>
-          <div id="sale-products" class="sale-products"></div>
-          <label>Комментарий<textarea id="sale-notes" rows="3" maxlength="300" placeholder="Необязательно: канал продажи, примечание"></textarea></label>
-          <div class="sale-total"><span>Сумма продажи</span><b id="sale-total">0 ₸</b></div>
-          <button class="btn primary full" type="submit">Записать продажу и списать товар</button>
-          <p id="sale-error" class="error"></p>
-        </form>
       </section>
 
       <section id="view-stock" class="view">
@@ -145,7 +142,6 @@
     <nav class="bottom-nav" aria-label="Навигация">
       <button class="nav-btn active" data-nav="dashboard"><span>⌂</span><small>Обзор</small></button>
       <button class="nav-btn" data-nav="sales"><span>≡</span><small>Операции</small></button>
-      <button class="nav-btn sale-nav" data-nav="sale"><span>＋</span><small>Продажа</small></button>
       <button class="nav-btn" data-nav="stock"><span>▦</span><small>Склад</small></button>
       <button class="nav-btn" data-nav="settings"><span>⚙</span><small>Ещё</small></button>
     </nav>
@@ -212,7 +208,7 @@
   <script src="./push-config.js?v=1"></script>
   <script type="module" src="./app.js?v=104"></script>
   <script type="module" src="./bootstrap-104.js"></script>
-  <script type="module" src="./core-ui-105.js"></script>
+  <script type="module" src="./core-ui-105.js?v=2"></script>
   <script type="module" src="./version-history-105.js"></script>
   <script type="module" src="./startup-guard-104.js"></script>
 </body>
