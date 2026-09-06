@@ -1,5 +1,16 @@
 const VERSIONS = [
   {
+    version: "1.0.7",
+    date: "06.09.2026",
+    changes: [
+      "Нижняя навигация зафиксирована в один ряд из четырёх равных кнопок.",
+      "Пункт «Ещё» заменён на прямую кнопку «Настройки».",
+      "Экран настроек приведён к компактному карточному стилю истории изменений.",
+      "Информация Firebase project скрыта из пользовательского интерфейса.",
+      "Удалён справочный блок «Как вносить остатки»."
+    ]
+  },
+  {
     version: "1.0.6",
     date: "06.09.2026",
     changes: [
@@ -114,7 +125,7 @@ function ensureHistoryUi() {
     button.id = "version-history-button";
     button.type = "button";
     button.className = "btn full version-history-btn";
-    button.innerHTML = '<span class="version-history-btn-copy"><b>История изменений</b><small>Актуальная версия: 1.0.6</small></span><span aria-hidden="true">›</span>';
+    button.innerHTML = '<span class="version-history-btn-copy"><b>История изменений</b><small>Актуальная версия: 1.0.7</small></span><span aria-hidden="true">›</span>';
     settings.querySelector(".settings-panel")?.insertAdjacentElement("afterend", button);
   }
 
