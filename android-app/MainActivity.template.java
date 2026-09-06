@@ -7,6 +7,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.view.ViewGroup;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 
 import androidx.core.graphics.Insets;
@@ -26,7 +27,7 @@ public class MainActivity extends BridgeActivity {
         getWindow().setStatusBarColor(Color.rgb(7, 10, 18));
         getWindow().setNavigationBarColor(Color.rgb(7, 10, 18));
         super.onCreate(savedInstanceState);
-        refreshBundledUiAfterUpgrade();
+        configureFreshBundledUi();
         applySystemBarInsets();
     }
 
@@ -36,9 +37,14 @@ public class MainActivity extends BridgeActivity {
         return info.versionCode;
     }
 
-    private void refreshBundledUiAfterUpgrade() {
+    private void configureFreshBundledUi() {
         final WebView webView = getBridge() != null ? getBridge().getWebView() : null;
         if (webView == null) return;
+
+        // The Android app ships its UI inside the APK. Reusing Chromium HTTP cache for
+        // these local assets can leave an older index/bootstrap visible after an APK update.
+        // Always bypass that cache for the bundled warehouse UI.
+        webView.getSettings().setCacheMode(WebSettings.LOAD_NO_CACHE);
 
         try {
             final long currentVersion = currentVersionCode();
@@ -54,6 +60,7 @@ public class MainActivity extends BridgeActivity {
             }, 120L);
         } catch (Exception ignored) {
             webView.clearCache(true);
+            webView.reload();
         }
     }
 
