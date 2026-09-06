@@ -40,7 +40,6 @@ service cloud.firestore {
     match /products/{productId} {
       allow read: if isStaff();
 
-      // The client only seeds the fixed colour-variant catalogue.
       allow create: if isStaff()
         && validProductId(productId)
         && validProductState(request.resource.data, productId)
@@ -54,8 +53,6 @@ service cloud.firestore {
           'createdByName', 'updatedAt', 'updatedBy', 'updatedByName'
         ]);
 
-      // Inventory operations can alter balances and their audit markers, but
-      // cannot rewrite catalogue identity fields or model prices.
       allow update: if isStaff()
         && validProductState(request.resource.data, productId)
         && validProductAuthor(request.resource.data)
@@ -75,7 +72,6 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // One authoritative model document supplies both warehouse and public SEO prices.
     match /catalog/{modelId} {
       allow read: if true;
       allow create, update: if isStaff()
@@ -99,22 +95,74 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Deprecated duplicated price collection. New clients use /catalog only.
     match /publicProducts/{modelId} {
       allow read, write: if false;
+    }
+
+    function validOrderAudit(data) {
+      return data.source == 'stock-app'
+        && data.status == 'done'
+        && data.createdBy == request.auth.uid
+        && data.createdByEmail == request.auth.token.email
+        && data.createdByName is string
+        && data.createdByName.size() > 0
+        && data.createdByName.size() <= 80
+        && data.createdAt == request.time
+        && data.createdAtClient is string
+        && data.createdAtClient.size() > 0
+        && data.createdAtClient.size() <= 80
+        && data.note is string
+        && data.note.size() <= 300;
+    }
+
+    function validSaleOrder(data) {
+      return data.get('operationType', '') == ''
+        && data.items is list
+        && data.items.size() > 0
+        && data.items.size() <= 200
+        && data.total is number
+        && data.total > 0
+        && (!data.keys().hasAny(['baseTotal']) || (data.baseTotal is number && data.baseTotal > 0))
+        && (!data.keys().hasAny(['pricing']) || data.pricing is map);
+    }
+
+    function validCashOrder(data) {
+      return data.operationType in ['cash_deposit', 'cash_sawmill']
+        && data.amount is int
+        && data.amount > 0
+        && data.cashDelta is int
+        && data.before is int
+        && data.before >= 0
+        && data.after is int
+        && data.after >= 0
+        && data.after == data.before + data.cashDelta
+        && data.items is list
+        && data.items.size() == 0
+        && data.total == data.cashDelta
+        && ((data.operationType == 'cash_deposit' && data.cashDelta == data.amount)
+          || (data.operationType == 'cash_sawmill' && data.cashDelta == -data.amount));
     }
 
     match /orders/{orderId} {
       allow read: if isStaff();
       allow create: if isStaff()
-        && request.resource.data.source == 'stock-app'
-        && request.resource.data.status == 'done'
-        && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.createdAt == request.time;
+        && request.resource.data.keys().hasOnly([
+          'items', 'total', 'baseTotal', 'note', 'pricing',
+          'operationType', 'amount', 'cashDelta', 'before', 'after',
+          'status', 'source', 'createdAt', 'createdAtClient',
+          'createdBy', 'createdByEmail', 'createdByName'
+        ])
+        && validOrderAudit(request.resource.data)
+        && (validSaleOrder(request.resource.data) || validCashOrder(request.resource.data));
       allow update: if isStaff()
         && resource.data.status == 'done'
+        && resource.data.get('operationType', '') == ''
         && request.resource.data.status == 'cancelled'
         && request.resource.data.cancelledBy == request.auth.uid
+        && request.resource.data.cancelledByEmail == request.auth.token.email
+        && request.resource.data.cancelledByName is string
+        && request.resource.data.cancelledByName.size() > 0
+        && request.resource.data.cancelledByName.size() <= 80
         && request.resource.data.cancelledAt == request.time
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'status', 'cancelledAt', 'cancelledBy', 'cancelledByEmail',
@@ -170,14 +218,14 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // One internal cash balance. Sales add revenue, cancellations subtract it,
-    // and explicit withdrawals are recorded in the immutable journal below.
     function validCashAudit(data) {
       return data.balance is int
+        && data.balance >= 0
         && data.updatedAt == request.time
         && data.updatedBy == request.auth.uid
         && data.updatedByEmail == request.auth.token.email
         && data.updatedByName is string
+        && data.updatedByName.size() > 0
         && data.updatedByName.size() <= 80;
     }
 
@@ -218,6 +266,7 @@ service cloud.firestore {
         && request.resource.data.amount is int
         && request.resource.data.amount > 0
         && request.resource.data.before is int
+        && request.resource.data.before >= 0
         && request.resource.data.after is int
         && request.resource.data.after == request.resource.data.before - request.resource.data.amount
         && request.resource.data.after >= 0
@@ -228,6 +277,7 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.createdByEmail == request.auth.token.email
         && request.resource.data.createdByName is string
+        && request.resource.data.createdByName.size() > 0
         && request.resource.data.createdByName.size() <= 80
         && getAfter(/databases/$(database)/documents/finance/cash).data.balance == request.resource.data.after;
       allow update, delete: if false;
@@ -245,22 +295,17 @@ service cloud.firestore {
         && data.updatedAt == request.time;
     }
 
-    // Each authenticated warehouse installation stores its current FCM token.
-    // Clients cannot read the collection; Cloud Functions use the Admin SDK.
     match /pushDevices/{deviceId} {
       allow read: if false;
       allow create, update: if isStaff() && validPushDevice(request.resource.data);
       allow delete: if isStaff() && resource.data.uid == request.auth.uid;
     }
 
-    // Historical request documents are read-only for staff. New customer
-    // requests and all request edits are disabled.
     match /requests/{requestId} {
       allow read: if isStaff();
       allow write: if false;
     }
 
-    // Obsolete CRM data and every unlisted path remain completely closed.
     match /leads/{leadId} {
       allow read, write: if false;
     }
