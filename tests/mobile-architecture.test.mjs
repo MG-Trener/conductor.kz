@@ -68,7 +68,7 @@ test("native updater accepts only the warehouse release and verifies SHA-256", a
 
 test("PWA cache uses canonical feature module URLs", async () => {
   const sw = await read("mobile/sw.js");
-  assert.match(sw, /conductor-mobile-v48/);
+  assert.match(sw, /const CACHE = "conductor-mobile-v\d+"/);
   for (const moduleName of ["analytics.js", "sales-history.js", "version-history.js", "ui-fixes-070.js"]) {
     assert.match(sw, new RegExp(`\\./${moduleName.replace(".", "\\.")}\\"`));
     assert.doesNotMatch(sw, new RegExp(`${moduleName.replace(".", "\\.")}\\?v=`));
