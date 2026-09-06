@@ -1,5 +1,15 @@
 const VERSIONS = [
   {
+    version: "1.0.8",
+    date: "06.09.2026",
+    changes: [
+      "Исправлено дублирование подписи «Настройки» в нижней навигации.",
+      "Восстановлена карточка проверки обновлений в разделе «Настройки».",
+      "Кнопки «Проверить ещё раз» и «Обновить» снова доступны в Android-приложении.",
+      "Карточка обновления приведена к компактному стилю остальных настроек."
+    ]
+  },
+  {
     version: "1.0.7",
     date: "06.09.2026",
     changes: [
@@ -125,7 +135,7 @@ function ensureHistoryUi() {
     button.id = "version-history-button";
     button.type = "button";
     button.className = "btn full version-history-btn";
-    button.innerHTML = '<span class="version-history-btn-copy"><b>История изменений</b><small>Актуальная версия: 1.0.7</small></span><span aria-hidden="true">›</span>';
+    button.innerHTML = '<span class="version-history-btn-copy"><b>История изменений</b><small>Актуальная версия: 1.0.8</small></span><span aria-hidden="true">›</span>';
     settings.querySelector(".settings-panel")?.insertAdjacentElement("afterend", button);
   }
 
