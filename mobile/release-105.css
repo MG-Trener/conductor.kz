@@ -1,0 +1,76 @@
+/* CONDUCTOR Warehouse 1.0.5 — compact stock rows */
+
+#view-stock .stock-color-summary{
+  gap:0!important;
+  margin:5px 0 7px!important;
+}
+
+#view-stock .stock-color-summary>span{
+  position:relative!important;
+  min-height:27px!important;
+  padding:4px 2px!important;
+  gap:6px!important;
+  border-bottom:1px solid rgba(148,163,184,.11)!important;
+  color:#d8dee9!important;
+}
+
+#view-stock .stock-color-summary>span:last-child{
+  border-bottom:0!important;
+}
+
+#view-stock .stock-color-summary>span b{
+  margin-left:auto!important;
+  min-width:34px!important;
+  padding-left:10px!important;
+  text-align:right!important;
+  font-variant-numeric:tabular-nums!important;
+  font-size:11px!important;
+  line-height:1!important;
+  color:#f7f9fc!important;
+}
+
+#view-stock .stock-color-summary>span.stock-zero{
+  color:#778291!important;
+}
+
+#view-stock .stock-color-summary>span.stock-zero .color-dot{
+  opacity:.52!important;
+  filter:saturate(.55)!important;
+}
+
+#view-stock .stock-color-summary>span.stock-zero b{
+  color:#6f7886!important;
+  font-weight:750!important;
+}
+
+#view-stock .stock-color-summary>span.stock-low{
+  background:linear-gradient(90deg,transparent 0%,rgba(255,176,84,.025) 72%,rgba(255,176,84,.055) 100%)!important;
+}
+
+#view-stock .stock-color-summary>span.stock-low b{
+  color:#ffb15a!important;
+  font-weight:950!important;
+}
+
+#view-stock .stock-model-card{
+  padding:9px 11px!important;
+}
+
+#view-stock .stock-name small{
+  margin-top:1px!important;
+}
+
+#view-stock .model-balance-btn{
+  margin-top:2px!important;
+}
+
+@media(max-width:390px){
+  #view-stock .stock-color-summary>span{
+    min-height:26px!important;
+    padding:3px 1px!important;
+  }
+  #view-stock .stock-color-summary>span b{
+    min-width:32px!important;
+    padding-left:8px!important;
+  }
+}
