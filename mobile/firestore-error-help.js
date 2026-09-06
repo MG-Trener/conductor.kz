@@ -1,10 +1,3 @@
-import "./app-update.js?v=2";
-import "./analytics.js?v=4";
-import "./sales-history.js?v=3";
-import "./warehouse-enhancements.js?v=2";
-import "./version-history.js?v=3";
-import "./ui-fixes-070.js?v=2";
-
 const permissionPatterns = [
   /permission-denied/i,
   /missing or insufficient permissions/i,
@@ -34,7 +27,8 @@ const watchedSelectors = [
 ];
 
 function watchNode(node) {
-  if (!node) return;
+  if (!node || node.dataset.permissionWatch === "1") return;
+  node.dataset.permissionWatch = "1";
   normalizeErrorNode(node);
   new MutationObserver(() => normalizeErrorNode(node)).observe(node, {
     childList: true,
@@ -46,13 +40,7 @@ function watchNode(node) {
 function start() {
   watchedSelectors.forEach((selector) => watchNode(document.querySelector(selector)));
   new MutationObserver(() => {
-    watchedSelectors.forEach((selector) => {
-      const node = document.querySelector(selector);
-      if (node && !node.dataset.permissionWatch) {
-        node.dataset.permissionWatch = "1";
-        watchNode(node);
-      }
-    });
+    watchedSelectors.forEach((selector) => watchNode(document.querySelector(selector)));
   }).observe(document.body, { childList: true, subtree: true });
 }
 
