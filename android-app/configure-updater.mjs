@@ -10,21 +10,6 @@ const packageName = capacitorConfig.appId;
 
 if (!fs.existsSync(androidDir)) throw new Error("Android project has not been generated yet");
 
-// Keep the fallback appVersion query parameter in the generated native config aligned
-// with the APK version. New builds also read versionName through @capacitor/app, but this
-// prevents false update prompts if that plugin is temporarily unavailable.
-const generatedConfigPath = path.join(androidDir, "app", "src", "main", "assets", "capacitor.config.json");
-if (fs.existsSync(generatedConfigPath)) {
-  const generatedConfig = JSON.parse(fs.readFileSync(generatedConfigPath, "utf8"));
-  if (generatedConfig.server?.url) {
-    const serverUrl = new URL(generatedConfig.server.url);
-    serverUrl.searchParams.set("native", "1");
-    serverUrl.searchParams.set("appVersion", packageJson.version);
-    generatedConfig.server.url = serverUrl.toString();
-    fs.writeFileSync(generatedConfigPath, `${JSON.stringify(generatedConfig, null, 2)}\n`);
-  }
-}
-
 const manifestPath = path.join(androidDir, "app", "src", "main", "AndroidManifest.xml");
 let manifest = fs.readFileSync(manifestPath, "utf8");
 if (!manifest.includes("android.permission.REQUEST_INSTALL_PACKAGES")) {
@@ -56,18 +41,40 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.security.MessageDigest;
+import java.util.Locale;
 
 @CapacitorPlugin(name = "AppUpdater")
 public class AppUpdaterPlugin extends Plugin {
     private static final String APK_MIME = "application/vnd.android.package-archive";
+    private static final String ALLOWED_HOST = "github.com";
+    private static final String ALLOWED_PATH = "/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk";
+
     private long activeDownloadId = -1L;
     private BroadcastReceiver downloadReceiver;
+    private File activeApkFile;
+    private String activeExpectedSha256 = "";
 
     @PluginMethod
     public void downloadAndInstall(PluginCall call) {
         String url = call.getString("url");
+        String expectedSha256 = call.getString("sha256");
         if (url == null || url.trim().isEmpty()) {
             call.reject("Не указан URL обновления");
+            return;
+        }
+        if (expectedSha256 == null || !expectedSha256.matches("(?i)^[a-f0-9]{64}$")) {
+            call.reject("Не указан корректный SHA-256 обновления");
+            return;
+        }
+
+        Uri updateUri = Uri.parse(url);
+        if (!"https".equalsIgnoreCase(updateUri.getScheme())
+            || !ALLOWED_HOST.equalsIgnoreCase(updateUri.getHost())
+            || !ALLOWED_PATH.equals(updateUri.getPath())) {
+            call.reject("Источник обновления не разрешён");
             return;
         }
 
@@ -84,11 +91,14 @@ public class AppUpdaterPlugin extends Plugin {
                 return;
             }
             File apkFile = new File(downloadsDir, "CONDUCTOR-Sklad-update.apk");
-            if (apkFile.exists()) apkFile.delete();
+            if (apkFile.exists() && !apkFile.delete()) {
+                call.reject("Не удалось очистить предыдущий файл обновления");
+                return;
+            }
 
-            DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
+            DownloadManager.Request request = new DownloadManager.Request(updateUri);
             request.setTitle("CONDUCTOR Склад");
-            request.setDescription("Скачивание обновления");
+            request.setDescription("Скачивание проверенного обновления");
             request.setMimeType(APK_MIME);
             request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
             request.setAllowedOverMetered(true);
@@ -99,6 +109,8 @@ public class AppUpdaterPlugin extends Plugin {
                 apkFile.getName()
             );
 
+            activeApkFile = apkFile;
+            activeExpectedSha256 = expectedSha256.toLowerCase(Locale.ROOT);
             registerDownloadReceiver(manager);
             activeDownloadId = manager.enqueue(request);
 
@@ -106,6 +118,7 @@ public class AppUpdaterPlugin extends Plugin {
             result.put("downloadId", activeDownloadId);
             call.resolve(result);
         } catch (Exception error) {
+            resetActiveDownload();
             call.reject("Не удалось начать загрузку обновления", error);
         }
     }
@@ -123,9 +136,14 @@ public class AppUpdaterPlugin extends Plugin {
                     context.unregisterReceiver(this);
                 } catch (Exception ignored) {}
                 downloadReceiver = null;
-                activeDownloadId = -1L;
 
-                installDownloadedApk(manager, completedId);
+                File apkFile = activeApkFile;
+                String expectedSha256 = activeExpectedSha256;
+                activeDownloadId = -1L;
+                activeApkFile = null;
+                activeExpectedSha256 = "";
+
+                installDownloadedApk(manager, completedId, apkFile, expectedSha256);
             }
         };
 
@@ -137,12 +155,40 @@ public class AppUpdaterPlugin extends Plugin {
         }
     }
 
-    private void installDownloadedApk(DownloadManager manager, long downloadId) {
+    private void resetActiveDownload() {
+        activeDownloadId = -1L;
+        activeApkFile = null;
+        activeExpectedSha256 = "";
+    }
+
+    private boolean verifySha256(File file, String expectedSha256) {
+        if (file == null || !file.isFile() || expectedSha256 == null || expectedSha256.isEmpty()) return false;
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            try (InputStream input = new FileInputStream(file)) {
+                byte[] buffer = new byte[64 * 1024];
+                int read;
+                while ((read = input.read(buffer)) > 0) digest.update(buffer, 0, read);
+            }
+            StringBuilder actual = new StringBuilder();
+            for (byte value : digest.digest()) actual.append(String.format(Locale.ROOT, "%02x", value));
+            return expectedSha256.equalsIgnoreCase(actual.toString());
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private void installDownloadedApk(DownloadManager manager, long downloadId, File apkFile, String expectedSha256) {
         DownloadManager.Query query = new DownloadManager.Query().setFilterById(downloadId);
         try (Cursor cursor = manager.query(query)) {
             if (cursor == null || !cursor.moveToFirst()) return;
             int statusIndex = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS);
             if (statusIndex < 0 || cursor.getInt(statusIndex) != DownloadManager.STATUS_SUCCESSFUL) return;
+        }
+
+        if (!verifySha256(apkFile, expectedSha256)) {
+            if (apkFile != null) apkFile.delete();
+            return;
         }
 
         Uri apkUri = manager.getUriForDownloadedFile(downloadId);
@@ -161,8 +207,6 @@ fs.writeFileSync(pluginPath, pluginSource);
 const mainActivityPath = path.join(javaDir, "MainActivity.java");
 let mainActivity = fs.readFileSync(mainActivityPath, "utf8");
 if (!mainActivity.includes("registerPlugin(AppUpdaterPlugin.class)")) {
-  // Inject immediately after onCreate opens. Do not depend on the exact statements that
-  // happen before super.onCreate(), because MainActivity also configures system bars.
   const onCreatePattern = /(protected\s+void\s+onCreate\s*\(\s*Bundle\s+savedInstanceState\s*\)\s*\{\s*)/;
   if (!onCreatePattern.test(mainActivity)) {
     throw new Error("Не найден метод onCreate(Bundle savedInstanceState) в MainActivity");
@@ -177,4 +221,4 @@ if (!mainActivity.includes("registerPlugin(AppUpdaterPlugin.class)")) {
   fs.writeFileSync(mainActivityPath, mainActivity);
 }
 
-console.log(`Native updater configured for ${packageName} v${packageJson.version}`);
+console.log(`Native updater configured for ${packageName} v${packageJson.version}: trusted GitHub source + SHA-256 verification`);
