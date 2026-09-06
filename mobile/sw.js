@@ -1,27 +1,28 @@
-const CACHE = "conductor-mobile-v51";
+const CACHE = "conductor-mobile-v52";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css?v=15",
   "./warehouse.css?v=20",
   "./header-mobile.css?v=1",
-  "./app.js?v=24",
-  "./bootstrap.js?v=1",
+  "./splash.css?v=3",
+  "./release-103.css",
+  "./app.js?v=103",
+  "./bootstrap-103.js",
+  "./core-ui-103.js",
+  "./version-history-103.js",
   "./firebase-config.js?v=22",
   "./push-config.js?v=1",
-  "./app-update.js",
-  "./analytics.js",
-  "./sales-history.js",
-  "./warehouse-enhancements.js",
+  "./app-update.js?v=103",
+  "./analytics.js?v=103",
+  "./sales-history.js?v=103",
+  "./warehouse-enhancements.js?v=103",
   "./warehouse-enhancements-legacy.js?v=2",
-  "./version-history.js",
-  "./ui-fixes-070.js",
-  "./inventory-state.js",
-  "./push-notifications.js",
-  "./firestore-error-help.js",
+  "./inventory-state.js?v=103",
+  "./push-notifications.js?v=103",
+  "./firestore-error-help.js?v=103",
   "./manifest.webmanifest?v=17",
   "./icon.svg",
-  "./splash.css?v=3",
   "./warehouse-splash-clean.png?v=1",
   "./conductor-vintage-title.png?v=1"
 ];
@@ -50,7 +51,7 @@ self.addEventListener("fetch", (event) => {
 
   if (request.mode === "navigate") {
     event.respondWith(
-      fetch(request)
+      fetch(request, { cache: "no-store" })
         .then((response) => {
           if (response.ok) caches.open(CACHE).then((cache) => cache.put("./index.html", response.clone()));
           return response;
@@ -61,14 +62,11 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    caches.match(request).then((cached) => {
-      const network = fetch(request)
-        .then((response) => {
-          if (response.ok) caches.open(CACHE).then((cache) => cache.put(request, response.clone()));
-          return response;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+    fetch(request)
+      .then((response) => {
+        if (response.ok) caches.open(CACHE).then((cache) => cache.put(request, response.clone()));
+        return response;
+      })
+      .catch(() => caches.match(request))
   );
 });
