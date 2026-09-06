@@ -11,6 +11,7 @@ const pages = {
 const mobileApp = new URL("../mobile/app.js", import.meta.url);
 const mobileHtml = new URL("../mobile/index.html", import.meta.url);
 const mobileWorker = new URL("../mobile/sw.js", import.meta.url);
+const mobileBootstrap = new URL("../mobile/bootstrap.js", import.meta.url);
 const warehouseCss = new URL("../mobile/warehouse.css", import.meta.url);
 const inventoryState = new URL("../mobile/inventory-state.js", import.meta.url);
 const pushNotifications = new URL("../mobile/push-notifications.js", import.meta.url);
@@ -56,16 +57,17 @@ test("the warehouse model card renders the saved Firestore price", async () => {
   assert.doesNotMatch(app, /stockValue\(\).*avgCost/);
   assert.match(html, /Потенциальная стоимость/);
   assert.match(html, /app\.js\?v=24/);
-  assert.match(worker, /conductor-mobile-v40/);
+  assert.match(worker, /const CACHE = "conductor-mobile-v\d+"/);
   assert.match(worker, /app\.js\?v=24/);
 });
 
 test("Firestore is initialized once before any asynchronous auth setup", async () => {
-  const [app, helper, html, worker] = await Promise.all([
+  const [app, helper, html, worker, bootstrap] = await Promise.all([
     readFile(mobileApp, "utf8"),
     readFile(inventoryState, "utf8"),
     readFile(mobileHtml, "utf8"),
-    readFile(mobileWorker, "utf8")
+    readFile(mobileWorker, "utf8"),
+    readFile(mobileBootstrap, "utf8")
   ]);
   const initializeIndex = app.indexOf("state.db = initializeFirestore(");
   const firstAwaitIndex = app.indexOf("await setPersistence(");
@@ -73,8 +75,10 @@ test("Firestore is initialized once before any asynchronous auth setup", async (
   assert.match(app, /window\.CONDUCTOR_FIRESTORE = state\.db/);
   assert.match(helper, /db = window\.CONDUCTOR_FIRESTORE/);
   assert.doesNotMatch(helper, /\bgetFirestore\s*\(/);
-  assert.match(html, /firebase-config\.js\?v=21/);
-  assert.match(worker, /inventory-state\.js\?v=24/);
+  assert.match(html, /firebase-config\.js\?v=\d+/);
+  assert.match(html, /bootstrap\.js\?v=1/);
+  assert.match(bootstrap, /import "\.\/inventory-state\.js"/);
+  assert.match(worker, /"\.\/inventory-state\.js"/);
 });
 
 test("the header contains a visible warehouse login and no hidden hotspot", async () => {
@@ -222,20 +226,23 @@ test("warehouse app no longer loads the obsolete requests interface", async () =
 });
 
 test("warehouse Android build loads and registers sale push notifications", async () => {
-  const [app, html, worker, push, endpointConfig] = await Promise.all([
+  const [app, html, worker, bootstrap, push, endpointConfig] = await Promise.all([
     readFile(mobileApp, "utf8"),
     readFile(mobileHtml, "utf8"),
     readFile(mobileWorker, "utf8"),
+    readFile(mobileBootstrap, "utf8"),
     readFile(pushNotifications, "utf8"),
     readFile(pushConfig, "utf8")
   ]);
   assert.match(html, /push-config\.js\?v=1/);
-  assert.match(html, /push-notifications\.js\?v=1/);
+  assert.match(html, /bootstrap\.js\?v=1/);
+  assert.match(bootstrap, /import "\.\/push-notifications\.js"/);
   assert.match(worker, /push-config\.js\?v=1/);
-  assert.match(worker, /push-notifications\.js\?v=1/);
+  assert.match(worker, /"\.\/push-notifications\.js"/);
   assert.match(push, /registerPlugin\("PushNotifications"\)/);
   assert.match(push, /"pushDevices"/);
   assert.match(push, /platform: "android"/);
+  assert.match(push, /deleteDoc\(doc\(window\.CONDUCTOR_FIRESTORE, "pushDevices"/);
   assert.match(endpointConfig, /CONDUCTOR_PUSH_ENDPOINT/);
   assert.match(app, /state\.user\.getIdToken\(\)/);
   assert.match(app, /JSON\.stringify\(\{ orderId \}\)/);
