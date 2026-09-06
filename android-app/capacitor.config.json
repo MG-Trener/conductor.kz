@@ -2,10 +2,6 @@
   "appId": "kz.conductor.warehouse",
   "appName": "CONDUCTOR Склад",
   "webDir": "www",
-  "server": {
-    "url": "https://conductor.kz/mobile/?native=1",
-    "cleartext": false
-  },
   "plugins": {
     "PushNotifications": {
       "presentationOptions": ["sound", "alert", "banner", "list"]
