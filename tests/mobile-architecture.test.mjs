@@ -8,7 +8,7 @@ const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 const execFileAsync = promisify(execFile);
 
-test("1.0.8 uses the compact stock UI entry points", async () => {
+test("mobile app uses the compact stock UI entry points", async () => {
   const [index, bootstrap, firebaseConfig, errorHelper, push] = await Promise.all([
     read("mobile/index.html"),
     read("mobile/bootstrap-104.js"),
@@ -37,13 +37,14 @@ test("1.0.8 uses the compact stock UI entry points", async () => {
   ]) {
     assert.equal(bootstrap.split(`./${moduleName}?v=104`).length - 1, 1, `${moduleName} must be imported once by bootstrap-104.js`);
   }
+  assert.equal(bootstrap.split("./ui-sounds.js?v=1").length - 1, 1, "ui-sounds.js must be imported once by bootstrap-104.js");
 
   assert.doesNotMatch(firebaseConfig, /loadUiModule|setTimeout\(.*inventory-state/s);
   assert.doesNotMatch(errorHelper, /import\s+["']\.\//);
   assert.doesNotMatch(push, /analytics\.js/);
 });
 
-test("1.0.8 startup UI cannot self-trigger an endless mutation loop", async () => {
+test("startup UI cannot self-trigger an endless mutation loop", async () => {
   const [coreUi, guard] = await Promise.all([
     read("mobile/core-ui-105.js"),
     read("mobile/startup-guard-104.js")
@@ -113,7 +114,7 @@ test("bottom navigation stays in one row and Settings label is rendered once", a
   assert.match(coreUi, /settingsNav\.textContent = "Настройки"/);
 });
 
-test("settings keep update checker visible while hiding obsolete helper content", async () => {
+test("settings keep update checker and latest changes visible", async () => {
   const [compactCss, updater] = await Promise.all([
     read("mobile/release-105.css"),
     read("mobile/app-update.js")
@@ -126,24 +127,37 @@ test("settings keep update checker visible while hiding obsolete helper content"
   assert.match(updater, /id="app-update-check"/);
   assert.match(updater, /Проверить ещё раз/);
   assert.match(updater, /id="app-update-download"/);
+  assert.match(updater, /Последние изменения/);
+  assert.match(updater, /app-update-latest-notes/);
+  assert.match(updater, /release\?\.body/);
   assert.match(updater, /checkForUpdate\(\)/);
 });
 
-test("version history starts with 1.0.8 and contains recent releases", async () => {
+test("version history starts with the current 1.0.12 release and contains recent releases", async () => {
   const history = await read("mobile/version-history-105.js");
-  assert.match(history, /const VERSIONS = \[\s*\{\s*version: "1\.0\.8"/);
-  assert.match(history, /version: "1\.0\.7"/);
-  assert.match(history, /version: "1\.0\.6"/);
-  assert.match(history, /version: "1\.0\.5"/);
-  assert.match(history, /version: "1\.0\.4"/);
-  assert.match(history, /version: "1\.0\.3"/);
-  assert.match(history, /version: "1\.0\.2"/);
-  assert.match(history, /version: "1\.0\.1"/);
-  assert.match(history, /Актуальная версия: 1\.0\.8/);
+  assert.match(history, /const VERSIONS = \[\s*\{\s*version: "1\.0\.12"/);
+  for (const version of ["1.0.11", "1.0.10", "1.0.9", "1.0.8", "1.0.7", "1.0.6", "1.0.5", "1.0.4", "1.0.3", "1.0.2", "1.0.1"]) {
+    assert.ok(history.includes(`version: "${version}"`), `version history must contain ${version}`);
+  }
+  assert.match(history, /Актуальная версия: 1\.0\.12/);
 });
 
-test("new 1.0.8 scripts pass syntax validation", async () => {
-  for (const file of ["mobile/bootstrap-104.js", "mobile/core-ui-105.js", "mobile/version-history-105.js", "mobile/startup-guard-104.js"]) {
+test("section-specific UI sounds cover navigation, stock, sales, analytics and settings", async () => {
+  const sounds = await read("mobile/ui-sounds.js");
+  assert.match(sounds, /playNavigation/);
+  assert.match(sounds, /playStock/);
+  assert.match(sounds, /playSales/);
+  assert.match(sounds, /playAnalytics/);
+  assert.match(sounds, /playSettings/);
+  assert.match(sounds, /\.bottom-nav/);
+  assert.match(sounds, /#view-stock/);
+  assert.match(sounds, /#sale-form/);
+  assert.match(sounds, /#view-analytics/);
+  assert.match(sounds, /#view-settings/);
+});
+
+test("mobile UI scripts pass syntax validation", async () => {
+  for (const file of ["mobile/bootstrap-104.js", "mobile/core-ui-105.js", "mobile/version-history-105.js", "mobile/startup-guard-104.js", "mobile/ui-sounds.js"]) {
     await execFileAsync(process.execPath, ["--check", new URL(file, root).pathname]);
   }
 });
@@ -179,10 +193,10 @@ test("native updater accepts only the warehouse release and verifies SHA-256", a
   assert.match(nativeUpdater, /MessageDigest\.getInstance\(\\?"SHA-256\\?"\)/);
 });
 
-test("PWA cache contains 1.0.8 settings fix assets", async () => {
+test("PWA cache contains current settings and UI sound assets", async () => {
   const sw = await read("mobile/sw.js");
-  assert.match(sw, /const CACHE = "conductor-mobile-v57"/);
-  for (const asset of ["release-103.css", "release-105.css?v=2", "app.js?v=104", "bootstrap-104.js", "core-ui-105.js?v=2", "version-history-105.js", "startup-guard-104.js"]) {
+  assert.match(sw, /const CACHE = "conductor-mobile-v58"/);
+  for (const asset of ["release-103.css", "release-105.css?v=2", "app.js?v=104", "bootstrap-104.js", "core-ui-105.js?v=2", "version-history-105.js", "startup-guard-104.js", "ui-sounds.js?v=1"]) {
     assert.ok(sw.includes(`./${asset}`), `${asset} must be cached`);
   }
   assert.match(sw, /fetch\(request, \{ cache: "no-store" \}\)/);
