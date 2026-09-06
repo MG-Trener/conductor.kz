@@ -145,22 +145,25 @@ test("warehouse stays behind the boot screen until initial live data is ready", 
   assert.doesNotMatch(html, /id="stock-units-hero"|id="metric-low"|id="metric-movements"|id="stock-total"|id="stock-units"/);
 });
 
-test("new sale groups variants by model and keeps the selected total visible", async () => {
+test("new sale lives in dashboard, groups variants by model and keeps the selected total visible", async () => {
   const [app, html, css] = await Promise.all([
     readFile(mobileApp, "utf8"),
     readFile(mobileHtml, "utf8"),
     readFile(warehouseCss, "utf8")
   ]);
 
-  assert.match(html, /class="section-head sticky-head sale-sticky-head"/);
+  assert.match(html, /<section id="view-dashboard"[\s\S]*?<h2>Новая продажа<\/h2>/);
+  assert.match(html, /id="sale-form" class="panel form-stack dashboard-sale-form"/);
   assert.match(html, /id="sale-header-total"/);
+  assert.doesNotMatch(html, /id="view-sale"/);
+  assert.doesNotMatch(html, /data-nav="sale"/);
   assert.match(app, /saleOpenModelId: null/);
   assert.match(app, /saleQuantities: new Map\(\)/);
   assert.match(app, /data-sale-model="\$\{model\.id\}"/);
   assert.match(app, /if \(isOpen\) html \+= `<div class="sale-model-variants"/);
   assert.match(app, /state\.saleQuantities\.get\(product\.id\)/);
   assert.match(app, /\$\("#sale-header-total"\).*textContent = formatted/);
-  assert.match(css, /\.sale-sticky-head\{top:70px/);
+  assert.match(app, /navigate\("sales"\)/);
   assert.match(css, /\.sale-model-toggle\{/);
 });
 
