@@ -1,7 +1,9 @@
-import "./analytics.js?v=1";
 import { getApps } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js";
 import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
-import { doc, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import { deleteDoc, doc, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+
+const DEVICE_ID_KEY = "conductor.pushDeviceId";
+const DEVICE_UID_KEY = "conductor.pushDeviceUid";
 
 let activeUser = null;
 let listenersInstalled = false;
@@ -52,6 +54,33 @@ async function saveDeviceToken(token) {
     platform: "android",
     updatedAt: serverTimestamp()
   });
+  try {
+    localStorage.setItem(DEVICE_ID_KEY, deviceId);
+    localStorage.setItem(DEVICE_UID_KEY, user.uid);
+  } catch {}
+}
+
+async function removeSavedDeviceToken(uid) {
+  if (!window.CONDUCTOR_FIRESTORE || !uid) return;
+  let deviceId = "";
+  let savedUid = "";
+  try {
+    deviceId = localStorage.getItem(DEVICE_ID_KEY) || "";
+    savedUid = localStorage.getItem(DEVICE_UID_KEY) || "";
+  } catch {}
+  if (!deviceId || savedUid !== uid) return;
+
+  try {
+    await deleteDoc(doc(window.CONDUCTOR_FIRESTORE, "pushDevices", deviceId));
+  } catch (error) {
+    console.warn("Push token cleanup failed", error);
+    return;
+  }
+
+  try {
+    localStorage.removeItem(DEVICE_ID_KEY);
+    localStorage.removeItem(DEVICE_UID_KEY);
+  } catch {}
 }
 
 async function installListeners(plugin) {
@@ -62,6 +91,7 @@ async function installListeners(plugin) {
     saveDeviceToken(value).catch((error) => console.error("Push token save failed", error));
   });
   await plugin.addListener("registrationError", (error) => {
+    registrationStartedForUid = "";
     console.error("Push registration failed", error);
   });
   await plugin.addListener("pushNotificationActionPerformed", (event) => {
@@ -90,6 +120,7 @@ async function registerForPush(user) {
     let permissions = await plugin.checkPermissions();
     if (permissions.receive === "prompt") permissions = await plugin.requestPermissions();
     if (permissions.receive !== "granted") {
+      registrationStartedForUid = "";
       console.warn("Push notifications permission was not granted");
       return;
     }
@@ -109,12 +140,20 @@ async function bootPushNotifications() {
 
   const auth = getAuth();
   onAuthStateChanged(auth, (user) => {
+    const previousUid = activeUser?.uid || "";
     activeUser = user;
     if (!user) {
       registrationStartedForUid = "";
+      if (previousUid) removeSavedDeviceToken(previousUid);
       return;
     }
     registerForPush(user);
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && activeUser && !registrationStartedForUid) {
+      registerForPush(activeUser);
+    }
   });
 }
 
