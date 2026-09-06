@@ -118,16 +118,39 @@ if (fs.existsSync(iconBackgroundPath)) {
   fs.writeFileSync(iconBackgroundPath, iconBackground);
 }
 
-// Compress the large decorative title bundled with the WebView without changing its URL.
-// 1400 px is already above the useful width on the target phone screens.
-const bundledTitlePath = path.join(androidDir, "app", "src", "main", "assets", "public", "conductor-vintage-title.png");
-if (fs.existsSync(bundledTitlePath)) {
-  const tempTitlePath = `${bundledTitlePath}.optimized.png`;
-  await sharp(bundledTitlePath)
-    .resize({ width: 1400, withoutEnlargement: true })
-    .png({ compressionLevel: 9, palette: true, quality: 90, effort: 10 })
-    .toFile(tempTitlePath);
-  fs.renameSync(tempTitlePath, bundledTitlePath);
+const publicAssetsDir = path.join(androidDir, "app", "src", "main", "assets", "public");
+
+// Remove historical splash experiments that are not referenced by the current app.
+for (const unused of ["warehouse-splash-vintage.png", "warehouse-splash.png"]) {
+  fs.rmSync(path.join(publicAssetsDir, unused), { force: true });
+}
+
+async function convertBundledPngToWebp(fileName, quality) {
+  const pngPath = path.join(publicAssetsDir, fileName);
+  if (!fs.existsSync(pngPath)) return null;
+  const webpName = fileName.replace(/\.png$/i, ".webp");
+  const webpPath = path.join(publicAssetsDir, webpName);
+  await sharp(pngPath).webp({ quality, effort: 6, smartSubsample: true }).toFile(webpPath);
+  fs.rmSync(pngPath);
+  return webpName;
+}
+
+// These two full-screen/decorative images dominated the APK. WebP keeps the same visual
+// appearance on Android while cutting several megabytes from every update download.
+const splashWebp = await convertBundledPngToWebp("warehouse-splash-clean.png", 88);
+const titleWebp = await convertBundledPngToWebp("conductor-vintage-title.png", 92);
+
+const textAssets = ["index.html", "splash.css", "sw.js"];
+for (const asset of textAssets) {
+  const assetPath = path.join(publicAssetsDir, asset);
+  if (!fs.existsSync(assetPath)) continue;
+  let text = fs.readFileSync(assetPath, "utf8");
+  if (splashWebp) text = text.replaceAll("warehouse-splash-clean.png", splashWebp);
+  if (titleWebp) text = text.replaceAll("conductor-vintage-title.png", titleWebp);
+  text = text
+    .replace('href="./warehouse-splash-clean.webp?v=1" as="image" type="image/png"', 'href="./warehouse-splash-clean.webp?v=1" as="image" type="image/webp"')
+    .replace('href="./conductor-vintage-title.webp?v=1" as="image" type="image/png"', 'href="./conductor-vintage-title.webp?v=1" as="image" type="image/webp"');
+  fs.writeFileSync(assetPath, text);
 }
 
 // Android still requires a very short system launch screen. Keep it visually blank so
@@ -171,4 +194,4 @@ if (!fs.existsSync(templatePath)) throw new Error(`Не найден ${templateP
 const mainActivity = fs.readFileSync(templatePath, "utf8").replaceAll("__PACKAGE_NAME__", packageName);
 fs.writeFileSync(mainActivityPath, mainActivity);
 
-console.log(`Android configured: ${packageJson.version} (${versionCode}), optimized density icons=WebP, release shrinking=on, signing=${process.env.WAREHOUSE_SIGNING_ENABLED === "true"}`);
+console.log(`Android configured: ${packageJson.version} (${versionCode}), optimized density icons=WebP, stale splash assets removed, active splash/title=WebP, release shrinking=on, signing=${process.env.WAREHOUSE_SIGNING_ENABLED === "true"}`);
