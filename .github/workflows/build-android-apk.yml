@@ -41,11 +41,14 @@ jobs:
           node --check mobile/sales-history.js
           node --check mobile/warehouse-enhancements.js
           node --check mobile/version-history.js
+          node --check mobile/version-history-105.js
+          node --check mobile/ui-sounds.js
           node --check mobile/ui-fixes-070.js
           node --check mobile/inventory-state.js
           node --check android-app/configure-android.mjs
           node --check android-app/configure-updater.mjs
           node - <<'NODE'
+          const fs = require('fs');
           const p = require('./android-app/package.json');
           const m = require('./mobile/app-version.json');
           if (p.version !== m.version) throw new Error('Android and update manifest versions differ');
@@ -56,6 +59,17 @@ jobs:
           const expectedCode = major * 10000 + minor * 100 + patch;
           if (m.versionCode !== expectedCode) {
             throw new Error(`Invalid Android versionCode ${m.versionCode} for ${p.version}; expected ${expectedCode}. Lower codes make Android treat updates as downgrades.`);
+          }
+          if (typeof m.notes !== 'string' || m.notes.trim().length < 40) {
+            throw new Error('Every Android release must contain meaningful information in app-version.json notes / Последние изменения.');
+          }
+          const history = fs.readFileSync('./mobile/version-history-105.js', 'utf8');
+          const firstHistoryVersion = history.match(/const VERSIONS = \[\s*\{\s*version: "([^"]+)"/)?.[1];
+          if (firstHistoryVersion !== p.version) {
+            throw new Error(`Version history must start with current release ${p.version}; found ${firstHistoryVersion || 'none'}.`);
+          }
+          if (!history.includes(`Актуальная версия: ${p.version}`)) {
+            throw new Error(`Version history button must show current release ${p.version}.`);
           }
           NODE
 
