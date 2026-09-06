@@ -64,6 +64,23 @@
   margin-top:2px!important;
 }
 
+/* Sale is now part of Overview, so the bottom navigation has four equal items. */
+.bottom-nav{
+  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+}
+
+#view-dashboard .quick-grid{
+  grid-template-columns:repeat(2,minmax(0,1fr))!important;
+}
+
+#view-dashboard .quick-grid .quick:last-child{
+  grid-column:auto!important;
+}
+
+#view-dashboard .dashboard-sale-form{
+  margin-bottom:4px;
+}
+
 @media(max-width:390px){
   #view-stock .stock-color-summary>span{
     min-height:26px!important;
