@@ -1,6 +1,7 @@
 import "./app-update.js?v=1";
-import "./analytics.js?v=2";
-import "./sales-history.js?v=1";
+import "./analytics.js?v=3";
+import "./sales-history.js?v=2";
+import "./warehouse-enhancements.js?v=1";
 
 const permissionPatterns = [
   /permission-denied/i,
@@ -20,7 +21,15 @@ function normalizeErrorNode(node) {
   node.textContent = friendly;
 }
 
-const watchedSelectors = ["#model-balance-error", "#stock-operation-error", "#sale-error", "#cash-withdrawal-error", "#login-error"];
+const watchedSelectors = [
+  "#model-balance-error",
+  "#stock-operation-error",
+  "#sale-error",
+  "#cash-withdrawal-error",
+  "#cash-movement-error",
+  "#sale-confirm-error",
+  "#login-error"
+];
 
 function watchNode(node) {
   if (!node) return;
@@ -32,40 +41,17 @@ function watchNode(node) {
   });
 }
 
-function normalizeAnalyticsSaleCards(root) {
-  if (!root) return;
-
-  root.querySelectorAll(".analytics-sale-card").forEach((card) => {
-    if (card.querySelector(".analytics-sale-status.cancelled")) card.remove();
-  });
-
-  root.querySelectorAll(".analytics-sale-title b").forEach((node) => {
-    if (/^Продажа\s+#/i.test(node.textContent || "")) node.textContent = "Продажа";
-  });
-
-  root.querySelectorAll(".analytics-sale-status").forEach((node) => node.remove());
-
-  const meta = document.querySelector("#analytics-journal-meta");
-  if (meta) meta.textContent = String(meta.textContent || "").replace(/\s*·\s*\d+\s+отменено/i, "");
-
-  if (!root.querySelector(".analytics-sale-card") && !root.querySelector(".empty") && !root.querySelector(".analytics-loading")) {
-    root.innerHTML = `<div class="empty">В этом месяце продаж нет.</div>`;
-  }
-}
-
-function watchAnalyticsSaleCards() {
-  const root = document.querySelector("#analytics-sales-list");
-  if (!root) return;
-  normalizeAnalyticsSaleCards(root);
-  new MutationObserver(() => normalizeAnalyticsSaleCards(root)).observe(root, {
-    childList: true,
-    subtree: true
-  });
-}
-
 function start() {
   watchedSelectors.forEach((selector) => watchNode(document.querySelector(selector)));
-  watchAnalyticsSaleCards();
+  new MutationObserver(() => {
+    watchedSelectors.forEach((selector) => {
+      const node = document.querySelector(selector);
+      if (node && !node.dataset.permissionWatch) {
+        node.dataset.permissionWatch = "1";
+        watchNode(node);
+      }
+    });
+  }).observe(document.body, { childList: true, subtree: true });
 }
 
 if (document.readyState === "loading") {
