@@ -1,22 +1,27 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { promisify } from "node:util";
 import test from "node:test";
 
 const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
+const execFileAsync = promisify(execFile);
 
-test("mobile features have one bootstrap entry point", async () => {
+test("1.0.3 uses immutable mobile entry points", async () => {
   const [index, bootstrap, firebaseConfig, errorHelper, push] = await Promise.all([
     read("mobile/index.html"),
-    read("mobile/bootstrap.js"),
+    read("mobile/bootstrap-103.js"),
     read("mobile/firebase-config.js"),
     read("mobile/firestore-error-help.js"),
     read("mobile/push-notifications.js")
   ]);
 
-  assert.match(index, /bootstrap\.js\?v=1/);
-  assert.doesNotMatch(index, /type="module"[^>]+push-notifications\.js/);
-  assert.doesNotMatch(index, /type="module"[^>]+firestore-error-help\.js/);
+  assert.match(index, /app\.js\?v=103/);
+  assert.match(index, /bootstrap-103\.js/);
+  assert.match(index, /core-ui-103\.js/);
+  assert.match(index, /version-history-103\.js/);
+  assert.match(index, /release-103\.css/);
   assert.match(index, /Content-Security-Policy/);
 
   for (const moduleName of [
@@ -24,13 +29,11 @@ test("mobile features have one bootstrap entry point", async () => {
     "analytics.js",
     "sales-history.js",
     "warehouse-enhancements.js",
-    "version-history.js",
-    "ui-fixes-070.js",
     "inventory-state.js",
     "push-notifications.js",
     "firestore-error-help.js"
   ]) {
-    assert.equal(bootstrap.split(`./${moduleName}`).length - 1, 1, `${moduleName} must be imported once by bootstrap.js`);
+    assert.equal(bootstrap.split(`./${moduleName}?v=103`).length - 1, 1, `${moduleName} must be imported once by bootstrap-103.js`);
   }
 
   assert.doesNotMatch(firebaseConfig, /loadUiModule|setTimeout\(.*inventory-state/s);
@@ -38,10 +41,51 @@ test("mobile features have one bootstrap entry point", async () => {
   assert.doesNotMatch(push, /analytics\.js/);
 });
 
-test("production Android configuration uses bundled web assets", async () => {
-  const [capacitorConfigText, workflow] = await Promise.all([
+test("operations and movement journal are structurally correct", async () => {
+  const [index, coreUi, releaseCss] = await Promise.all([
+    read("mobile/index.html"),
+    read("mobile/core-ui-103.js"),
+    read("mobile/release-103.css")
+  ]);
+
+  const salesView = index.match(/<section id="view-sales"[\s\S]*?<\/section>/)?.[0] || "";
+  assert.match(salesView, /<h1>Операции<\/h1>/);
+  assert.doesNotMatch(salesView, /data-nav="sale"/);
+
+  const stockView = index.match(/<section id="view-stock"[\s\S]*?<\/section>/)?.[0] || "";
+  assert.match(stockView, /id="open-stock-movements"/);
+  assert.doesNotMatch(stockView, /id="movement-list"/);
+  assert.doesNotMatch(stockView, /<h2>Журнал движения<\/h2>/);
+
+  const movementDialog = index.match(/<dialog id="movement-dialog"[\s\S]*?<\/dialog>/)?.[0] || "";
+  assert.match(movementDialog, /id="movement-list"/);
+  assert.match(movementDialog, /<h2>Журнал движения<\/h2>/);
+
+  assert.match(releaseCss, /#view-stock \.stock-color-summary\s*\{[\s\S]*display:grid!important/);
+  assert.match(releaseCss, /grid-template-columns:1fr!important/);
+  assert.match(coreUi, /stripColorCount/);
+  assert.match(coreUi, /open-stock-movements/);
+});
+
+test("version history starts with 1.0.3 and contains missing releases", async () => {
+  const history = await read("mobile/version-history-103.js");
+  assert.match(history, /const VERSIONS = \[\s*\{\s*version: "1\.0\.3"/);
+  assert.match(history, /version: "1\.0\.2"/);
+  assert.match(history, /version: "1\.0\.1"/);
+  assert.match(history, /Актуальная версия: 1\.0\.3/);
+});
+
+test("new immutable scripts pass syntax validation", async () => {
+  for (const file of ["mobile/bootstrap-103.js", "mobile/core-ui-103.js", "mobile/version-history-103.js"]) {
+    await execFileAsync(process.execPath, ["--check", new URL(file, root).pathname]);
+  }
+});
+
+test("production Android configuration uses bundled web assets and no-cache mode", async () => {
+  const [capacitorConfigText, workflow, activity] = await Promise.all([
     read("android-app/capacitor.config.json"),
-    read(".github/workflows/build-android-apk.yml")
+    read(".github/workflows/build-android-apk.yml"),
+    read("android-app/MainActivity.template.java")
   ]);
   const capacitorConfig = JSON.parse(capacitorConfigText);
 
@@ -50,6 +94,8 @@ test("production Android configuration uses bundled web assets", async () => {
   assert.match(workflow, /Prepare bundled mobile web app/);
   assert.match(workflow, /cp -R mobile\/\. android-app\/www\//);
   assert.match(workflow, /Production Android build must not use remote server\.url/);
+  assert.match(activity, /WebSettings\.LOAD_NO_CACHE/);
+  assert.match(activity, /webView\.clearCache\(true\)/);
 });
 
 test("native updater accepts only the warehouse release and verifies SHA-256", async () => {
@@ -66,11 +112,11 @@ test("native updater accepts only the warehouse release and verifies SHA-256", a
   assert.match(nativeUpdater, /MessageDigest\.getInstance\(\\?"SHA-256\\?"\)/);
 });
 
-test("PWA cache uses canonical feature module URLs", async () => {
+test("PWA cache contains immutable 1.0.3 assets", async () => {
   const sw = await read("mobile/sw.js");
-  assert.match(sw, /const CACHE = "conductor-mobile-v\d+"/);
-  for (const moduleName of ["analytics.js", "sales-history.js", "version-history.js", "ui-fixes-070.js"]) {
-    assert.match(sw, new RegExp(`\\./${moduleName.replace(".", "\\.")}\\"`));
-    assert.doesNotMatch(sw, new RegExp(`${moduleName.replace(".", "\\.")}\\?v=`));
+  assert.match(sw, /const CACHE = "conductor-mobile-v52"/);
+  for (const asset of ["release-103.css", "app.js?v=103", "bootstrap-103.js", "core-ui-103.js", "version-history-103.js"]) {
+    assert.ok(sw.includes(`./${asset}`), `${asset} must be cached`);
   }
+  assert.match(sw, /fetch\(request, \{ cache: "no-store" \}\)/);
 });
