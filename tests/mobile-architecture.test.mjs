@@ -8,7 +8,7 @@ const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 const execFileAsync = promisify(execFile);
 
-test("1.0.6 uses the compact stock UI entry points", async () => {
+test("1.0.7 uses the compact stock UI entry points", async () => {
   const [index, bootstrap, firebaseConfig, errorHelper, push] = await Promise.all([
     read("mobile/index.html"),
     read("mobile/bootstrap-104.js"),
@@ -43,7 +43,7 @@ test("1.0.6 uses the compact stock UI entry points", async () => {
   assert.doesNotMatch(push, /analytics\.js/);
 });
 
-test("1.0.6 startup UI cannot self-trigger an endless mutation loop", async () => {
+test("1.0.7 startup UI cannot self-trigger an endless mutation loop", async () => {
   const [coreUi, guard] = await Promise.all([
     read("mobile/core-ui-105.js"),
     read("mobile/startup-guard-104.js")
@@ -97,18 +97,41 @@ test("compact stock rows keep quantities right aligned and expose zero/low state
   assert.match(compactCss, /stock-low/);
 });
 
-test("version history starts with 1.0.6 and contains recent releases", async () => {
+test("bottom navigation stays in one row and Settings is a direct destination", async () => {
+  const [index, compactCss] = await Promise.all([
+    read("mobile/index.html"),
+    read("mobile/release-105.css")
+  ]);
+  const nav = index.match(/<nav class="bottom-nav"[\s\S]*?<\/nav>/)?.[0] || "";
+  assert.equal((nav.match(/class="nav-btn/g) || []).length, 4);
+  assert.match(nav, /data-nav="settings"/);
+  assert.match(compactCss, /display:flex!important/);
+  assert.match(compactCss, /flex-wrap:nowrap!important/);
+  assert.match(compactCss, /content:"Настройки"/);
+});
+
+test("settings hide technical Firebase info and obsolete stock instructions", async () => {
+  const compactCss = await read("mobile/release-105.css");
+  assert.match(compactCss, /settings-row:has\(#settings-project\)/);
+  assert.match(compactCss, /#view-settings > \.panel:not\(\.settings-panel\)/);
+  assert.match(compactCss, /#view-settings \.version-history-btn/);
+  assert.match(compactCss, /#view-settings \.site-settings-btn/);
+  assert.match(compactCss, /#view-settings #reset-password/);
+});
+
+test("version history starts with 1.0.7 and contains recent releases", async () => {
   const history = await read("mobile/version-history-105.js");
-  assert.match(history, /const VERSIONS = \[\s*\{\s*version: "1\.0\.6"/);
+  assert.match(history, /const VERSIONS = \[\s*\{\s*version: "1\.0\.7"/);
+  assert.match(history, /version: "1\.0\.6"/);
   assert.match(history, /version: "1\.0\.5"/);
   assert.match(history, /version: "1\.0\.4"/);
   assert.match(history, /version: "1\.0\.3"/);
   assert.match(history, /version: "1\.0\.2"/);
   assert.match(history, /version: "1\.0\.1"/);
-  assert.match(history, /Актуальная версия: 1\.0\.6/);
+  assert.match(history, /Актуальная версия: 1\.0\.7/);
 });
 
-test("new 1.0.6 scripts pass syntax validation", async () => {
+test("new 1.0.7 scripts pass syntax validation", async () => {
   for (const file of ["mobile/bootstrap-104.js", "mobile/core-ui-105.js", "mobile/version-history-105.js", "mobile/startup-guard-104.js"]) {
     await execFileAsync(process.execPath, ["--check", new URL(file, root).pathname]);
   }
@@ -145,9 +168,9 @@ test("native updater accepts only the warehouse release and verifies SHA-256", a
   assert.match(nativeUpdater, /MessageDigest\.getInstance\(\\?"SHA-256\\?"\)/);
 });
 
-test("PWA cache contains 1.0.6 dashboard sale assets", async () => {
+test("PWA cache contains 1.0.7 navigation and settings assets", async () => {
   const sw = await read("mobile/sw.js");
-  assert.match(sw, /const CACHE = "conductor-mobile-v55"/);
+  assert.match(sw, /const CACHE = "conductor-mobile-v56"/);
   for (const asset of ["release-103.css", "release-105.css?v=2", "app.js?v=104", "bootstrap-104.js", "core-ui-105.js?v=2", "version-history-105.js", "startup-guard-104.js"]) {
     assert.ok(sw.includes(`./${asset}`), `${asset} must be cached`);
   }
