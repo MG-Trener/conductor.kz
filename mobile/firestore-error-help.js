@@ -2,6 +2,7 @@ import "./app-update.js?v=1";
 import "./analytics.js?v=3";
 import "./sales-history.js?v=2";
 import "./warehouse-enhancements.js?v=1";
+import "./version-history.js?v=1";
 
 const permissionPatterns = [
   /permission-denied/i,
