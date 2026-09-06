@@ -1,6 +1,6 @@
-const UPDATE_MANIFEST_URL = "./app-version.json";
 const UPDATE_RELEASE_API_URL = "https://api.github.com/repos/MG-Trener/conductor.kz/releases/tags/warehouse-latest";
 const APK_DOWNLOAD_URL = "https://github.com/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk";
+const APK_ASSET_NAME = "CONDUCTOR-Sklad.apk";
 const LEGACY_ANDROID_VERSION = "0.1.0";
 
 function parseVersion(value = "0") {
@@ -89,7 +89,7 @@ function ensureDirectDownloadButton() {
   link.href = APK_DOWNLOAD_URL;
   link.target = "_blank";
   link.rel = "noopener";
-  link.download = "CONDUCTOR-Sklad.apk";
+  link.download = APK_ASSET_NAME;
   link.textContent = "↓ Скачать APK для Android";
   link.setAttribute("aria-label", "Скачать актуальный APK приложения CONDUCTOR Склад");
 
@@ -126,19 +126,34 @@ function ensureUi() {
   return { card };
 }
 
-async function getPublishedVersion() {
+async function getPublishedRelease() {
   const response = await fetch(`${UPDATE_RELEASE_API_URL}?t=${Date.now()}`, {
     cache: "no-store",
-    headers: { Accept: "application/vnd.github+json" },
+    headers: { Accept: "application/vnd.github+json" }
   });
   if (!response.ok) throw new Error(`Release HTTP ${response.status}`);
+
   const release = await response.json();
   const match = String(release?.name || "").match(/\bv?(\d+(?:\.\d+){1,3})\b/i);
   if (!match) throw new Error("Не удалось определить опубликованную версию APK");
-  return match[1];
+
+  const asset = Array.isArray(release?.assets)
+    ? release.assets.find((item) => item?.name === APK_ASSET_NAME)
+    : null;
+  if (!asset?.browser_download_url) throw new Error("APK не найден в опубликованном релизе");
+  if (asset.browser_download_url !== APK_DOWNLOAD_URL) throw new Error("Опубликован неожиданный URL APK");
+
+  const digest = String(asset.digest || "").replace(/^sha256:/i, "").trim().toLowerCase();
+  if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error("GitHub не предоставил SHA-256 опубликованного APK");
+
+  return {
+    version: match[1],
+    downloadUrl: APK_DOWNLOAD_URL,
+    sha256: digest
+  };
 }
 
-let lastManifest = null;
+let lastRelease = null;
 let downloadInProgress = false;
 
 function clearUpdateBadge() {
@@ -164,28 +179,9 @@ async function checkForUpdate({ quiet = false } = {}) {
   }
 
   try {
-    const [manifestResponse, publishedVersion] = await Promise.all([
-      fetch(`${UPDATE_MANIFEST_URL}?t=${Date.now()}`, { cache: "no-store" }),
-      getPublishedVersion(),
-    ]);
-    if (!manifestResponse.ok) throw new Error(`HTTP ${manifestResponse.status}`);
-    const manifest = await manifestResponse.json();
-    if (!manifest?.version || !manifest?.downloadUrl) throw new Error("Некорректный файл версии");
-
-    if (manifest.releaseReady === false) {
-      lastManifest = null;
-      ui.card.classList.remove("available");
-      downloadButton?.classList.add("hidden");
-      clearUpdateBadge();
-      if (statusNode && !downloadInProgress) {
-        statusNode.textContent = `Установлена актуальная версия v${currentVersion}`;
-        statusNode.classList.add("muted");
-      }
-      return;
-    }
-
-    lastManifest = { ...manifest, version: publishedVersion };
-    const available = compareVersions(publishedVersion, currentVersion) > 0;
+    const published = await getPublishedRelease();
+    lastRelease = published;
+    const available = compareVersions(published.version, currentVersion) > 0;
 
     ui.card.classList.toggle("available", available);
     statusNode?.classList.toggle("muted", !available);
@@ -202,23 +198,24 @@ async function checkForUpdate({ quiet = false } = {}) {
 
     if (!downloadInProgress && statusNode) {
       statusNode.textContent = available
-        ? `Доступна новая версия v${publishedVersion}`
+        ? `Доступна новая версия v${published.version}`
         : `Установлена актуальная версия v${currentVersion}`;
     }
   } catch (error) {
-    lastManifest = null;
+    lastRelease = null;
     ui.card.classList.remove("available");
     downloadButton?.classList.add("hidden");
     clearUpdateBadge();
     if (statusNode && !quiet && !downloadInProgress) {
-      statusNode.textContent = "Не удалось проверить обновления. Проверьте интернет и повторите.";
+      statusNode.textContent = "Не удалось безопасно проверить обновления. Проверьте интернет и повторите.";
       statusNode.classList.add("muted");
     }
+    console.error("Update check failed", error);
   }
 }
 
 async function downloadUpdate() {
-  if (!lastManifest?.downloadUrl || downloadInProgress) return;
+  if (!lastRelease?.downloadUrl || !lastRelease?.sha256 || downloadInProgress) return;
 
   const statusNode = document.querySelector("#app-update-status");
   const button = document.querySelector("#app-update-download");
@@ -229,14 +226,17 @@ async function downloadUpdate() {
     button.textContent = "Скачивание…";
   }
   if (statusNode) {
-    statusNode.textContent = "Скачиваем обновление. После загрузки Android сразу откроет установку.";
+    statusNode.textContent = "Скачиваем и проверяем обновление. После проверки Android откроет установку.";
     statusNode.classList.remove("muted");
   }
 
   try {
     const nativeUpdater = window.Capacitor?.Plugins?.AppUpdater;
     if (nativeUpdater?.downloadAndInstall) {
-      await nativeUpdater.downloadAndInstall({ url: lastManifest.downloadUrl });
+      await nativeUpdater.downloadAndInstall({
+        url: lastRelease.downloadUrl,
+        sha256: lastRelease.sha256
+      });
       return;
     }
 
@@ -246,9 +246,9 @@ async function downloadUpdate() {
       button.textContent = originalText;
     }
     if (statusNode) {
-      statusNode.textContent = "Эта старая версия скачает APK обычным способом. После установки новой версии следующие обновления будут открывать установку автоматически.";
+      statusNode.textContent = "Эта старая версия скачает APK обычным способом. Начиная с версии 1.0.0 обновления дополнительно проверяются перед установкой.";
     }
-    openDownload(lastManifest.downloadUrl);
+    openDownload(lastRelease.downloadUrl);
   } catch (error) {
     downloadInProgress = false;
     if (button) {
@@ -256,9 +256,10 @@ async function downloadUpdate() {
       button.textContent = originalText;
     }
     if (statusNode) {
-      statusNode.textContent = "Не удалось начать обновление. Повторите попытку.";
+      statusNode.textContent = "Не удалось начать безопасное обновление. Повторите попытку.";
       statusNode.classList.add("muted");
     }
+    console.error("Update download failed", error);
   }
 }
 
