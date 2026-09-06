@@ -1,7 +1,7 @@
 {
-  "version": "1.0.10",
-  "versionCode": 110,
+  "version": "1.0.11",
+  "versionCode": 10011,
   "apkUrl": "https://github.com/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk",
-  "notes": "1.0.10: полностью оптимизирован размер Android-приложения: иконки генерируются под реальные Android-плотности, удалены неиспользуемые старые заставки, активная графика переведена в WebP внутри APK, включено удаление неиспользуемого кода и ресурсов.",
+  "notes": "1.0.11: исправлена установка обновлений Android. Восстановлена монотонная схема versionCode (major*10000 + minor*100 + patch), чтобы новые версии больше не воспринимались системой как откат. APK дополнительно проверяется apksigner и zipalign перед публикацией.",
   "mandatory": false
 }
