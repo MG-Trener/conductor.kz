@@ -1,4 +1,4 @@
-const CACHE = "conductor-mobile-v52";
+const CACHE = "conductor-mobile-v53";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -7,20 +7,21 @@ const APP_SHELL = [
   "./header-mobile.css?v=1",
   "./splash.css?v=3",
   "./release-103.css",
-  "./app.js?v=103",
-  "./bootstrap-103.js",
-  "./core-ui-103.js",
-  "./version-history-103.js",
+  "./app.js?v=104",
+  "./bootstrap-104.js",
+  "./core-ui-104.js",
+  "./version-history-104.js",
+  "./startup-guard-104.js",
   "./firebase-config.js?v=22",
   "./push-config.js?v=1",
-  "./app-update.js?v=103",
-  "./analytics.js?v=103",
-  "./sales-history.js?v=103",
-  "./warehouse-enhancements.js?v=103",
+  "./app-update.js?v=104",
+  "./analytics.js?v=104",
+  "./sales-history.js?v=104",
+  "./warehouse-enhancements.js?v=104",
   "./warehouse-enhancements-legacy.js?v=2",
-  "./inventory-state.js?v=103",
-  "./push-notifications.js?v=103",
-  "./firestore-error-help.js?v=103",
+  "./inventory-state.js?v=104",
+  "./push-notifications.js?v=104",
+  "./firestore-error-help.js?v=104",
   "./manifest.webmanifest?v=17",
   "./icon.svg",
   "./warehouse-splash-clean.png?v=1",
@@ -62,7 +63,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   event.respondWith(
-    fetch(request)
+    fetch(request, { cache: "no-store" })
       .then((response) => {
         if (response.ok) caches.open(CACHE).then((cache) => cache.put(request, response.clone()));
         return response;
