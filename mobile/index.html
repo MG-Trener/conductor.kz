@@ -14,8 +14,8 @@
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js" crossorigin>
   <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js" crossorigin>
-  <link rel="modulepreload" href="./app.js?v=24">
-  <link rel="modulepreload" href="./bootstrap.js?v=1">
+  <link rel="modulepreload" href="./app.js?v=103">
+  <link rel="modulepreload" href="./bootstrap-103.js">
   <link rel="preload" href="./warehouse-splash-clean.png?v=1" as="image" type="image/png">
   <link rel="preload" href="./conductor-vintage-title.png?v=1" as="image" type="image/png">
   <link rel="manifest" href="./manifest.webmanifest?v=17">
@@ -24,22 +24,18 @@
   <link rel="stylesheet" href="./warehouse.css?v=20">
   <link rel="stylesheet" href="./header-mobile.css?v=1">
   <link rel="stylesheet" href="./splash.css?v=3">
+  <link rel="stylesheet" href="./release-103.css">
 </head>
 <body>
   <div id="boot" class="boot" data-min-display-ms="6200" aria-label="CONDUCTOR.KZ — приложение загружается">
-  <div class="boot-bg"></div>
-  <div class="boot-smoke boot-smoke-left"></div>
-  <div class="boot-smoke boot-smoke-right"></div>
-
-  <div class="boot-title-wrap" aria-hidden="true">
-    <img
-      class="boot-title"
-      src="./conductor-vintage-title.png?v=1"
-      alt="CONDUCTOR.KZ"
-    >
-    <div class="boot-title-shine"></div>
+    <div class="boot-bg"></div>
+    <div class="boot-smoke boot-smoke-left"></div>
+    <div class="boot-smoke boot-smoke-right"></div>
+    <div class="boot-title-wrap" aria-hidden="true">
+      <img class="boot-title" src="./conductor-vintage-title.png?v=1" alt="CONDUCTOR.KZ">
+      <div class="boot-title-shine"></div>
+    </div>
   </div>
-</div>
 
   <div id="login" class="screen hidden">
     <main class="center-wrap">
@@ -89,7 +85,7 @@
         <div class="quick-grid">
           <button class="quick pink" data-nav="sale"><span>＋</span><b>Зафиксировать продажу</b><small>Списать конкретный цвет</small></button>
           <button class="quick green" data-nav="stock"><span>▦</span><b>Актуальные остатки</b><small>Все модели и цвета</small></button>
-          <button class="quick blue" data-nav="sales"><span>≡</span><b>Продажи</b><small>Кто и когда внёс</small></button>
+          <button class="quick blue" data-nav="sales"><span>≡</span><b>Операции</b><small>Продажи и движение денег</small></button>
         </div>
 
         <div class="section-head"><h2>Последние продажи</h2><button class="link-btn" data-nav="sales">Все</button></div>
@@ -97,7 +93,7 @@
       </section>
 
       <section id="view-sales" class="view">
-        <div class="section-head sticky-head"><h1>Продажи</h1><button class="btn small primary" data-nav="sale">＋ Продажа</button></div>
+        <div class="section-head sticky-head"><h1>Операции</h1></div>
         <div id="sales-summary" class="panel mini-summary"></div>
         <div id="sales-list" class="list"></div>
       </section>
@@ -122,11 +118,9 @@
         <div class="panel stock-summary">
           <div><span>Моделей</span><b id="stock-sku-count">0</b></div>
           <div><span>Потенциальная стоимость</span><b id="stock-value">0 ₸</b></div>
+          <button id="open-stock-movements" class="stock-journal-btn" type="button">Журнал</button>
         </div>
         <div id="stock-list" class="stock-list"></div>
-
-        <div class="section-head"><h2>Журнал движения</h2><span class="muted">последние 100</span></div>
-        <div id="movement-list" class="list"></div>
       </section>
 
       <section id="view-settings" class="view">
@@ -148,12 +142,23 @@
 
     <nav class="bottom-nav" aria-label="Навигация">
       <button class="nav-btn active" data-nav="dashboard"><span>⌂</span><small>Обзор</small></button>
-      <button class="nav-btn" data-nav="sales"><span>≡</span><small>Продажи</small></button>
+      <button class="nav-btn" data-nav="sales"><span>≡</span><small>Операции</small></button>
       <button class="nav-btn sale-nav" data-nav="sale"><span>＋</span><small>Продажа</small></button>
       <button class="nav-btn" data-nav="stock"><span>▦</span><small>Склад</small></button>
       <button class="nav-btn" data-nav="settings"><span>⚙</span><small>Ещё</small></button>
     </nav>
   </div>
+
+  <dialog id="movement-dialog" class="stock-dialog movement-dialog">
+    <div class="stock-dialog-card">
+      <div class="dialog-head">
+        <div><div class="eyebrow">Склад</div><h2>Журнал движения</h2></div>
+        <button id="movement-dialog-close" class="dialog-close" type="button" aria-label="Закрыть">×</button>
+      </div>
+      <p class="movement-dialog-intro">Последние 100 операций по остаткам</p>
+      <div id="movement-list" class="list"></div>
+    </div>
+  </dialog>
 
   <dialog id="model-dialog" class="stock-dialog model-dialog">
     <form id="model-balance-form" method="dialog" class="stock-dialog-card">
@@ -200,10 +205,12 @@
   </dialog>
 
   <div id="toast" class="toast"></div>
-  
+
   <script src="./firebase-config.js?v=22"></script>
   <script src="./push-config.js?v=1"></script>
-  <script type="module" src="./app.js?v=24"></script>
-  <script type="module" src="./bootstrap.js?v=1"></script>
+  <script type="module" src="./app.js?v=103"></script>
+  <script type="module" src="./bootstrap-103.js"></script>
+  <script type="module" src="./core-ui-103.js"></script>
+  <script type="module" src="./version-history-103.js"></script>
 </body>
 </html>
