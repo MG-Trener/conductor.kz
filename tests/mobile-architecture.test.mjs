@@ -8,19 +8,20 @@ const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 const execFileAsync = promisify(execFile);
 
-test("1.0.3 uses immutable mobile entry points", async () => {
+test("1.0.4 uses immutable mobile entry points", async () => {
   const [index, bootstrap, firebaseConfig, errorHelper, push] = await Promise.all([
     read("mobile/index.html"),
-    read("mobile/bootstrap-103.js"),
+    read("mobile/bootstrap-104.js"),
     read("mobile/firebase-config.js"),
     read("mobile/firestore-error-help.js"),
     read("mobile/push-notifications.js")
   ]);
 
-  assert.match(index, /app\.js\?v=103/);
-  assert.match(index, /bootstrap-103\.js/);
-  assert.match(index, /core-ui-103\.js/);
-  assert.match(index, /version-history-103\.js/);
+  assert.match(index, /app\.js\?v=104/);
+  assert.match(index, /bootstrap-104\.js/);
+  assert.match(index, /core-ui-104\.js/);
+  assert.match(index, /version-history-104\.js/);
+  assert.match(index, /startup-guard-104\.js/);
   assert.match(index, /release-103\.css/);
   assert.match(index, /Content-Security-Policy/);
 
@@ -33,7 +34,7 @@ test("1.0.3 uses immutable mobile entry points", async () => {
     "push-notifications.js",
     "firestore-error-help.js"
   ]) {
-    assert.equal(bootstrap.split(`./${moduleName}?v=103`).length - 1, 1, `${moduleName} must be imported once by bootstrap-103.js`);
+    assert.equal(bootstrap.split(`./${moduleName}?v=104`).length - 1, 1, `${moduleName} must be imported once by bootstrap-104.js`);
   }
 
   assert.doesNotMatch(firebaseConfig, /loadUiModule|setTimeout\(.*inventory-state/s);
@@ -41,10 +42,22 @@ test("1.0.3 uses immutable mobile entry points", async () => {
   assert.doesNotMatch(push, /analytics\.js/);
 });
 
+test("1.0.4 startup UI cannot self-trigger an endless mutation loop", async () => {
+  const [coreUi, guard] = await Promise.all([
+    read("mobile/core-ui-104.js"),
+    read("mobile/startup-guard-104.js")
+  ]);
+  assert.doesNotMatch(coreUi, /new MutationObserver/);
+  assert.match(coreUi, /normalizeUiOnce/);
+  assert.match(guard, /window\.setTimeout\(finishStuckBoot, 9000\)/);
+  assert.match(guard, /ALLOWED_EMAILS/);
+  assert.match(guard, /boot\.classList\.add\("hide"\)/);
+});
+
 test("operations and movement journal are structurally correct", async () => {
   const [index, coreUi, releaseCss] = await Promise.all([
     read("mobile/index.html"),
-    read("mobile/core-ui-103.js"),
+    read("mobile/core-ui-104.js"),
     read("mobile/release-103.css")
   ]);
 
@@ -67,16 +80,17 @@ test("operations and movement journal are structurally correct", async () => {
   assert.match(coreUi, /open-stock-movements/);
 });
 
-test("version history starts with 1.0.3 and contains missing releases", async () => {
-  const history = await read("mobile/version-history-103.js");
-  assert.match(history, /const VERSIONS = \[\s*\{\s*version: "1\.0\.3"/);
+test("version history starts with 1.0.4 and contains recent releases", async () => {
+  const history = await read("mobile/version-history-104.js");
+  assert.match(history, /const VERSIONS = \[\s*\{\s*version: "1\.0\.4"/);
+  assert.match(history, /version: "1\.0\.3"/);
   assert.match(history, /version: "1\.0\.2"/);
   assert.match(history, /version: "1\.0\.1"/);
-  assert.match(history, /Актуальная версия: 1\.0\.3/);
+  assert.match(history, /Актуальная версия: 1\.0\.4/);
 });
 
-test("new immutable scripts pass syntax validation", async () => {
-  for (const file of ["mobile/bootstrap-103.js", "mobile/core-ui-103.js", "mobile/version-history-103.js"]) {
+test("new 1.0.4 scripts pass syntax validation", async () => {
+  for (const file of ["mobile/bootstrap-104.js", "mobile/core-ui-104.js", "mobile/version-history-104.js", "mobile/startup-guard-104.js"]) {
     await execFileAsync(process.execPath, ["--check", new URL(file, root).pathname]);
   }
 });
@@ -112,10 +126,10 @@ test("native updater accepts only the warehouse release and verifies SHA-256", a
   assert.match(nativeUpdater, /MessageDigest\.getInstance\(\\?"SHA-256\\?"\)/);
 });
 
-test("PWA cache contains immutable 1.0.3 assets", async () => {
+test("PWA cache contains immutable 1.0.4 assets", async () => {
   const sw = await read("mobile/sw.js");
-  assert.match(sw, /const CACHE = "conductor-mobile-v52"/);
-  for (const asset of ["release-103.css", "app.js?v=103", "bootstrap-103.js", "core-ui-103.js", "version-history-103.js"]) {
+  assert.match(sw, /const CACHE = "conductor-mobile-v53"/);
+  for (const asset of ["release-103.css", "app.js?v=104", "bootstrap-104.js", "core-ui-104.js", "version-history-104.js", "startup-guard-104.js"]) {
     assert.ok(sw.includes(`./${asset}`), `${asset} must be cached`);
   }
   assert.match(sw, /fetch\(request, \{ cache: "no-store" \}\)/);
