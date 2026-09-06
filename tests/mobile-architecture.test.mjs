@@ -8,7 +8,7 @@ const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 const execFileAsync = promisify(execFile);
 
-test("1.0.4 uses immutable mobile entry points", async () => {
+test("1.0.5 uses the compact stock UI entry points", async () => {
   const [index, bootstrap, firebaseConfig, errorHelper, push] = await Promise.all([
     read("mobile/index.html"),
     read("mobile/bootstrap-104.js"),
@@ -19,10 +19,11 @@ test("1.0.4 uses immutable mobile entry points", async () => {
 
   assert.match(index, /app\.js\?v=104/);
   assert.match(index, /bootstrap-104\.js/);
-  assert.match(index, /core-ui-104\.js/);
-  assert.match(index, /version-history-104\.js/);
+  assert.match(index, /core-ui-105\.js/);
+  assert.match(index, /version-history-105\.js/);
   assert.match(index, /startup-guard-104\.js/);
   assert.match(index, /release-103\.css/);
+  assert.match(index, /release-105\.css/);
   assert.match(index, /Content-Security-Policy/);
 
   for (const moduleName of [
@@ -42,22 +43,23 @@ test("1.0.4 uses immutable mobile entry points", async () => {
   assert.doesNotMatch(push, /analytics\.js/);
 });
 
-test("1.0.4 startup UI cannot self-trigger an endless mutation loop", async () => {
+test("1.0.5 startup UI cannot self-trigger an endless mutation loop", async () => {
   const [coreUi, guard] = await Promise.all([
-    read("mobile/core-ui-104.js"),
+    read("mobile/core-ui-105.js"),
     read("mobile/startup-guard-104.js")
   ]);
   assert.doesNotMatch(coreUi, /new MutationObserver/);
-  assert.match(coreUi, /normalizeUiOnce/);
+  assert.match(coreUi, /decorateStockRows/);
+  assert.match(coreUi, /setInterval\(refreshCompactStockUi, 1200\)/);
   assert.match(guard, /window\.setTimeout\(finishStuckBoot, 9000\)/);
   assert.match(guard, /ALLOWED_EMAILS/);
   assert.match(guard, /boot\.classList\.add\("hide"\)/);
 });
 
-test("operations and movement journal are structurally correct", async () => {
+test("operations and movement journal remain structurally correct", async () => {
   const [index, coreUi, releaseCss] = await Promise.all([
     read("mobile/index.html"),
-    read("mobile/core-ui-104.js"),
+    read("mobile/core-ui-105.js"),
     read("mobile/release-103.css")
   ]);
 
@@ -80,17 +82,33 @@ test("operations and movement journal are structurally correct", async () => {
   assert.match(coreUi, /open-stock-movements/);
 });
 
-test("version history starts with 1.0.4 and contains recent releases", async () => {
-  const history = await read("mobile/version-history-104.js");
-  assert.match(history, /const VERSIONS = \[\s*\{\s*version: "1\.0\.4"/);
+test("compact stock rows keep quantities right aligned and expose zero/low states", async () => {
+  const [coreUi, compactCss] = await Promise.all([
+    read("mobile/core-ui-105.js"),
+    read("mobile/release-105.css")
+  ]);
+  assert.match(coreUi, /stock-zero/);
+  assert.match(coreUi, /stock-low/);
+  assert.match(coreUi, /value > 0 && value <= 2/);
+  assert.match(compactCss, /border-bottom:1px solid rgba\(148,163,184,\.11\)!important/);
+  assert.match(compactCss, /margin-left:auto!important/);
+  assert.match(compactCss, /text-align:right!important/);
+  assert.match(compactCss, /stock-zero/);
+  assert.match(compactCss, /stock-low/);
+});
+
+test("version history starts with 1.0.5 and contains recent releases", async () => {
+  const history = await read("mobile/version-history-105.js");
+  assert.match(history, /const VERSIONS = \[\s*\{\s*version: "1\.0\.5"/);
+  assert.match(history, /version: "1\.0\.4"/);
   assert.match(history, /version: "1\.0\.3"/);
   assert.match(history, /version: "1\.0\.2"/);
   assert.match(history, /version: "1\.0\.1"/);
-  assert.match(history, /Актуальная версия: 1\.0\.4/);
+  assert.match(history, /Актуальная версия: 1\.0\.5/);
 });
 
-test("new 1.0.4 scripts pass syntax validation", async () => {
-  for (const file of ["mobile/bootstrap-104.js", "mobile/core-ui-104.js", "mobile/version-history-104.js", "mobile/startup-guard-104.js"]) {
+test("new 1.0.5 scripts pass syntax validation", async () => {
+  for (const file of ["mobile/bootstrap-104.js", "mobile/core-ui-105.js", "mobile/version-history-105.js", "mobile/startup-guard-104.js"]) {
     await execFileAsync(process.execPath, ["--check", new URL(file, root).pathname]);
   }
 });
@@ -126,10 +144,10 @@ test("native updater accepts only the warehouse release and verifies SHA-256", a
   assert.match(nativeUpdater, /MessageDigest\.getInstance\(\\?"SHA-256\\?"\)/);
 });
 
-test("PWA cache contains immutable 1.0.4 assets", async () => {
+test("PWA cache contains 1.0.5 compact stock assets", async () => {
   const sw = await read("mobile/sw.js");
-  assert.match(sw, /const CACHE = "conductor-mobile-v53"/);
-  for (const asset of ["release-103.css", "app.js?v=104", "bootstrap-104.js", "core-ui-104.js", "version-history-104.js", "startup-guard-104.js"]) {
+  assert.match(sw, /const CACHE = "conductor-mobile-v54"/);
+  for (const asset of ["release-103.css", "release-105.css", "app.js?v=104", "bootstrap-104.js", "core-ui-105.js", "version-history-105.js", "startup-guard-104.js"]) {
     assert.ok(sw.includes(`./${asset}`), `${asset} must be cached`);
   }
   assert.match(sw, /fetch\(request, \{ cache: "no-store" \}\)/);
