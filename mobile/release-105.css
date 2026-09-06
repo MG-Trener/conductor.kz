@@ -1,4 +1,4 @@
-/* CONDUCTOR Warehouse 1.0.5 — compact stock rows */
+/* CONDUCTOR Warehouse 1.0.7 — compact stock, navigation and settings */
 
 #view-stock .stock-color-summary{
   gap:0!important;
@@ -64,9 +64,44 @@
   margin-top:2px!important;
 }
 
-/* Sale is now part of Overview, so the bottom navigation has four equal items. */
+/* Four navigation destinations must always stay in a single row. */
 .bottom-nav{
-  grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  display:flex!important;
+  flex-wrap:nowrap!important;
+  align-items:stretch!important;
+  grid-template-columns:none!important;
+  overflow:hidden!important;
+}
+
+.bottom-nav .nav-btn{
+  flex:1 1 25%!important;
+  width:25%!important;
+  min-width:0!important;
+  max-width:25%!important;
+  padding:4px 2px!important;
+  overflow:hidden!important;
+}
+
+.bottom-nav .nav-btn span{
+  flex:0 0 auto!important;
+}
+
+.bottom-nav .nav-btn small{
+  max-width:100%!important;
+  white-space:nowrap!important;
+  overflow:hidden!important;
+  text-overflow:ellipsis!important;
+  font-size:10px!important;
+}
+
+/* "Ещё" is the Settings destination, so expose it directly as Settings. */
+.bottom-nav [data-nav="settings"] small{
+  font-size:0!important;
+}
+.bottom-nav [data-nav="settings"] small::after{
+  content:"Настройки";
+  font-size:10px!important;
+  font-weight:800;
 }
 
 #view-dashboard .quick-grid{
@@ -81,6 +116,99 @@
   margin-bottom:4px;
 }
 
+/* Settings use the same compact card language as Version history. */
+#view-settings .settings-panel{
+  display:grid!important;
+  gap:6px!important;
+  padding:0!important;
+  border:0!important;
+  background:transparent!important;
+}
+
+#view-settings .settings-row{
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:12px!important;
+  min-height:45px!important;
+  padding:9px 10px!important;
+  border:1px solid var(--line)!important;
+  border-radius:12px!important;
+  background:#090e16!important;
+  font-size:10px!important;
+}
+
+#view-settings .settings-row span{
+  color:var(--muted)!important;
+  font-size:9px!important;
+}
+
+#view-settings .settings-row b{
+  min-width:0!important;
+  max-width:68%!important;
+  text-align:right!important;
+  word-break:break-word!important;
+  font-size:10.5px!important;
+}
+
+/* Keep the technical node for app.js compatibility, but remove Firebase project from UI. */
+#view-settings .settings-row:has(#settings-project){
+  display:none!important;
+}
+
+/* Remove the obsolete "Как вносить остатки" panel. */
+#view-settings > .panel:not(.settings-panel){
+  display:none!important;
+}
+
+#view-settings .version-history-btn,
+#view-settings .site-settings-btn,
+#view-settings #reset-password{
+  width:100%!important;
+  min-height:44px!important;
+  margin:7px 0!important;
+  padding:8px 10px!important;
+  display:flex!important;
+  align-items:center!important;
+  justify-content:space-between!important;
+  gap:10px!important;
+  border:1px solid var(--line)!important;
+  border-radius:12px!important;
+  background:#090e16!important;
+  color:#f7f9fc!important;
+  text-align:left!important;
+  text-decoration:none!important;
+  font-size:10.5px!important;
+}
+
+#view-settings .site-settings-btn{
+  font-size:0!important;
+}
+#view-settings .site-settings-btn::before{
+  content:"Основной сайт";
+  font-size:10.5px!important;
+  font-weight:900;
+}
+#view-settings .site-settings-btn::after{
+  content:"›"!important;
+  font-size:18px!important;
+  line-height:1!important;
+}
+
+#view-settings #reset-password{
+  font-size:0!important;
+}
+#view-settings #reset-password::before{
+  content:"Смена пароля";
+  font-size:10.5px!important;
+  font-weight:900;
+}
+#view-settings #reset-password::after{
+  content:"›";
+  font-size:18px!important;
+  line-height:1!important;
+}
+
 @media(max-width:390px){
   #view-stock .stock-color-summary>span{
     min-height:26px!important;
@@ -89,5 +217,9 @@
   #view-stock .stock-color-summary>span b{
     min-width:32px!important;
     padding-left:8px!important;
+  }
+  .bottom-nav .nav-btn small,
+  .bottom-nav [data-nav="settings"] small::after{
+    font-size:9px!important;
   }
 }
