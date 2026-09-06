@@ -1,5 +1,16 @@
 const VERSIONS = [
   {
+    version: "1.0.6",
+    date: "06.09.2026",
+    changes: [
+      "Функционал «Новая продажа» перенесён прямо в «Обзор» сразу после верхних показателей.",
+      "Отдельный раздел «Продажа» и дублирующие кнопки продажи удалены.",
+      "Нижнее меню сокращено до четырёх пунктов: Обзор, Операции, Склад и Ещё.",
+      "После сохранения продажи приложение переходит в «Операции», где сразу видна созданная запись.",
+      "Обновлён PWA-кэш для новой компоновки интерфейса."
+    ]
+  },
+  {
     version: "1.0.5",
     date: "06.09.2026",
     changes: [
@@ -103,7 +114,7 @@ function ensureHistoryUi() {
     button.id = "version-history-button";
     button.type = "button";
     button.className = "btn full version-history-btn";
-    button.innerHTML = '<span class="version-history-btn-copy"><b>История изменений</b><small>Актуальная версия: 1.0.5</small></span><span aria-hidden="true">›</span>';
+    button.innerHTML = '<span class="version-history-btn-copy"><b>История изменений</b><small>Актуальная версия: 1.0.6</small></span><span aria-hidden="true">›</span>';
     settings.querySelector(".settings-panel")?.insertAdjacentElement("afterend", button);
   }
 
