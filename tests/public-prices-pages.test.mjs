@@ -11,7 +11,7 @@ const pages = {
 const mobileApp = new URL("../mobile/app.js", import.meta.url);
 const mobileHtml = new URL("../mobile/index.html", import.meta.url);
 const mobileWorker = new URL("../mobile/sw.js", import.meta.url);
-const mobileBootstrap = new URL("../mobile/bootstrap.js", import.meta.url);
+const mobileBootstrap = new URL("../mobile/bootstrap-103.js", import.meta.url);
 const warehouseCss = new URL("../mobile/warehouse.css", import.meta.url);
 const inventoryState = new URL("../mobile/inventory-state.js", import.meta.url);
 const pushNotifications = new URL("../mobile/push-notifications.js", import.meta.url);
@@ -56,9 +56,9 @@ test("the warehouse model card renders the saved Firestore price", async () => {
   assert.match(app, /Number\(item\.stock \|\| 0\) \* modelSalePrice/);
   assert.doesNotMatch(app, /stockValue\(\).*avgCost/);
   assert.match(html, /Потенциальная стоимость/);
-  assert.match(html, /app\.js\?v=24/);
+  assert.match(html, /app\.js\?v=103/);
   assert.match(worker, /const CACHE = "conductor-mobile-v\d+"/);
-  assert.match(worker, /app\.js\?v=24/);
+  assert.match(worker, /app\.js\?v=103/);
 });
 
 test("Firestore is initialized once before any asynchronous auth setup", async () => {
@@ -76,9 +76,9 @@ test("Firestore is initialized once before any asynchronous auth setup", async (
   assert.match(helper, /db = window\.CONDUCTOR_FIRESTORE/);
   assert.doesNotMatch(helper, /\bgetFirestore\s*\(/);
   assert.match(html, /firebase-config\.js\?v=\d+/);
-  assert.match(html, /bootstrap\.js\?v=1/);
-  assert.match(bootstrap, /import "\.\/inventory-state\.js"/);
-  assert.match(worker, /"\.\/inventory-state\.js"/);
+  assert.match(html, /bootstrap-103\.js/);
+  assert.match(bootstrap, /import "\.\/inventory-state\.js\?v=103"/);
+  assert.match(worker, /"\.\/inventory-state\.js\?v=103"/);
 });
 
 test("the header contains a visible warehouse login and no hidden hotspot", async () => {
@@ -235,10 +235,10 @@ test("warehouse Android build loads and registers sale push notifications", asyn
     readFile(pushConfig, "utf8")
   ]);
   assert.match(html, /push-config\.js\?v=1/);
-  assert.match(html, /bootstrap\.js\?v=1/);
-  assert.match(bootstrap, /import "\.\/push-notifications\.js"/);
+  assert.match(html, /bootstrap-103\.js/);
+  assert.match(bootstrap, /import "\.\/push-notifications\.js\?v=103"/);
   assert.match(worker, /push-config\.js\?v=1/);
-  assert.match(worker, /"\.\/push-notifications\.js"/);
+  assert.match(worker, /"\.\/push-notifications\.js\?v=103"/);
   assert.match(push, /registerPlugin\("PushNotifications"\)/);
   assert.match(push, /"pushDevices"/);
   assert.match(push, /platform: "android"/);
