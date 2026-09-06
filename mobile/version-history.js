@@ -1,5 +1,17 @@
 const VERSIONS = [
   {
+    version: "1.0.0",
+    date: "06.09.2026",
+    changes: [
+      "Первый стабильный релиз новой архитектуры: Android-приложение содержит интерфейс склада внутри APK и больше не использует удалённый сайт как основной экран приложения.",
+      "Все дополнительные функции запускаются через единый bootstrap без дублирующих импортов и конфликтующих версий модулей; PWA-кэш приведён к единой схеме.",
+      "Безопасность обновлений усилена: разрешён только официальный GitHub Release CONDUCTOR, а скачанный APK проверяется по SHA-256 до открытия системной установки Android.",
+      "Добавлена Content Security Policy, исправлена повторная регистрация Push и удаление токена устройства при выходе из аккаунта.",
+      "Усилены Firestore Rules для продаж, отмен, движения денег и кассы; добавлены архитектурные регрессионные тесты и полный тестовый барьер перед Android-сборкой.",
+      "Зафиксированы проверенные версии Capacitor, обновлён GitHub Actions workflow и убрана устаревшая перезагрузка WebView после обновления APK."
+    ]
+  },
+  {
     version: "0.7.0",
     date: "06.09.2026",
     changes: [
@@ -206,7 +218,7 @@ function ensureUi() {
     button.id = "version-history-button";
     button.type = "button";
     button.className = "btn full version-history-btn";
-    button.innerHTML = `<span class="version-history-btn-copy"><b>История версий</b><small>Значимые изменения с первой Android-сборки</small></span><span class="version-history-chevron" aria-hidden="true">›</span>`;
+    button.innerHTML = `<span class="version-history-btn-copy"><b>История изменений</b><small>Ключевые изменения с первой Android-сборки</small></span><span class="version-history-chevron" aria-hidden="true">›</span>`;
     const settingsPanel = settings.querySelector(".settings-panel");
     settingsPanel?.insertAdjacentElement("afterend", button);
   }
@@ -219,10 +231,10 @@ function ensureUi() {
     dialog.innerHTML = `
       <div class="stock-dialog-card">
         <div class="dialog-head">
-          <div><div class="eyebrow">CONDUCTOR Склад</div><h2>История версий</h2></div>
+          <div><div class="eyebrow">CONDUCTOR Склад</div><h2>История изменений</h2></div>
           <button id="version-history-close" class="dialog-close" type="button" aria-label="Закрыть">×</button>
         </div>
-        <div class="version-history-intro">Только заметные изменения приложения — без технических правок, кэша и служебных коммитов.</div>
+        <div class="version-history-intro">Только заметные изменения приложения — без служебных коммитов и внутренних номеров кэша.</div>
         <div id="version-history-list" class="version-history-list"></div>
       </div>`;
     document.body.appendChild(dialog);

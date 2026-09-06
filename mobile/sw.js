@@ -1,4 +1,4 @@
-const CACHE = "conductor-mobile-v48";
+const CACHE = "conductor-mobile-v49";
 const APP_SHELL = [
   "./",
   "./index.html",
