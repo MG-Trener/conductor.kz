@@ -57,6 +57,9 @@ function addStyles() {
     .app-update-status { margin:8px 0 0; line-height:1.45; }
     .app-update-card.available { border-color:rgba(255,190,70,.65); box-shadow:0 0 0 1px rgba(255,190,70,.08) inset; }
     .app-update-card.available .app-update-status { color:#ffd27a; }
+    .app-update-latest { margin-top:10px; padding:10px 11px; border:1px solid var(--line); border-radius:12px; background:#090e16; }
+    .app-update-latest b { display:block; margin-bottom:4px; font-size:10px; letter-spacing:.04em; text-transform:uppercase; color:#9aa6b5; }
+    .app-update-latest p { margin:0; color:#dce4ee; font-size:10.5px; line-height:1.45; white-space:pre-line; }
     .app-update-actions { display:flex; gap:8px; margin-top:12px; }
     .app-update-actions .btn { margin:0; }
     .app-update-badge { position:absolute; width:9px; height:9px; border-radius:50%; background:#ffb52e; top:7px; right:calc(50% - 19px); box-shadow:0 0 0 3px #0b0f18; }
@@ -113,6 +116,10 @@ function ensureUi() {
         <span id="app-current-version" class="app-update-version">—</span>
       </div>
       <p id="app-update-status" class="app-update-status muted">Проверяем обновления…</p>
+      <div class="app-update-latest">
+        <b>Последние изменения</b>
+        <p id="app-update-latest-notes">Загружаем описание последней версии…</p>
+      </div>
       <div class="app-update-actions">
         <button id="app-update-download" class="btn primary full hidden" type="button">Обновить</button>
         <button id="app-update-check" class="btn full" type="button">Проверить ещё раз</button>
@@ -146,10 +153,14 @@ async function getPublishedRelease() {
   const digest = String(asset.digest || "").replace(/^sha256:/i, "").trim().toLowerCase();
   if (!/^[a-f0-9]{64}$/.test(digest)) throw new Error("GitHub не предоставил SHA-256 опубликованного APK");
 
+  const notes = String(release?.body || "").trim();
+  if (!notes) throw new Error("У опубликованной версии отсутствует описание последних изменений");
+
   return {
     version: match[1],
     downloadUrl: APK_DOWNLOAD_URL,
-    sha256: digest
+    sha256: digest,
+    notes
   };
 }
 
@@ -169,6 +180,7 @@ async function checkForUpdate({ quiet = false } = {}) {
   const currentVersion = await currentAppVersion();
   const versionNode = document.querySelector("#app-current-version");
   const statusNode = document.querySelector("#app-update-status");
+  const notesNode = document.querySelector("#app-update-latest-notes");
   const downloadButton = document.querySelector("#app-update-download");
   const navSettings = document.querySelector('.nav-btn[data-nav="settings"]');
 
@@ -186,6 +198,7 @@ async function checkForUpdate({ quiet = false } = {}) {
     ui.card.classList.toggle("available", available);
     statusNode?.classList.toggle("muted", !available);
     downloadButton?.classList.toggle("hidden", !available);
+    if (notesNode) notesNode.textContent = published.notes;
 
     clearUpdateBadge();
     if (available && navSettings) {
@@ -206,6 +219,7 @@ async function checkForUpdate({ quiet = false } = {}) {
     ui.card.classList.remove("available");
     downloadButton?.classList.add("hidden");
     clearUpdateBadge();
+    if (notesNode && !quiet) notesNode.textContent = "Описание последней версии сейчас недоступно.";
     if (statusNode && !quiet && !downloadInProgress) {
       statusNode.textContent = "Не удалось безопасно проверить обновления. Проверьте интернет и повторите.";
       statusNode.classList.add("muted");
