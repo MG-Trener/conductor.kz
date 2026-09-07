@@ -16,7 +16,8 @@ import {
 } from "firebase/firestore";
 
 const projectId = "conductor-rules-test";
-const staffUid = "employee-1";
+const staffUid = "98l4qLx3yzX9XZ2ye8REhURyiRi2";
+const secondStaffUid = "sIUV6byir4VALmrKBIpJLzD8Evz2";
 const staffEmail = "mihagavr@gmail.com";
 const secondStaffEmail = "a.kalashin@gmail.com";
 let testEnv;
@@ -45,7 +46,7 @@ function staffDb() {
 }
 
 function secondStaffDb() {
-  return testEnv.authenticatedContext("employee-2", { email: secondStaffEmail }).firestore();
+  return testEnv.authenticatedContext(secondStaffUid, { email: secondStaffEmail }).firestore();
 }
 
 function movement(overrides = {}) {
@@ -110,11 +111,12 @@ after(async () => {
   await testEnv?.cleanup();
 });
 
-test("only the two approved email accounts can read warehouse products", async () => {
+test("only the two approved Firebase UIDs can read warehouse products", async () => {
   const snapshot = await assertSucceeds(getDoc(doc(staffDb(), "products", "DM30_BLUE")));
   assert.equal(snapshot.data().stock, 4);
   await assertSucceeds(getDoc(doc(secondStaffDb(), "products", "DM30_BLUE")));
   await assertFails(getDoc(doc(testEnv.authenticatedContext("outsider", { email: "other@example.com" }).firestore(), "products", "DM30_BLUE")));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext("spoofed-uid", { email: staffEmail }).firestore(), "products", "DM30_BLUE")));
 });
 
 test("unauthenticated and non-email identities cannot access warehouse data", async () => {

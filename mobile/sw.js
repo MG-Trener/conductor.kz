@@ -1,7 +1,7 @@
 const CACHE = "conductor-mobile-shell";
 const APP_SHELL = [
   "./", "./index.html", "./styles.css", "./warehouse.css", "./header-mobile.css", "./splash.css", "./release.css",
-  "./app.js", "./catalog-core.js", "./catalog-service.js", "./warehouse-domain.js", "./bootstrap.js", "./core-ui.js",
+  "./app.js", "./auth-throttle.js", "./catalog-core.js", "./catalog-service.js", "./warehouse-domain.js", "./bootstrap.js", "./core-ui.js",
   "./version-history.js", "./version-history-archive.js", "./startup-guard.js", "./auth-throttle.js", "./firebase-config.js", "./push-config.js",
   "./app-update.js", "./analytics.js", "./sales-history.js", "./warehouse-ui.js", "./push-notifications.js",
   "./firestore-error-help.js", "./ui-sounds.js", "./manifest.webmanifest", "./icon.svg",

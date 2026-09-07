@@ -32,9 +32,9 @@ import { createWarehouseDomain } from "./warehouse-domain.js";
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const KZT = new Intl.NumberFormat("ru-KZ", { style: "currency", currency: "KZT", maximumFractionDigits: 0 });
-const STAFF_NAMES = new Map([
-  ["mihagavr@gmail.com", "Михаил"],
-  ["a.kalashin@gmail.com", "Алексей"]
+const STAFF_BY_UID = new Map([
+  ["98l4qLx3yzX9XZ2ye8REhURyiRi2", "Михаил"],
+  ["sIUV6byir4VALmrKBIpJLzD8Evz2", "Алексей"]
 ]);
 
 const MODELS = LEGACY_CATALOG_SEED;
@@ -67,15 +67,14 @@ const state = {
 
 function config() { return window.CONDUCTOR_FIREBASE_CONFIG || null; }
 
-function employeeNameFromEmail(email = "") {
-  const normalized = String(email).trim().toLowerCase();
-  return STAFF_NAMES.get(normalized) || "Сотрудник";
+function employeeNameFromUser(user) {
+  return STAFF_BY_UID.get(String(user?.uid || "")) || "Сотрудник";
 }
 
-function isAllowedStaffEmail(email = "") { return STAFF_NAMES.has(String(email).trim().toLowerCase()); }
+function isAllowedStaffUser(user) { return STAFF_BY_UID.has(String(user?.uid || "")); }
 
 function currentEmployeeName() {
-  return employeeNameFromEmail(state.user?.email || "");
+  return employeeNameFromUser(state.user);
 }
 
 const catalogService = createCatalogService({ state, currentEmployeeName });
@@ -952,7 +951,7 @@ async function boot() {
         hideBoot();
         return;
       }
-      if (!isAllowedStaffEmail(user.email || "")) {
+      if (!isAllowedStaffUser(user)) {
         stopRealtime();
         showOnly("#login");
         $("#login-error").textContent = "У этой учётной записи нет доступа к складу.";

@@ -115,7 +115,7 @@ test("version history begins with the current release", async () => {
 });
 
 test("active mobile scripts pass syntax validation", async () => {
-  for (const file of ["app.js", "catalog-core.js", "catalog-service.js", "warehouse-domain.js", "bootstrap.js", "core-ui.js", "version-history.js", "version-history-archive.js", "startup-guard.js", "app-update.js", "analytics.js", "sales-history.js", "warehouse-ui.js", "push-notifications.js", "firestore-error-help.js", "ui-sounds.js"]) {
+  for (const file of ["app.js", "auth-throttle.js", "catalog-core.js", "catalog-service.js", "warehouse-domain.js", "bootstrap.js", "core-ui.js", "version-history.js", "version-history-archive.js", "startup-guard.js", "app-update.js", "analytics.js", "sales-history.js", "warehouse-ui.js", "push-notifications.js", "firestore-error-help.js", "ui-sounds.js"]) {
     await execFileAsync(process.execPath, ["--check", fileURLToPath(new URL(`mobile/${file}`, root))]);
   }
 });

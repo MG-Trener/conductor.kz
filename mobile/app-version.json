@@ -1,7 +1,7 @@
 {
-  "version": "1.1.1",
-  "versionCode": 10101,
+  "version": "1.1.2",
+  "versionCode": 10102,
   "apkUrl": "https://github.com/MG-Trener/conductor.kz/releases/download/warehouse-latest/CONDUCTOR-Sklad.apk",
-  "notes": "1.1.1: каталог Firestore стал единым runtime-источником моделей и цен без специальных корректировок DM60G/DM60R1G. app.js разделён на отдельные catalog/domain модули. PWA избавлен от ручных ?v= и версий кэша, splash-ресурсы переведены в WebP. Android-зависимости зафиксированы package-lock и устанавливаются через npm ci; усилен .gitignore.",
+  "notes": "1.1.2: закрытая авторизация переведена на два разрешённых Firebase UID. Саморегистрация отсутствует в приложении. После 5 неверных попыток вход блокируется на 5 минут, затем на 30 минут и далее на 24 часа; защита сохраняется после перезапуска.",
   "mandatory": false
 }

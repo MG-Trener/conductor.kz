@@ -1,14 +1,13 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Only the two explicitly approved Firebase Authentication accounts can
-    // access warehouse data. There is no public sign-up in the application.
+    // Only the two explicitly approved Firebase Authentication UIDs can
+    // access warehouse data. Email addresses are metadata, never authorization.
     function isStaff() {
       return request.auth != null
-        && request.auth.token.keys().hasAll(['email'])
-        && request.auth.token.email in [
-          'mihagavr@gmail.com',
-          'a.kalashin@gmail.com'
+        && request.auth.uid in [
+          '98l4qLx3yzX9XZ2ye8REhURyiRi2',
+          'sIUV6byir4VALmrKBIpJLzD8Evz2'
         ];
     }
 

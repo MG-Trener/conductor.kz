@@ -1,6 +1,6 @@
-const ALLOWED_EMAILS = new Set([
-  "mihagavr@gmail.com",
-  "a.kalashin@gmail.com"
+const ALLOWED_UIDS = new Set([
+  "98l4qLx3yzX9XZ2ye8REhURyiRi2",
+  "sIUV6byir4VALmrKBIpJLzD8Evz2"
 ]);
 
 const ALLOWED_ORIGINS = new Set([
@@ -141,7 +141,7 @@ async function authenticate(request, env) {
   if (!response.ok) return null;
   const user = (await response.json()).users?.[0];
   const email = String(user?.email || "").toLowerCase();
-  if (!user?.localId || !ALLOWED_EMAILS.has(email)) return null;
+  if (!user?.localId || !ALLOWED_UIDS.has(user.localId)) return null;
   return { uid: user.localId, email };
 }
 

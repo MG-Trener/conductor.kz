@@ -95,3 +95,19 @@ test("mobile has sign-in and password reset only, with no account-registration c
   assert.doesNotMatch(guard, /ALLOWED_EMAILS|ALLOWED_EMAILS\.has/);
   assert.match(guard, /event\.stopImmediatePropagation\(\)/);
 });
+
+
+test("authorization allowlist is pinned to the two Firebase UIDs", async () => {
+  const [app, rules, push] = await Promise.all([
+    read("mobile/app.js"), read("firestore.rules"), read("push-worker/src/index.js")
+  ]);
+  for (const uid of ["98l4qLx3yzX9XZ2ye8REhURyiRi2", "sIUV6byir4VALmrKBIpJLzD8Evz2"]) {
+    assert.ok(app.includes(uid));
+    assert.ok(rules.includes(uid));
+    assert.ok(push.includes(uid));
+  }
+  assert.match(app, /STAFF_BY_UID/);
+  assert.doesNotMatch(app, /isAllowedStaffEmail/);
+  assert.doesNotMatch(rules, /request\.auth\.token\.email in/);
+  assert.doesNotMatch(push, /ALLOWED_EMAILS/);
+});
