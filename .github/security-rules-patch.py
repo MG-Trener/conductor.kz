@@ -1,14 +1,8 @@
 from pathlib import Path
 import re
 
-path = Path("firestore.rules")
-text = path.read_text()
-
-old = "        && validModelId(data.modelId)\n"
-new = "        && modelExists(data.modelId)\n"
-if text.count(old) != 1:
-    raise SystemExit(f"expected one validModelId(data.modelId) guard, found {text.count(old)}")
-text = text.replace(old, new, 1)
+rules_path = Path("firestore.rules")
+text = rules_path.read_text()
 
 
 def replace_function(name, replacement):
@@ -32,13 +26,62 @@ replace_function("linkedProductMovement", '''    function linkedProductMovement(
         && movement.createdAt == request.time;
     }''')
 
-replace_function("orderMatchesCash", '''    function orderMatchesCash(orderId, operationType) {
-      let cash = getAfter(/databases/$(database)/documents/finance/cash).data;
-      return cash.lastOperationType == operationType
-        && cash.lastOperationId == orderId
-        && cash.updatedBy == request.auth.uid
-        && cash.updatedAt == request.time;
+replace_function("validOrderCancel", '''    function validOrderCancel(orderId) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'cancelledAt', 'cancelledBy', 'cancelledByName'
+        ])
+        && request.resource.data.status == 'cancelled'
+        && resource.data.status == 'done'
+        && request.resource.data.cancelledAt == request.time
+        && request.resource.data.cancelledBy == request.auth.uid
+        && request.resource.data.cancelledByName is string
+        && request.resource.data.cancelledByName.size() <= 80;
     }''')
+
+orders_old = '''      allow create: if isStaff()
+        && validOrderCreate(request.resource.data)
+        && orderMatchesCash(orderId, 'sale');
+      allow update: if isStaff() && validOrderCancel(orderId);'''
+orders_new = '''      allow create: if isStaff() && validOrderCreate(request.resource.data);
+      allow update: if isStaff() && validOrderCancel(orderId);'''
+if text.count(orders_old) != 1:
+    raise SystemExit(f"expected one cyclic order guard, found {text.count(orders_old)}")
+text = text.replace(orders_old, orders_new, 1)
+
+movement_anchor = '''    function validMovementType(value) {
+      return value in ['receipt', 'writeoff', 'adjustment', 'sale', 'sale_return'];
+    }
+
+    function validMovement(data) {'''
+movement_replacement = '''    function validMovementType(value) {
+      return value in ['receipt', 'writeoff', 'adjustment', 'sale', 'sale_return'];
+    }
+
+    function linkedMovementOrder(data) {
+      let order = getAfter(/databases/$(database)/documents/orders/$(data.orderId)).data;
+      return validOperationId(data.orderId)
+        && ((data.type == 'sale'
+            && order.status == 'done'
+            && order.createdAt == request.time
+            && order.createdBy == request.auth.uid)
+          || (data.type == 'sale_return'
+            && order.status == 'cancelled'
+            && order.cancelledAt == request.time
+            && order.cancelledBy == request.auth.uid));
+    }
+
+    function validMovement(data) {'''
+if text.count(movement_anchor) != 1:
+    raise SystemExit("movement order helper anchor not found")
+text = text.replace(movement_anchor, movement_replacement, 1)
+
+sale_guard_old = '''        && (data.type != 'sale' || (data.keys().hasAll(['salePrice', 'orderId']) && data.orderId.size() > 0))
+        && (data.type != 'sale_return' || (data.keys().hasAll(['orderId']) && data.orderId.size() > 0))'''
+sale_guard_new = '''        && (data.type != 'sale' || (data.keys().hasAll(['salePrice', 'orderId']) && data.orderId.size() > 0 && linkedMovementOrder(data)))
+        && (data.type != 'sale_return' || (data.keys().hasAll(['orderId']) && data.orderId.size() > 0 && linkedMovementOrder(data)))'''
+if text.count(sale_guard_old) != 1:
+    raise SystemExit("sale movement order guard not found")
+text = text.replace(sale_guard_old, sale_guard_new, 1)
 
 replace_function("cashMatchesSale", '''    function cashMatchesSale() {
       let order = getAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data))).data;
@@ -77,4 +120,12 @@ replace_function("withdrawalMatchesCash", '''    function withdrawalMatchesCash(
         && cash.updatedAt == request.time;
     }''')
 
-path.write_text(text)
+rules_path.write_text(text)
+
+public_test_path = Path("tests/public-prices-pages.test.mjs")
+public_tests = public_test_path.read_text()
+old_assertion = '  assert.match(rules, /modelExists\\(data\\.modelId\\)/);\n'
+new_assertion = '  assert.match(rules, /modelExists\\(request\\.resource\\.data\\.modelId\\)/);\n'
+if public_tests.count(old_assertion) != 1:
+    raise SystemExit(f"expected one catalogue-backed rules assertion, found {public_tests.count(old_assertion)}")
+public_test_path.write_text(public_tests.replace(old_assertion, new_assertion, 1))
