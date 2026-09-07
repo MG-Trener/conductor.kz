@@ -69,7 +69,8 @@ jobs:
             mobile/version-history.js \
             android-app/package.json \
             android-app/package-lock.json \
-            tests/firestore.rules.test.mjs
+            tests/firestore.rules.test.mjs \
+            tests/public-prices-pages.test.mjs
           git diff --cached --check
           git commit -m "security: enforce linked warehouse and cash mutations"
           git push origin HEAD:security/high-integrity-guards
