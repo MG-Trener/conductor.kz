@@ -18,7 +18,9 @@ jobs:
         with:
           node-version: 22
       - name: Apply UID-only authorization and release bump
-        run: python3 .github/harden-auth-uids.py
+        run: |
+          python3 .github/harden-auth-uids.py
+          python3 .github/fix-auth-version-marker.py
       - name: Install test dependencies
         run: npm ci
       - name: Run full security and regression suite
