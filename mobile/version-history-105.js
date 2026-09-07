@@ -1,11 +1,19 @@
 const VERSIONS = [
   {
+    version: "1.0.14",
+    date: "07.09.2026",
+    changes: [
+      "Повторно исправлена цена гендерного дыма DM60G после подтверждения, что версия 1.0.13 оставляла в карточке 3 000 ₸.",
+      "Проверка цены теперь запускается независимо от дополнительной логики склада и напрямую работает с catalog/DM60G после авторизации.",
+      "После записи 3 500 ₸ приложение повторно читает документ и проверяет, что исправление действительно сохранилось."
+    ]
+  },
+  {
     version: "1.0.13",
     date: "07.09.2026",
     changes: [
-      "Исправлена цена гендерного дыма DM60G в мобильном складе: ошибочные 3 000 ₸ автоматически приводятся к правильным 3 500 ₸.",
-      "Исправление выполняется в общем каталоге, поэтому правильная цена используется не только в карточке склада, но и при продаже, расчёте стоимости склада и на сайте.",
-      "Миграция ограничена исходной ошибочной записью DM60G и не будет перезаписывать последующие ручные изменения цены."
+      "Первая попытка исправить цену гендерного дыма DM60G с 3 000 ₸ на 3 500 ₸ через миграцию каталога.",
+      "По фактической проверке на устройстве миграция не сработала, поэтому механизм заменён в версии 1.0.14."
     ]
   }
 ];
@@ -29,10 +37,10 @@ function renderCurrentVersionCard() {
 function patchCurrentVersionUi() {
   const button = document.getElementById("version-history-button");
   const copy = button?.querySelector(".version-history-btn-copy small");
-  if (copy) copy.textContent = "Актуальная версия: 1.0.13";
+  if (copy) copy.textContent = "Актуальная версия: 1.0.14";
 
   const root = document.getElementById("version-history-list");
-  if (!root || root.querySelector('[data-current-version="1.0.13"]')) return;
+  if (!root || root.querySelector('[data-current-version="1.0.14"]')) return;
   root.querySelectorAll(".version-history-card.latest").forEach((card) => card.classList.remove("latest"));
   root.querySelectorAll(".version-history-badge").forEach((badge) => badge.remove());
   root.insertAdjacentHTML("afterbegin", renderCurrentVersionCard());
