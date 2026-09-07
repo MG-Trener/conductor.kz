@@ -16,6 +16,7 @@ service cloud.firestore {
       return modelId is string && modelId.matches('^[A-Z0-9]{2,24}$');
     }
 
+    // Warehouse variants are valid only when their model is published in catalog.
     function modelExists(modelId) {
       return validModelId(modelId)
         && exists(/databases/$(database)/documents/catalog/$(modelId));
