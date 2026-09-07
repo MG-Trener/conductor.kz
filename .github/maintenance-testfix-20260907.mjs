@@ -5,6 +5,20 @@ const root = process.cwd();
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const write = (file, content) => fs.writeFileSync(path.join(root, file), content);
 
+let rules = read("firestore.rules");
+rules = rules.replace(`    function validProductId(productId, modelId) {
+      return validModelId(modelId)
+        && productId.matches('^' + modelId + '_[A-Z0-9]+$');
+    }
+`, `    function validProductId(productId) {
+      return productId is string
+        && productId.matches('^[A-Z0-9]{2,24}_[A-Z0-9]+$');
+    }
+`);
+rules = rules.replaceAll("validProductId(productId, request.resource.data.modelId)", "validProductId(productId)");
+if (rules.includes("productId.matches('^' + modelId")) throw new Error("Dynamic regex concatenation survived");
+write("firestore.rules", rules);
+
 let architecture = read("tests/mobile-architecture.test.mjs");
 architecture = architecture.replaceAll("});});", "});");
 write("tests/mobile-architecture.test.mjs", architecture);
@@ -42,4 +56,4 @@ const replacement = `test("warehouse Android build loads and registers sale push
 prices = prices.slice(0, start) + replacement + prices.slice(end);
 write("tests/public-prices-pages.test.mjs", prices);
 
-console.log("Maintenance test transformations repaired");
+console.log("Maintenance compatibility repairs applied");
