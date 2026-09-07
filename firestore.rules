@@ -325,7 +325,8 @@ service cloud.firestore {
           'lastOperationType', 'lastOperationId'
         ])
         && request.resource.data.balance != resource.data.balance
-        && cashOperationId(request.resource.data) != cashOperationId(resource.data)
+        && (cashOperationId(request.resource.data) != cashOperationId(resource.data)
+          || cashOperationType(request.resource.data) != cashOperationType(resource.data))
         && (cashMatchesSale() || cashMatchesCancellation() || cashMatchesWithdrawal());
       allow delete: if false;
     }
