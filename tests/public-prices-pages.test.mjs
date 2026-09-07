@@ -9,6 +9,8 @@ const pages = {
 };
 
 const mobileApp = new URL("../mobile/app.js", import.meta.url);
+const catalogCore = new URL("../mobile/catalog-core.js", import.meta.url);
+const warehouseDomain = new URL("../mobile/warehouse-domain.js", import.meta.url);
 const mobileHtml = new URL("../mobile/index.html", import.meta.url);
 const mobileWorker = new URL("../mobile/sw.js", import.meta.url);
 const mobileBootstrap = new URL("../mobile/bootstrap.js", import.meta.url);
@@ -36,34 +38,26 @@ test("home and smoke pages bind every smoke model price", async () => {
   }
 });
 
-test("DM60G is one shared catalog model with blue and pink warehouse variants", async () => {
-  const [app, prices, rules] = await Promise.all([
-    readFile(mobileApp, "utf8"),
-    readFile(publicPriceModule, "utf8"),
-    readFile(new URL("../firestore.rules", import.meta.url), "utf8")
+test("DM60G seed has blue/pink variants while Firestore rules accept catalogue-backed models", async () => {
+  const [catalog, prices, rules] = await Promise.all([
+    readFile(catalogCore, "utf8"), readFile(publicPriceModule, "utf8"), readFile(new URL("../firestore.rules", import.meta.url), "utf8")
   ]);
-
-  assert.match(app, /id: "DM60G", name: "Гендерный дым DM60G", price: 3500/);
-  assert.match(app, /\["BLUE", "Синий", "#258cff"\][\s\S]*\["PINK", "Розовый", "#ff6bab"\]/);
-  assert.match(prices, /"DM60G"/);
-  assert.match(rules, /'DM60G'/);
-  assert.match(rules, /DM60G\|DM60R1G\|DM90/);
+  assert.match(catalog, /id: "DM60G", name: "Гендерный дым DM60G", price: 3500/);
+  assert.match(catalog, /\["BLUE", "Синий", "#258cff"\][\s\S]*\["PINK", "Розовый", "#ff6bab"\]/);
+  assert.match(prices, /collection\(getFirestore\(app\), "catalog"\)/);
+  assert.match(rules, /function validModelId/);
+  assert.doesNotMatch(rules, /DM60G\|DM60R1G/);
 });
 
-test("DM60R1G uses one catalog price and blue/pink warehouse variants", async () => {
-  const [app, prices, rules, home, smoke, requestScript] = await Promise.all([
-    readFile(mobileApp, "utf8"),
-    readFile(publicPriceModule, "utf8"),
-    readFile(new URL("../firestore.rules", import.meta.url), "utf8"),
-    readFile(pages.home, "utf8"),
-    readFile(pages.smoke, "utf8"),
-    readFile(publicRequestModule, "utf8")
+test("DM60R1G seed uses one catalog price and blue/pink warehouse variants", async () => {
+  const [catalog, prices, rules, home, smoke, requestScript] = await Promise.all([
+    readFile(catalogCore, "utf8"), readFile(publicPriceModule, "utf8"), readFile(new URL("../firestore.rules", import.meta.url), "utf8"),
+    readFile(pages.home, "utf8"), readFile(pages.smoke, "utf8"), readFile(publicRequestModule, "utf8")
   ]);
-  assert.match(app, /id: "DM60R1G", name: "DM60R1G \(интрига\)", price: 4000/);
-  assert.match(app, /\["BLUE", "Синий", "#258cff"\][\s\S]*\["PINK", "Розовый", "#ff6bab"\]/);
-  assert.match(prices, /"DM60R1G"/);
-  assert.match(rules, /'DM60R1G'/);
-  assert.match(rules, /DM60G\|DM60R1G\|DM90/);
+  assert.match(catalog, /id: "DM60R1G", name: "DM60R1G \(интрига\)", price: 4000/);
+  assert.match(catalog, /\["BLUE", "Синий", "#258cff"\][\s\S]*\["PINK", "Розовый", "#ff6bab"\]/);
+  assert.doesNotMatch(prices, /storedPrice === 3000/);
+  assert.match(rules, /modelExists\(data\.modelId\)/);
   for (const html of [home, smoke]) {
     assert.match(html, /data-public-price="DM60R1G"/);
     assert.match(html, /dm60r1g\.webp\?v=1/);
@@ -90,9 +84,9 @@ test("the warehouse model card renders the saved Firestore price", async () => {
   assert.match(app, /Number\(item\.stock \|\| 0\) \* modelSalePrice/);
   assert.doesNotMatch(app, /stockValue\(\).*avgCost/);
   assert.match(html, /Потенциальная стоимость/);
-  assert.match(html, /app\.js\?v=109/);
-  assert.match(worker, /const CACHE = "conductor-mobile-v\d+"/);
-  assert.match(worker, /app\.js\?v=109/);
+  assert.match(html, /app\.js/);
+  assert.match(worker, /const CACHE = "conductor-mobile-shell"/);
+  assert.match(worker, /app\.js/);
 });
 
 test("Firestore is initialized once before any asynchronous auth setup", async () => {
@@ -108,8 +102,8 @@ test("Firestore is initialized once before any asynchronous auth setup", async (
   assert.ok(initializeIndex >= 0 && initializeIndex < firstAwaitIndex);
   assert.match(app, /window\.CONDUCTOR_FIRESTORE = state\.db/);
   assert.doesNotMatch(ui, /initializeFirestore|getFirestore/);
-  assert.match(html, /firebase-config\.js\?v=\d+/);
-  assert.match(html, /bootstrap\.js\?v=1/);
+  assert.match(html, /firebase-config\.js/);
+  assert.match(html, /bootstrap\.js/);
   assert.doesNotMatch(bootstrap, /inventory-state/);
   assert.doesNotMatch(worker, /inventory-state/);
 });
@@ -161,7 +155,7 @@ test("the warehouse header has one logout button wired to Firebase sign-out", as
   assert.match(html, /<button id="logout" class="site-btn logout-btn"[^>]*>Выйти<\/button>/);
   assert.equal((html.match(/id="logout"/g) || []).length, 1);
   assert.match(app, /\$\("#logout"\)\.addEventListener\("click", \(\) => signOut\(state\.auth\)\)/);
-  assert.match(worker, /warehouse\.css\?v=20/);
+  assert.match(worker, /warehouse\.css/);
 });
 
 test("warehouse stays behind the boot screen until initial live data is ready", async () => {
@@ -212,19 +206,16 @@ test("Holi sale pricing uses the total quantity across all selected colors", asy
 });
 
 test("dashboard cash balance is updated by sales, cancellations and withdrawals", async () => {
-  const [app, html, css] = await Promise.all([
-    readFile(mobileApp, "utf8"),
-    readFile(mobileHtml, "utf8"),
-    readFile(warehouseCss, "utf8")
+  const [app, domain, html, css] = await Promise.all([
+    readFile(mobileApp, "utf8"), readFile(warehouseDomain, "utf8"), readFile(mobileHtml, "utf8"), readFile(warehouseCss, "utf8")
   ]);
-
   assert.match(html, /id="open-cash-dialog"/);
   assert.match(html, /id="metric-cash"/);
   assert.match(html, /id="cash-withdrawal-form"/);
   assert.match(app, /function availableCash\(\)/);
-  assert.match(app, /async function ensureCashBalance\(\)/);
-  assert.match(app, /balance: Number\(cashSnap\.data\(\)\.balance \|\| 0\) \+ total/);
-  assert.match(app, /balance: Number\(cashSnap\.data\(\)\.balance \|\| 0\) - Number\(sale\.total \|\| 0\)/);
+  assert.match(domain, /async function ensureCashBalance\(\)/);
+  assert.match(domain, /balance: Number\(cashSnap\.data\(\)\.balance \|\| 0\) \+ total/);
+  assert.match(domain, /balance: Number\(cashSnap\.data\(\)\.balance \|\| 0\) - Number\(sale\.total \|\| 0\)/);
   assert.match(app, /if \(amount > before\)/);
   assert.match(app, /tx\.set\(withdrawalRef/);
   assert.match(css, /\.cash-metric\{/);
@@ -264,24 +255,25 @@ test("warehouse app no longer loads the obsolete requests interface", async () =
 });
 
 test("warehouse Android build loads and registers sale push notifications", async () => {
-  const [app, html, worker, bootstrap, push, endpointConfig] = await Promise.all([
+  const [app, domain, html, worker, bootstrap, push, endpointConfig] = await Promise.all([
     readFile(mobileApp, "utf8"),
+    readFile(warehouseDomain, "utf8"),
     readFile(mobileHtml, "utf8"),
     readFile(mobileWorker, "utf8"),
     readFile(mobileBootstrap, "utf8"),
     readFile(pushNotifications, "utf8"),
     readFile(pushConfig, "utf8")
   ]);
-  assert.match(html, /push-config\.js\?v=1/);
-  assert.match(html, /bootstrap\.js\?v=1/);
-  assert.match(bootstrap, /import "\.\/push-notifications\.js\?v=1"/);
-  assert.match(worker, /push-config\.js\?v=1/);
-  assert.match(worker, /"\.\/push-notifications\.js\?v=1"/);
+  assert.match(html, /push-config\.js/);
+  assert.match(html, /bootstrap\.js/);
+  assert.match(bootstrap, /import "\.\/push-notifications\.js"/);
+  assert.match(worker, /push-config\.js/);
+  assert.match(worker, /"\.\/push-notifications\.js"/);
   assert.match(push, /registerPlugin\("PushNotifications"\)/);
   assert.match(push, /"pushDevices"/);
   assert.match(push, /platform: "android"/);
   assert.match(push, /deleteDoc\(doc\(window\.CONDUCTOR_FIRESTORE, "pushDevices"/);
   assert.match(endpointConfig, /CONDUCTOR_PUSH_ENDPOINT/);
-  assert.match(app, /state\.user\.getIdToken\(\)/);
-  assert.match(app, /JSON\.stringify\(\{ orderId \}\)/);
+  assert.match(domain, /state\.user\.getIdToken\(\)/);
+  assert.match(domain, /JSON\.stringify\(\{ orderId \}\)/);
 });

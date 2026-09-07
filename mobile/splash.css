@@ -20,7 +20,7 @@
   inset: 0;
   background:
     linear-gradient(to bottom, rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.34)),
-    url("./warehouse-splash-clean.png?v=1") center center / cover no-repeat;
+    url("./warehouse-splash-clean.webp") center center / cover no-repeat;
   transform: scale(1);
   animation: bootPush 6.2s ease-out forwards;
   will-change: transform;
@@ -116,7 +116,7 @@
     position: absolute;
     inset: -36px;
     z-index: -2;
-    background: url("./warehouse-splash-clean.png?v=1") center / cover no-repeat;
+    background: url("./warehouse-splash-clean.webp") center / cover no-repeat;
     filter: blur(30px) brightness(.38) saturate(.9);
     transform: scale(1.05);
     opacity: .8;
@@ -126,7 +126,7 @@
     inset: clamp(14px, 2vh, 28px) clamp(24px, 7vw, 120px);
     background:
       linear-gradient(to bottom, rgba(0, 0, 0, .08), rgba(0, 0, 0, .2)),
-      url("./warehouse-splash-clean.png?v=1") center / contain no-repeat;
+      url("./warehouse-splash-clean.webp") center / contain no-repeat;
     animation: bootPushDesktop 6.2s ease-out forwards;
     filter: drop-shadow(0 24px 60px rgba(0, 0, 0, .55));
   }

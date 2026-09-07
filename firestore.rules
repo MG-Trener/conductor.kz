@@ -12,17 +12,23 @@ service cloud.firestore {
         ];
     }
 
-    function isModel(modelId) {
-      return modelId in ['DM30', 'DM60', 'DM60G', 'DM60R1G', 'DM90', 'HOLI'];
+    function validModelId(modelId) {
+      return modelId is string && modelId.matches('^[A-Z0-9]{2,24}$');
+    }
+
+    function modelExists(modelId) {
+      return validModelId(modelId)
+        && exists(/databases/$(database)/documents/catalog/$(modelId));
     }
 
     function validProductId(productId) {
-      return productId.matches('^(DM30|DM60|DM60G|DM60R1G|DM90|HOLI)_[A-Z0-9]+$');
+      return productId is string
+        && productId.matches('^[A-Z0-9]{2,24}_[A-Z0-9]+$');
     }
 
-    function validProductState(data, productId) {
-      return data.keys().hasAll(['name', 'stock'])
-        && isModel(data.get('modelId', productId))
+    function validProductState(data) {
+      return data.keys().hasAll(['modelId', 'name', 'stock'])
+        && modelExists(data.modelId)
         && data.name is string
         && data.name.size() > 0
         && data.name.size() <= 120
@@ -42,7 +48,7 @@ service cloud.firestore {
 
       allow create: if isStaff()
         && validProductId(productId)
-        && validProductState(request.resource.data, productId)
+        && validProductState(request.resource.data)
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.createdAt == request.time
         && validProductAuthor(request.resource.data)
@@ -54,7 +60,7 @@ service cloud.firestore {
         ]);
 
       allow update: if isStaff()
-        && validProductState(request.resource.data, productId)
+        && validProductState(request.resource.data)
         && validProductAuthor(request.resource.data)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'stock', 'active', 'modelOnly',
@@ -75,7 +81,7 @@ service cloud.firestore {
     match /catalog/{modelId} {
       allow read: if true;
       allow create, update: if isStaff()
-        && isModel(modelId)
+        && validModelId(modelId)
         && request.resource.data.keys().hasAll([
           'modelId', 'name', 'price', 'updatedAt', 'updatedBy', 'updatedByName'
         ])
@@ -186,7 +192,7 @@ service cloud.firestore {
         && data.type in ['receipt', 'writeoff', 'adjustment', 'sale', 'sale_return']
         && data.inventoryId is string
         && validProductId(data.inventoryId)
-        && isModel(data.productId)
+        && modelExists(data.productId)
         && data.productName is string
         && data.productName.size() > 0
         && data.productName.size() <= 120

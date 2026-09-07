@@ -25,6 +25,9 @@ import {
   serverTimestamp,
   runTransaction
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import { LEGACY_CATALOG_SEED, LEGACY_VARIANT_DEFAULTS, runtimeModels } from "./catalog-core.js";
+import { createCatalogService } from "./catalog-service.js";
+import { createWarehouseDomain } from "./warehouse-domain.js";
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -34,82 +37,8 @@ const STAFF_NAMES = new Map([
   ["a.kalashin@gmail.com", "Алексей"]
 ]);
 
-const MODELS = [
-  {
-    id: "DM30", name: "Цветной дым DM30", price: 2500, lowStock: 2, sort: 10,
-    variants: [
-      ["BLUE", "Синий", "#258cff"],
-      ["YELLOW", "Жёлтый", "#ffd42a"],
-      ["RED", "Красный", "#ff4545"],
-      ["PURPLE", "Фиолетовый", "#9b59ff"],
-      ["TURQUOISE", "Бирюзовый", "#27d3c3"]
-    ]
-  },
-  {
-    id: "DM60", name: "Цветной дым DM60", price: 3000, lowStock: 2, sort: 20,
-    variants: [
-      ["WHITE", "Белый", "#f4f5f7"],
-      ["BLACK", "Чёрный", "#15171d"],
-      ["YELLOW", "Жёлтый", "#ffd42a"],
-      ["BLUE", "Синий", "#258cff"],
-      ["PINK", "Розовый", "#ff6bab"],
-      ["GREEN", "Зелёный", "#42c66b"],
-      ["PURPLE", "Фиолетовый", "#9b59ff"],
-      ["RED", "Красный", "#ff4545"]
-    ]
-  },
-  {
-    id: "DM60G", name: "Гендерный дым DM60G", price: 3500, lowStock: 2, sort: 25,
-    variants: [
-      ["BLUE", "Синий", "#258cff"],
-      ["PINK", "Розовый", "#ff6bab"]
-    ]
-  },
-  {
-    id: "DM60R1G", name: "DM60R1G (интрига)", price: 4000, lowStock: 2, sort: 27,
-    variants: [
-      ["BLUE", "Синий", "#258cff"],
-      ["PINK", "Розовый", "#ff6bab"]
-    ]
-  },
-  {
-    id: "DM90", name: "Цветной дым DM90", price: 3500, lowStock: 2, sort: 30,
-    variants: [
-      ["ORANGE", "Оранжевый", "#ff8b2d"],
-      ["PURPLE", "Фиолетовый", "#9b59ff"],
-      ["TURQUOISE", "Бирюзовый", "#27d3c3"],
-      ["YELLOW", "Жёлтый", "#ffd42a"],
-      ["PISTACHIO", "Фисташковый", "#9ecb68"],
-      ["RED", "Красный", "#ff4545"]
-    ]
-  },
-  {
-    id: "HOLI", name: "Краски Холи", price: 1000, lowStock: 10, sort: 40,
-    variants: [
-      ["SCARLET", "Алый", "#ff3030"],
-      ["RASPBERRY", "Малиновый", "#d92b70"],
-      ["YELLOW", "Жёлтый", "#ffd42a"],
-      ["BLUE", "Синий", "#258cff"],
-      ["LIME", "Салатовый", "#8bdc45"],
-      ["PURPLE", "Фиолетовый", "#9b59ff"],
-      ["ORANGE", "Оранжевый", "#ff8b2d"],
-      ["TURQUOISE", "Бирюзовый", "#27d3c3"]
-    ]
-  }
-];
-
-const defaults = MODELS.flatMap((model) => model.variants.map(([key, colorName, colorHex], index) => ({
-  id: `${model.id}_${key}`,
-  modelId: model.id,
-  colorId: key.toLowerCase(),
-  colorName,
-  colorHex,
-  name: `${model.id} · ${colorName}`,
-  price: model.price,
-  stock: 0,
-  lowStock: model.lowStock,
-  sort: model.sort + index + 1
-})));
+const MODELS = LEGACY_CATALOG_SEED;
+const defaults = LEGACY_VARIANT_DEFAULTS;
 
 const movementLabels = {
   receipt: "Поступление",
@@ -149,30 +78,13 @@ function currentEmployeeName() {
   return employeeNameFromEmail(state.user?.email || "");
 }
 
-async function requestSalePush(orderId) {
-  const endpoint = String(window.CONDUCTOR_PUSH_ENDPOINT || "").trim();
-  if (!endpoint || !state.user) return { configured: false, delivered: false };
-  const idToken = await state.user.getIdToken();
-  let lastError = null;
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ orderId })
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      return { configured: true, delivered: true };
-    } catch (error) {
-      lastError = error;
-    }
-  }
-  console.error("Sale push request failed", lastError);
-  return { configured: true, delivered: false };
-}
+const catalogService = createCatalogService({ state, currentEmployeeName });
+const warehouseDomain = createWarehouseDomain({ state, currentEmployeeName });
+const ensureProducts = () => catalogService.ensureProducts();
+const ensureCashBalance = () => warehouseDomain.ensureCashBalance();
+const commitSale = (payload) => warehouseDomain.commitSale(payload);
+const cancelSale = (saleId) => warehouseDomain.cancelSale(saleId);
+function models() { return runtimeModels(state.catalog, state.products); }
 
 function toast(message) {
   const node = $("#toast");
@@ -249,22 +161,17 @@ window.addEventListener("pageshow", (event) => {
   hideBoot();
 });
 
-function modelById(modelId) { return MODELS.find((model) => model.id === modelId); }
+function modelById(modelId) { return models().find((model) => model.id === modelId); }
 function variantDefaults(modelId) { return defaults.filter((item) => item.modelId === modelId); }
 function modelVariants(modelId) {
-  const actual = state.products
-    .filter((item) => item.modelId === modelId && !item.legacyUnassigned && item.active !== false)
+  return state.products
+    .filter((item) => item.modelId === modelId && !item.legacyUnassigned && item.active !== false && !item.modelOnly)
     .sort((a, b) => Number(a.sort || 0) - Number(b.sort || 0));
-  if (modelId !== "DM60R1G") return actual;
-  const byId = new Map(actual.map((item) => [item.id, item]));
-  return variantDefaults(modelId).map((item) => byId.get(item.id) || ({ ...item, active: true, virtual: true }));
 }
 function modelSalePrice(modelId) {
-  const catalogModel = state.catalog.find((item) => item.id === modelId);
-  const catalogPrice = Number(catalogModel?.price || 0);
-  if (modelId === "DM60G" && catalogPrice === 3000) return 3500;
-  if (modelId === "DM60R1G" && catalogPrice === 3000) return 4000;
-  return catalogPrice || Number(modelById(modelId)?.price || 0);
+  const catalogPrice = Number(state.catalog.find((item) => item.id === modelId)?.price || 0);
+  if (catalogPrice > 0) return catalogPrice;
+  return Number(modelById(modelId)?.price || 0);
 }
 function selectedModelQuantity(modelId) {
   return modelVariants(modelId).reduce((sum, product) => sum + Number(state.saleQuantities.get(product.id) || 0), 0);
@@ -286,169 +193,6 @@ function historicalCashBalance() {
 }
 function availableCash() { return state.cashBalance == null ? historicalCashBalance() : Number(state.cashBalance || 0); }
 function colorDot(product) { return product.colorHex ? `<span class="color-dot" style="background:${escapeHtml(product.colorHex)}"></span>` : ""; }
-
-async function ensureCashBalance() {
-  const cashRef = doc(state.db, "finance", "cash");
-  const current = await getDoc(cashRef);
-  if (current.exists()) return Number(current.data().balance || 0);
-
-  const [ordersSnap, withdrawalsSnap] = await Promise.all([
-    getDocs(collection(state.db, "orders")),
-    getDocs(collection(state.db, "cashWithdrawals"))
-  ]);
-  const revenue = ordersSnap.docs.reduce((sum, item) => item.data().status === "cancelled" ? sum : sum + Number(item.data().total || 0), 0);
-  const withdrawn = withdrawalsSnap.docs.reduce((sum, item) => sum + Number(item.data().amount || 0), 0);
-  const initialBalance = revenue - withdrawn;
-  const employee = currentEmployeeName();
-
-  await runTransaction(state.db, async (tx) => {
-    const snap = await tx.get(cashRef);
-    if (snap.exists()) return;
-    tx.set(cashRef, {
-      balance: initialBalance,
-      initializedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      updatedBy: state.user.uid,
-      updatedByEmail: state.user.email || "",
-      updatedByName: employee
-    });
-  });
-  return initialBalance;
-}
-
-async function migrateLegacyModel(model) {
-  const legacyRef = doc(state.db, "products", model.id);
-  const unassignedRef = doc(state.db, "products", `${model.id}_UNASSIGNED`);
-  const employee = currentEmployeeName();
-  const audit = {
-    updatedAt: serverTimestamp(),
-    updatedBy: state.user.uid,
-    updatedByName: employee
-  };
-
-  await runTransaction(state.db, async (tx) => {
-    const legacySnap = await tx.get(legacyRef);
-    const unassignedSnap = await tx.get(unassignedRef);
-    if (!legacySnap.exists() && !unassignedSnap.exists()) return;
-
-    const legacy = legacySnap.exists() ? legacySnap.data() : null;
-    const unassigned = unassignedSnap.exists() ? unassignedSnap.data() : null;
-    const legacyStock = Number(legacy?.stock || 0);
-    const currentStock = Number(unassigned?.stock || 0);
-    const nextStock = currentStock + legacyStock;
-    const creationAudit = unassignedSnap.exists() ? {} : {
-      createdAt: serverTimestamp(),
-      createdBy: state.user.uid,
-      createdByName: employee
-    };
-    if (legacySnap.exists() || unassignedSnap.exists()) {
-      tx.set(unassignedRef, {
-        modelId: model.id,
-        name: `${model.id} · Нераспределено`,
-        stock: nextStock,
-        lowStock: 0,
-        sort: model.sort,
-        legacyUnassigned: true,
-        active: nextStock > 0,
-        ...creationAudit,
-        ...audit
-      }, { merge: true });
-    }
-
-    if (legacySnap.exists()) {
-      tx.set(legacyRef, {
-        active: false,
-        stock: 0,
-        modelOnly: true,
-        variantMigrationV2: true,
-        ...audit
-      }, { merge: true });
-    }
-  });
-}
-
-async function ensureProducts() {
-  const [productSnap, catalogSnap] = await Promise.all([
-    getDocs(collection(state.db, "products")),
-    getDocs(collection(state.db, "catalog"))
-  ]);
-  const existingProducts = productSnap.docs.map((item) => ({ id: item.id, ...item.data() }));
-  const existingById = new Map(existingProducts.map((item) => [item.id, item]));
-  const catalogById = new Map(catalogSnap.docs.map((item) => [item.id, { id: item.id, ...item.data() }]));
-  const employee = currentEmployeeName();
-
-  for (const model of MODELS) {
-    const catalogRef = doc(state.db, "catalog", model.id);
-    const catalogItem = catalogById.get(model.id);
-    if (!catalogItem) {
-      const legacyPrice = model.id === "DM60R1G"
-        ? 0
-        : existingProducts.find((item) => item.modelId === model.id && Number(item.price) > 0)?.price;
-      await setDoc(catalogRef, {
-        modelId: model.id,
-        name: model.name,
-        price: Math.trunc(Number(legacyPrice || model.price)),
-        updatedAt: serverTimestamp(),
-        updatedBy: state.user.uid,
-        updatedByName: employee
-      });
-      continue;
-    }
-    if (model.id === "DM60R1G" && Number(catalogItem.price) === 3000) {
-      await updateDoc(catalogRef, {
-        price: model.price,
-        updatedAt: serverTimestamp(),
-        updatedBy: state.user.uid,
-        updatedByName: employee
-      });
-    }
-  }
-
-  const variantErrors = [];
-  for (const item of defaults) {
-    const productRef = doc(state.db, "products", item.id);
-    const current = existingById.get(item.id);
-    try {
-      if (!current) {
-        await setDoc(productRef, {
-          id: item.id,
-          modelId: item.modelId,
-          colorId: item.colorId,
-          colorName: item.colorName,
-          colorHex: item.colorHex,
-          name: item.name,
-          stock: item.stock,
-          lowStock: item.lowStock,
-          sort: item.sort,
-          active: true,
-          createdAt: serverTimestamp(),
-          createdBy: state.user.uid,
-          createdByName: employee,
-          updatedAt: serverTimestamp(),
-          updatedBy: state.user.uid,
-          updatedByName: employee
-        });
-        continue;
-      }
-      if (item.modelId === "DM60R1G" && (current.active === false || current.modelOnly === true)) {
-        const repair = {
-          updatedAt: serverTimestamp(),
-          updatedBy: state.user.uid,
-          updatedByName: employee
-        };
-        if (current.active === false) repair.active = true;
-        if (current.modelOnly === true) repair.modelOnly = false;
-        await updateDoc(productRef, repair);
-      }
-    } catch (error) {
-      if (item.modelId === "DM60R1G") variantErrors.push(`${item.id}: ${error.message}`);
-      else throw error;
-    }
-  }
-
-  for (const model of MODELS) await migrateLegacyModel(model);
-  if (variantErrors.length) throw new Error(`DM60R1G: не удалось восстановить разновидности (${variantErrors.join("; ")})`);
-}
 
 function stopRealtime() {
   state.unsubs.forEach((fn) => fn?.());
@@ -521,7 +265,7 @@ function modelTotal(modelId) {
 function renderInventoryOverview() {
   const root = $("#inventory-overview");
   if (!root) return;
-  root.innerHTML = MODELS.map((model) => {
+  root.innerHTML = models().map((model) => {
     const variants = modelVariants(model.id);
     const unassigned = unassignedForModel(model.id);
     return `<article class="inventory-overview-card">
@@ -670,7 +414,7 @@ function renderProducts() {
   }
 
   let html = `<div class="sale-model-list">`;
-  for (const model of MODELS) {
+  for (const model of models()) {
     const variants = modelVariants(model.id);
     if (!variants.length) continue;
     const isOpen = state.saleOpenModelId === model.id;
@@ -753,7 +497,7 @@ function updateSaleTotal() {
   const formatted = KZT.format(total);
   $("#sale-total").textContent = formatted;
   if ($("#sale-header-total")) $("#sale-header-total").textContent = formatted;
-  for (const model of MODELS) {
+  for (const model of models()) {
     const modelItems = items.filter((item) => item.productId === model.id);
     const qty = modelItems.reduce((sum, item) => sum + item.qty, 0);
     const subtotal = modelItems.reduce((sum, item) => sum + item.lineTotal, 0);
@@ -763,89 +507,6 @@ function updateSaleTotal() {
     if (priceNode) priceNode.textContent = KZT.format(unitPrice);
     if (summary) summary.textContent = qty ? `${qty} ед. · ${KZT.format(unitPrice)}/шт. · ${KZT.format(subtotal)}` : "Выбрать цвет";
   }
-}
-
-async function commitSale({ items, note = "", total, baseTotal = total, pricing = null }) {
-  if (!state.user || !state.db) throw new Error("Нет активной авторизации.");
-  if (!Array.isArray(items) || !items.length) throw new Error("Укажите количество хотя бы одного товара.");
-  if (!Number.isFinite(total) || total <= 0) throw new Error("Итоговая сумма должна быть больше нуля.");
-
-  await ensureCashBalance();
-  const employee = currentEmployeeName();
-  const productRefs = items.map((item) => doc(state.db, "products", item.inventoryId));
-  const movementRefs = items.map(() => doc(collection(state.db, "stockMovements")));
-  const saleRef = doc(collection(state.db, "orders"));
-  const cashRef = doc(state.db, "finance", "cash");
-
-  await runTransaction(state.db, async (tx) => {
-    const snaps = [];
-    for (const ref of productRefs) snaps.push(await tx.get(ref));
-    const cashSnap = await tx.get(cashRef);
-    if (!cashSnap.exists()) throw new Error("Баланс кассы ещё не создан. Повторите сохранение.");
-
-    snaps.forEach((snap, index) => {
-      if (!snap.exists()) throw new Error(`${items[index].name}: товар не найден`);
-      const stock = Number(snap.data().stock || 0);
-      if (stock < items[index].qty) throw new Error(`${items[index].name}: на складе только ${stock}`);
-    });
-
-    snaps.forEach((snap, index) => {
-      const data = snap.data();
-      const before = Number(data.stock || 0);
-      const after = before - items[index].qty;
-      tx.update(productRefs[index], {
-        stock: after,
-        updatedAt: serverTimestamp(),
-        updatedBy: state.user.uid,
-        updatedByName: employee
-      });
-      tx.set(movementRefs[index], {
-        type: "sale",
-        inventoryId: items[index].inventoryId,
-        productId: items[index].productId,
-        productName: items[index].name,
-        colorId: items[index].colorId,
-        colorName: items[index].colorName,
-        qtyDelta: -items[index].qty,
-        before,
-        after,
-        unitCost: 0,
-        totalCost: 0,
-        salePrice: items[index].price,
-        orderId: saleRef.id,
-        reason: note,
-        createdAt: serverTimestamp(),
-        createdAtClient: new Date().toISOString(),
-        createdBy: state.user.uid,
-        createdByEmail: state.user.email || "",
-        createdByName: employee
-      });
-    });
-
-    tx.set(saleRef, {
-      items,
-      total,
-      ...(pricing ? { baseTotal, pricing } : {}),
-      note,
-      status: "done",
-      source: "stock-app",
-      createdAt: serverTimestamp(),
-      createdAtClient: new Date().toISOString(),
-      createdBy: state.user.uid,
-      createdByEmail: state.user.email || "",
-      createdByName: employee
-    });
-    tx.update(cashRef, {
-      balance: Number(cashSnap.data().balance || 0) + total,
-      updatedAt: serverTimestamp(),
-      updatedBy: state.user.uid,
-      updatedByEmail: state.user.email || "",
-      updatedByName: employee
-    });
-  });
-
-  const pushResult = await requestSalePush(saleRef.id);
-  return { saleId: saleRef.id, employee, pushResult };
 }
 
 function finalizeSale(result) {
@@ -883,88 +544,12 @@ async function createSale(event) {
   }
 }
 
-function inventoryIdForSaleItem(item) {
-  if (item.inventoryId) return item.inventoryId;
-  if (MODELS.some((model) => model.id === item.productId)) return `${item.productId}_UNASSIGNED`;
-  return item.productId;
-}
-
-async function cancelSale(saleId) {
-  const employee = currentEmployeeName();
-  const saleRef = doc(state.db, "orders", saleId);
-  await ensureCashBalance();
-  const cashRef = doc(state.db, "finance", "cash");
-  await runTransaction(state.db, async (tx) => {
-    const saleSnap = await tx.get(saleRef);
-    if (!saleSnap.exists()) throw new Error("Продажа не найдена");
-    const sale = saleSnap.data();
-    if (sale.status === "cancelled") throw new Error("Продажа уже отменена");
-    const items = sale.items || [];
-    if (!items.length) throw new Error("В продаже нет товарных позиций");
-
-    const inventoryIds = items.map(inventoryIdForSaleItem);
-    const productRefs = inventoryIds.map((id) => doc(state.db, "products", id));
-    const productSnaps = [];
-    for (const ref of productRefs) productSnaps.push(await tx.get(ref));
-    const cashSnap = await tx.get(cashRef);
-    if (!cashSnap.exists()) throw new Error("Баланс кассы ещё не создан. Повторите отмену.");
-    const movementRefs = items.map(() => doc(collection(state.db, "stockMovements")));
-
-    productSnaps.forEach((snap, index) => { if (!snap.exists()) throw new Error(`${items[index].name || items[index].productId}: товар не найден`); });
-    productSnaps.forEach((snap, index) => {
-      const data = snap.data();
-      const before = Number(data.stock || 0);
-      const qty = Number(items[index].qty || 0);
-      const after = before + qty;
-      const update = { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid, updatedByName: employee };
-      if (data.legacyUnassigned) update.active = true;
-      tx.update(productRefs[index], update);
-      tx.set(movementRefs[index], {
-        type: "sale_return",
-        inventoryId: inventoryIds[index],
-        productId: data.modelId || items[index].productId,
-        productName: data.name || items[index].name || items[index].productId,
-        colorId: data.colorId || items[index].colorId || "",
-        colorName: data.colorName || items[index].colorName || "",
-        qtyDelta: qty,
-        before,
-        after,
-        unitCost: 0,
-        totalCost: 0,
-        orderId: saleId,
-        reason: "Отмена продажи",
-        createdAt: serverTimestamp(),
-        createdAtClient: new Date().toISOString(),
-        createdBy: state.user.uid,
-        createdByEmail: state.user.email || "",
-        createdByName: employee
-      });
-    });
-
-    tx.update(saleRef, {
-      status: "cancelled",
-      cancelledAt: serverTimestamp(),
-      cancelledBy: state.user.uid,
-      cancelledByEmail: state.user.email || "",
-      cancelledByName: employee
-    });
-    tx.update(cashRef, {
-      balance: Number(cashSnap.data().balance || 0) - Number(sale.total || 0),
-      updatedAt: serverTimestamp(),
-      updatedBy: state.user.uid,
-      updatedByEmail: state.user.email || "",
-      updatedByName: employee
-    });
-  });
-}
-
 function initializedInventoryIds() {
   const ids = new Set(state.movements.map((item) => item.inventoryId).filter(Boolean));
   for (const product of state.products) {
     if (product.stockInitialized === true
       || product.inventoryInitialized === true
-      || Number(product.stock || 0) > 0
-      || product.modelId === "DM60R1G") ids.add(product.id);
+      || Number(product.stock || 0) > 0) ids.add(product.id);
   }
   return ids;
 }
@@ -983,12 +568,12 @@ function compactColorSummary(modelId) {
 
 function renderStock() {
   const value = stockValue();
-  $("#stock-sku-count").textContent = String(MODELS.length);
+  $("#stock-sku-count").textContent = String(models().length);
   $("#stock-value").textContent = KZT.format(value);
 
-  $("#stock-list").innerHTML = MODELS.map((model) => `<article class="stock-card stock-model-card">
+  $("#stock-list").innerHTML = models().map((model) => `<article class="stock-card stock-model-card">
     <div class="stock-main">
-      <div class="stock-name"><b>${escapeHtml(model.name)}</b><small>${model.variants.length} цветов · цена ${KZT.format(modelSalePrice(model.id))}</small></div>
+      <div class="stock-name"><b>${escapeHtml(model.name)}</b><small>${modelVariants(model.id).length} цветов · цена ${KZT.format(modelSalePrice(model.id))}</small></div>
     </div>
     ${compactColorSummary(model.id)}
     <button class="btn full model-balance-btn" data-open-model="${model.id}">Цвета и актуальные остатки</button>

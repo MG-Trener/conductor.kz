@@ -5,11 +5,13 @@ import test from "node:test";
 
 const root = path.resolve(import.meta.dirname, "..");
 
-test("PWA contains the verified splash artwork and vintage title", () => {
-  for (const name of ["warehouse-splash-clean.png", "conductor-vintage-title.png"]) {
+test("PWA contains optimized WebP splash artwork and vintage title", () => {
+  for (const name of ["warehouse-splash-clean.webp", "conductor-vintage-title.webp"]) {
     const asset = fs.readFileSync(path.join(root, "mobile", name));
-    assert.ok(asset.length > 1_000_000, `${name} is unexpectedly small`);
-    assert.deepEqual([...asset.subarray(0, 8)], [137, 80, 78, 71, 13, 10, 26, 10]);
+    assert.ok(asset.length > 20_000, `${name} is unexpectedly small`);
+    assert.ok(asset.length < 1_000_000, `${name} should stay optimized`);
+    assert.equal(asset.subarray(0, 4).toString("ascii"), "RIFF");
+    assert.equal(asset.subarray(8, 12).toString("ascii"), "WEBP");
   }
 });
 
@@ -23,9 +25,9 @@ test("startup screens remain visible and return after app resume", () => {
   assert.match(androidActivity, /WindowInsetsCompat\.Type\.systemBars\(\)/);
   assert.match(androidActivity, /params\.topMargin = bars\.top/);
   assert.match(webApp, /document\.addEventListener\("visibilitychange"/);
-  assert.match(webPage, /warehouse-splash-clean\.png\?v=1/);
-  assert.match(webPage, /conductor-vintage-title\.png\?v=1/);
-  assert.match(webPage, /splash\.css\?v=3/);
+  assert.match(webPage, /warehouse-splash-clean\.webp/);
+  assert.match(webPage, /conductor-vintage-title\.webp/);
+  assert.match(webPage, /splash\.css/);
   assert.match(splashCss, /bottom: max\(28px, env\(safe-area-inset-bottom\) \+ 18px\)/);
   assert.match(webPage, /data-min-display-ms="6200"/);
 });

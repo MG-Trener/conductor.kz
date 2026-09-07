@@ -10,7 +10,6 @@ const config = {
   appId: "1:249591037242:web:e534b60202dca9245ee403"
 };
 
-const MODELS = new Set(["DM30", "DM60", "DM60G", "DM60R1G", "DM90", "HOLI"]);
 const KZT = new Intl.NumberFormat("ru-KZ", {
   style: "currency",
   currency: "KZT",
@@ -94,13 +93,10 @@ function loadPublicPrices() {
     for (const item of snapshot.docs) {
       const modelId = item.id;
       const storedPrice = Math.trunc(Number(item.data().price));
-      if (!MODELS.has(modelId) || !Number.isFinite(storedPrice) || storedPrice <= 0) continue;
-      const price = modelId === "DM60G" && storedPrice === 3000 ? 3500
-        : modelId === "DM60R1G" && storedPrice === 3000 ? 4000
-        : storedPrice;
-      prices.set(modelId, price);
+      if (!/^[A-Z0-9]{2,24}$/.test(modelId) || !Number.isFinite(storedPrice) || storedPrice <= 0) continue;
+      prices.set(modelId, storedPrice);
       for (const node of document.querySelectorAll(`[data-public-price="${modelId}"]`)) {
-        node.textContent = KZT.format(price);
+        node.textContent = KZT.format(storedPrice);
       }
     }
     updateStructuredData(prices);

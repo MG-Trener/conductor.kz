@@ -101,6 +101,7 @@ before(async () => {
 beforeEach(async () => {
   await testEnv.clearFirestore();
   await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "catalog", "DM30"), { modelId: "DM30", name: "Цветной дым DM30", price: 2500, updatedAt: new Date("2026-01-01T00:00:00Z"), updatedBy: staffUid, updatedByName: "Сотрудник" });
     await setDoc(doc(context.firestore(), "products", "DM30_BLUE"), product);
   });
 });
@@ -337,18 +338,18 @@ test("staff can initialize a zero balance without creating a zero-delta movement
   }));
 });
 
-test("staff can seed a fixed catalogue variant but not an arbitrary product", async () => {
+test("staff can seed a variant only for a model that already exists in catalog", async () => {
   const db = staffDb();
-  await assertSucceeds(setDoc(doc(db, "products", "HOLI_RED"), {
-    id: "HOLI_RED",
-    modelId: "HOLI",
-    colorId: "red",
-    colorName: "Красный",
-    colorHex: "#ff0000",
-    name: "HOLI · Красный",
+  await assertSucceeds(setDoc(doc(db, "products", "DM30_YELLOW"), {
+    id: "DM30_YELLOW",
+    modelId: "DM30",
+    colorId: "yellow",
+    colorName: "Жёлтый",
+    colorHex: "#ffd42a",
+    name: "DM30 · Жёлтый",
     stock: 0,
-    lowStock: 10,
-    sort: 41,
+    lowStock: 2,
+    sort: 12,
     active: true,
     createdAt: serverTimestamp(),
     createdBy: staffUid,
@@ -357,11 +358,17 @@ test("staff can seed a fixed catalogue variant but not an arbitrary product", as
     updatedBy: staffUid,
     updatedByName: "Сотрудник"
   }));
-  await assertFails(setDoc(doc(db, "products", "ARBITRARY"), {
-    name: "Чужой товар",
+  await assertFails(setDoc(doc(db, "products", "OTHER_BLUE"), {
+    id: "OTHER_BLUE",
     modelId: "OTHER",
-    price: 1,
+    colorId: "blue",
+    colorName: "Синий",
+    colorHex: "#258cff",
+    name: "OTHER · Синий",
     stock: 0,
+    lowStock: 2,
+    sort: 90,
+    active: true,
     createdAt: serverTimestamp(),
     createdBy: staffUid,
     createdByName: "Сотрудник",

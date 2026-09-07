@@ -1,5 +1,15 @@
 const VERSIONS = [
   {
+    version: "1.1.1",
+    date: "07.09.2026",
+    changes: [
+      "Каталог Firestore стал рабочим источником моделей и цен: убраны корректирующие исключения DM60G/DM60R1G, новые catalog + products позиции автоматически появляются в складе и продажах.",
+      "Большой app.js разделён на catalog-core, catalog-service и warehouse-domain; транзакции продаж/отмен и инициализация каталога вынесены из UI-ядра.",
+      "PWA больше не требует ручных ?v= и номера кэша: используется network-first обновление, service worker сам проверяет новую версию, активные splash-ресурсы переведены в WebP.",
+      "Android-сборка переведена на зафиксированный package-lock + npm ci; усилены исключения секретов и служебных файлов."
+    ]
+  },
+  {
     version: "1.1.0",
     date: "07.09.2026",
     changes: [
@@ -83,7 +93,7 @@ function renderCurrentVersionCard() {
 function patchCurrentVersionUi() {
   const button = document.getElementById("version-history-button");
   const copy = button?.querySelector(".version-history-btn-copy small");
-  if (copy) copy.textContent = "Актуальная версия: 1.1.0";
+  if (copy) copy.textContent = "Актуальная версия: 1.1.1";
 
   const root = document.getElementById("version-history-list");
   if (!root || root.querySelector('[data-current-version="1.1.0"]')) return;
@@ -94,7 +104,7 @@ function patchCurrentVersionUi() {
 
 async function startVersionHistory() {
   try {
-    await import("./version-history-archive.js?v=1");
+    await import("./version-history-archive.js");
     patchCurrentVersionUi();
   } catch (error) {
     console.error("Version history failed to load", error);

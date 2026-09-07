@@ -14,13 +14,13 @@ async function missing(path) {
 }
 
 test("mobile has one core owner for catalog, products and sale transactions", async () => {
-  const [app, bootstrap, ui, analytics, sales] = await Promise.all([
-    read("mobile/app.js"), read("mobile/bootstrap.js"), read("mobile/warehouse-ui.js"), read("mobile/analytics.js"), read("mobile/sales-history.js")
+  const [app, domain, bootstrap, ui, analytics, sales] = await Promise.all([
+    read("mobile/app.js"), read("mobile/warehouse-domain.js"), read("mobile/bootstrap.js"), read("mobile/warehouse-ui.js"), read("mobile/analytics.js"), read("mobile/sales-history.js")
   ]);
   assert.match(app, /window\.CONDUCTOR_APP_API/);
   assert.match(app, /function modelSalePrice/);
-  assert.match(app, /async function commitSale/);
-  assert.equal((app.match(/tx\.set\(saleRef/g) || []).length, 1, "sale write must exist once in the core app");
+  assert.match(domain, /async function commitSale/);
+  assert.equal((domain.match(/tx\.set\(saleRef/g) || []).length, 1, "sale write must exist once in the domain module");
   assert.match(ui, /api\.commitSale/);
   assert.doesNotMatch(ui, /onSnapshot\s*\(/);
   assert.doesNotMatch(ui, /collection\([^\n]*"products"/);
@@ -31,16 +31,16 @@ test("mobile has one core owner for catalog, products and sale transactions", as
   assert.doesNotMatch(bootstrap, /inventory-state|warehouse-enhancements/);
 });
 
-test("DM60R1G variants, model price and inventory save live in the core app", async () => {
-  const [app, publicPrices] = await Promise.all([read("mobile/app.js"), read("assets/public-prices.js")]);
-  assert.match(app, /id: "DM60R1G", name: "DM60R1G \(интрига\)", price: 4000/);
-  assert.match(app, /\["BLUE", "Синий", "#258cff"\]/);
-  assert.match(app, /\["PINK", "Розовый", "#ff6bab"\]/);
-  assert.match(app, /virtual: true/);
+test("legacy catalogue seeds DM60R1G but runtime price has no model-specific correction", async () => {
+  const [app, catalogCore, publicPrices] = await Promise.all([
+    read("mobile/app.js"), read("mobile/catalog-core.js"), read("assets/public-prices.js")
+  ]);
+  assert.match(catalogCore, /id: "DM60R1G", name: "DM60R1G \(интрига\)", price: 4000/);
+  assert.match(catalogCore, /\["BLUE", "Синий", "#258cff"\]/);
+  assert.match(catalogCore, /\["PINK", "Розовый", "#ff6bab"\]/);
+  assert.doesNotMatch(app, /catalogPrice === 3000/);
+  assert.doesNotMatch(publicPrices, /storedPrice === 3000/);
   assert.match(app, /id="model-sale-price"/);
-  assert.match(app, /tx\.set\(catalogRef/);
-  assert.match(app, /if \(!snap\.exists\(\)\)/);
-  assert.match(publicPrices, /DM60R1G/);
 });
 
 test("sale UI uses the exact items and prices calculated by the core", async () => {
@@ -71,7 +71,7 @@ test("service worker is registered only by bootstrap and never in native Android
 
 test("active mobile entry points use stable filenames", async () => {
   const index = await read("mobile/index.html");
-  for (const name of ["app.js?v=109", "bootstrap.js?v=1", "core-ui.js?v=1", "version-history.js?v=1", "startup-guard.js?v=1", "release.css?v=1"]) assert.ok(index.includes(name), `${name} must be loaded`);
+  for (const name of ["app.js", "bootstrap.js", "core-ui.js", "version-history.js", "startup-guard.js", "release.css"]) assert.ok(index.includes(name), `${name} must be loaded`);
   assert.doesNotMatch(index, /bootstrap-10|core-ui-10|version-history-10|release-10|inventory-state|warehouse-enhancements/);
 });
 
@@ -115,7 +115,7 @@ test("version history begins with the current release", async () => {
 });
 
 test("active mobile scripts pass syntax validation", async () => {
-  for (const file of ["app.js", "bootstrap.js", "core-ui.js", "version-history.js", "version-history-archive.js", "startup-guard.js", "app-update.js", "analytics.js", "sales-history.js", "warehouse-ui.js", "push-notifications.js", "firestore-error-help.js", "ui-sounds.js"]) {
+  for (const file of ["app.js", "catalog-core.js", "catalog-service.js", "warehouse-domain.js", "bootstrap.js", "core-ui.js", "version-history.js", "version-history-archive.js", "startup-guard.js", "app-update.js", "analytics.js", "sales-history.js", "warehouse-ui.js", "push-notifications.js", "firestore-error-help.js", "ui-sounds.js"]) {
     await execFileAsync(process.execPath, ["--check", fileURLToPath(new URL(`mobile/${file}`, root))]);
   }
 });
@@ -125,6 +125,8 @@ test("Android release build validates bundle, version and APK size", async () =>
   const pkg = JSON.parse(packageText);
   assert.equal(pkg.scripts?.postinstall, undefined);
   assert.match(workflow, /node --check mobile\/app\.js/);
+  assert.match(workflow, /node --check mobile\/warehouse-domain\.js/);
+  assert.match(workflow, /working-directory: android-app[\s\S]*run: npm ci/);
   assert.match(workflow, /node --check mobile\/warehouse-ui\.js/);
   assert.match(workflow, /test ! -f android-app\/www\/inventory-state\.js/);
   assert.match(workflow, /APK unexpectedly exceeds 8 MiB/);
@@ -139,9 +141,12 @@ test("native updater remains pinned to GitHub release and SHA-256", async () => 
   assert.match(nativeUpdater, /verifySha256/);
 });
 
-test("PWA cache contains only current application modules", async () => {
-  const sw = await read("mobile/sw.js");
-  assert.match(sw, /conductor-mobile-v63/);
-  for (const asset of ["app.js?v=109", "bootstrap.js?v=1", "core-ui.js?v=1", "version-history.js?v=1", "warehouse-ui.js?v=1", "release.css?v=1"]) assert.ok(sw.includes(asset));
-  assert.doesNotMatch(sw, /inventory-state|warehouse-enhancements|bootstrap-10|core-ui-10/);
+test("PWA uses stable URLs and network-first refresh without manual cache versions", async () => {
+  const [sw, index, bootstrap] = await Promise.all([read("mobile/sw.js"), read("mobile/index.html"), read("mobile/bootstrap.js")]);
+  assert.match(sw, /const CACHE = "conductor-mobile-shell"/);
+  for (const asset of ["app.js", "catalog-core.js", "catalog-service.js", "warehouse-domain.js", "bootstrap.js", "core-ui.js", "warehouse-ui.js", "release.css"]) assert.ok(sw.includes(asset));
+  assert.doesNotMatch(sw, /\?v=|conductor-mobile-v\d+/);
+  assert.doesNotMatch(index, /\?v=\d+/);
+  assert.match(bootstrap, /registration\.update\(\)/);
 });
+
