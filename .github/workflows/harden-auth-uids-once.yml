@@ -33,7 +33,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add firestore.rules mobile/app.js mobile/auth-throttle.js mobile/sw.js mobile/app-version.json mobile/version-history.js push-worker/src/index.js tests/firestore.rules.test.mjs tests/auth-security.test.mjs tests/mobile-architecture.test.mjs android-app/package.json android-app/package-lock.json .github/workflows/build-android-apk.yml
+          git restore .github/workflows/build-android-apk.yml
+          git add firestore.rules mobile/app.js mobile/auth-throttle.js mobile/sw.js mobile/app-version.json mobile/version-history.js push-worker/src/index.js tests/firestore.rules.test.mjs tests/auth-security.test.mjs tests/mobile-architecture.test.mjs android-app/package.json android-app/package-lock.json
           git diff --cached --check
           git commit -m "security: restrict warehouse access to approved UIDs"
           git push origin main
