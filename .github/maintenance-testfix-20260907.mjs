@@ -6,17 +6,19 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const write = (file, content) => fs.writeFileSync(path.join(root, file), content);
 
 let rules = read("firestore.rules");
-rules = rules.replace(`    function validProductId(productId, modelId) {
-      return validModelId(modelId)
-        && productId.matches('^' + modelId + '_[A-Z0-9]+$');
-    }
-`, `    function validProductId(productId) {
+rules = rules.replace(
+  /    function validProductId\(productId, modelId\) \{[\s\S]*?\n    \}\n\n    function validProductState/,
+  `    function validProductId(productId) {
       return productId is string
         && productId.matches('^[A-Z0-9]{2,24}_[A-Z0-9]+$');
     }
-`);
+
+    function validProductState`
+);
 rules = rules.replaceAll("validProductId(productId, request.resource.data.modelId)", "validProductId(productId)");
-if (rules.includes("productId.matches('^' + modelId")) throw new Error("Dynamic regex concatenation survived");
+if (rules.includes("productId.matches('^' + modelId") || rules.includes("validProductId(productId, modelId)")) {
+  throw new Error("Dynamic product id validation survived");
+}
 write("firestore.rules", rules);
 
 let architecture = read("tests/mobile-architecture.test.mjs");
