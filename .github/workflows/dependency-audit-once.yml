@@ -1,0 +1,40 @@
+name: One-time dependency audit
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/dependency-audit-once.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Root dependency audit
+        shell: bash
+        run: |
+          npm ci --ignore-scripts
+          echo '=== ROOT_AUDIT_BEGIN ==='
+          npm audit --json || true
+          echo '=== ROOT_AUDIT_END ==='
+
+      - name: Android dependency audit
+        working-directory: android-app
+        shell: bash
+        run: |
+          npm ci --ignore-scripts
+          echo '=== ANDROID_AUDIT_BEGIN ==='
+          npm audit --json || true
+          echo '=== ANDROID_AUDIT_END ==='
