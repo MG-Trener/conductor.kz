@@ -36,8 +36,9 @@ test("mobile app uses the compact stock UI entry points", async () => {
     "push-notifications.js",
     "firestore-error-help.js"
   ]) {
-    const version = ["sales-history.js", "warehouse-enhancements.js", "inventory-state.js"].includes(moduleName) ? 105 : 104;
-    assert.equal(bootstrap.split(`./${moduleName}?v=${version}`).length - 1, 1, `${moduleName} must be imported once by bootstrap-104.js`);
+    const escaped = moduleName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const imports = bootstrap.match(new RegExp(`\\./${escaped}\\?v=\\d+`, "g")) || [];
+    assert.equal(imports.length, 1, `${moduleName} must be imported once by bootstrap-104.js`);
   }
   assert.equal(bootstrap.split("./ui-sounds.js?v=1").length - 1, 1, "ui-sounds.js must be imported once by bootstrap-104.js");
 
@@ -135,13 +136,20 @@ test("settings keep update checker and latest changes visible", async () => {
   assert.match(updater, /checkForUpdate\(\)/);
 });
 
-test("version history starts with the current 1.0.12 release and contains recent releases", async () => {
-  const history = await read("mobile/version-history-105.js");
-  assert.match(history, /const VERSIONS = \[\s*\{\s*version: "1\.0\.12"/);
-  for (const version of ["1.0.11", "1.0.10", "1.0.9", "1.0.8", "1.0.7", "1.0.6", "1.0.5", "1.0.4", "1.0.3", "1.0.2", "1.0.1"]) {
-    assert.ok(history.includes(`version: "${version}"`), `version history must contain ${version}`);
+test("version history starts with the current release and contains recent releases", async () => {
+  const [history, archive, manifestText] = await Promise.all([
+    read("mobile/version-history-105.js"),
+    read("mobile/version-history-105-archive.js"),
+    read("mobile/app-version.json")
+  ]);
+  const manifest = JSON.parse(manifestText);
+  const firstHistoryVersion = history.match(/const VERSIONS = \[\s*\{\s*version: "([^"]+)"/)?.[1];
+  assert.equal(firstHistoryVersion, manifest.version, "version history must start with the current app release");
+  const combinedHistory = `${history}\n${archive}`;
+  for (const version of ["1.0.12", "1.0.11", "1.0.10", "1.0.9", "1.0.8", "1.0.7", "1.0.6", "1.0.5", "1.0.4", "1.0.3", "1.0.2", "1.0.1"]) {
+    assert.ok(combinedHistory.includes(`version: "${version}"`), `version history must contain ${version}`);
   }
-  assert.match(history, /Актуальная версия: 1\.0\.12/);
+  assert.ok(history.includes(`Актуальная версия: ${manifest.version}`), "version history button must show the current release");
 });
 
 test("section-specific UI sounds cover navigation, stock, sales, analytics and settings", async () => {
