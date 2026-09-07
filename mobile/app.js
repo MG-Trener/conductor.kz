@@ -331,6 +331,8 @@ async function withdrawCash(event) {
       const after = before - amount;
       tx.update(cashRef, {
         balance: after,
+        lastOperationType: "withdrawal",
+        lastOperationId: withdrawalRef.id,
         updatedAt: serverTimestamp(),
         updatedBy: state.user.uid,
         updatedByName: employee
@@ -707,6 +709,7 @@ async function saveModelBalances(event) {
         const template = templates.get(desiredItem.id);
         const before = snap.exists() ? Number(snap.data().stock || 0) : 0;
         const after = desiredItem.stock;
+        const movementRef = before !== after ? doc(collection(state.db, "stockMovements")) : null;
 
         if (!snap.exists()) {
           if (!template) throw new Error(`${desiredItem.id}: позиция не найдена`);
@@ -721,6 +724,7 @@ async function saveModelBalances(event) {
             lowStock: template.lowStock,
             sort: template.sort,
             active: true,
+            ...(movementRef ? { lastMovementId: movementRef.id } : {}),
             createdAt: serverTimestamp(),
             createdBy: state.user.uid,
             createdByName: employee,
@@ -741,15 +745,15 @@ async function saveModelBalances(event) {
             updatedBy: state.user.uid,
             updatedByName: employee
           };
+          if (movementRef) update.lastMovementId = movementRef.id;
           if (data.legacyUnassigned) update.active = after > 0;
           else if (data.active === false) update.active = true;
           if (data.modelOnly === true) update.modelOnly = false;
           tx.update(ref, update);
         }
 
-        if (before !== after) {
+        if (movementRef) {
           const data = snap.exists() ? snap.data() : template;
-          const movementRef = doc(collection(state.db, "stockMovements"));
           tx.set(movementRef, {
             type: "adjustment",
             inventoryId: desiredItem.id,
@@ -833,7 +837,13 @@ async function applyStockOperation(event) {
       const delta = operation.type === "receipt" ? qty : -qty;
       if (before + delta < 0) throw new Error(`На складе только ${before} ед.`);
       const after = before + delta;
-      tx.update(productRef, { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid, updatedByName: employee });
+      tx.update(productRef, {
+        stock: after,
+        lastMovementId: movementRef.id,
+        updatedAt: serverTimestamp(),
+        updatedBy: state.user.uid,
+        updatedByName: employee
+      });
       tx.set(movementRef, {
         type: operation.type,
         inventoryId: operation.productId,

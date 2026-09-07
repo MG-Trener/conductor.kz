@@ -49,16 +49,16 @@ service cloud.firestore {
     }
 
     function linkedProductMovement(productId, before, after) {
+      let movement = getAfter(/databases/$(database)/documents/stockMovements/$(request.resource.data.lastMovementId)).data;
       return request.resource.data.keys().hasAny(['lastMovementId'])
         && validOperationId(request.resource.data.lastMovementId)
-        && existsAfter(/databases/$(database)/documents/stockMovements/$(request.resource.data.lastMovementId))
-        && getAfter(/databases/$(database)/documents/stockMovements/$(request.resource.data.lastMovementId)).data.inventoryId == productId
-        && getAfter(/databases/$(database)/documents/stockMovements/$(request.resource.data.lastMovementId)).data.productId == request.resource.data.modelId
-        && getAfter(/databases/$(database)/documents/stockMovements/$(request.resource.data.lastMovementId)).data.before == before
-        && getAfter(/databases/$(database)/documents/stockMovements/$(request.resource.data.lastMovementId)).data.after == after
-        && getAfter(/databases/$(database)/documents/stockMovements/$(request.resource.data.lastMovementId)).data.qtyDelta == after - before
-        && getAfter(/databases/$(database)/documents/stockMovements/$(request.resource.data.lastMovementId)).data.createdBy == request.auth.uid
-        && getAfter(/databases/$(database)/documents/stockMovements/$(request.resource.data.lastMovementId)).data.createdAt == request.time;
+        && movement.inventoryId == productId
+        && movement.productId == request.resource.data.modelId
+        && movement.before == before
+        && movement.after == after
+        && movement.qtyDelta == after - before
+        && movement.createdBy == request.auth.uid
+        && movement.createdAt == request.time;
     }
 
     function safeLegacyZeroing(productId) {
@@ -181,15 +181,12 @@ service cloud.firestore {
         && request.resource.data.cancelledAt == request.time
         && request.resource.data.cancelledBy == request.auth.uid
         && request.resource.data.cancelledByName is string
-        && request.resource.data.cancelledByName.size() <= 80
-        && orderMatchesCash(orderId, 'cancel_sale');
+        && request.resource.data.cancelledByName.size() <= 80;
     }
 
     match /orders/{orderId} {
       allow read: if isStaff();
-      allow create: if isStaff()
-        && validOrderCreate(request.resource.data)
-        && orderMatchesCash(orderId, 'sale');
+      allow create: if isStaff() && validOrderCreate(request.resource.data);
       allow update: if isStaff() && validOrderCancel(orderId);
       allow delete: if false;
     }
@@ -277,34 +274,31 @@ service cloud.firestore {
     }
 
     function cashMatchesSale() {
+      let order = getAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data))).data;
       return cashOperationType(request.resource.data) == 'sale'
-        && existsAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data)))
-        && getAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data))).data.status == 'done'
-        && getAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data))).data.createdAt == request.time
-        && getAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data))).data.createdBy == request.auth.uid
-        && request.resource.data.balance == resource.data.balance
-          + getAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data))).data.total;
+        && order.status == 'done'
+        && order.createdAt == request.time
+        && order.createdBy == request.auth.uid
+        && request.resource.data.balance == resource.data.balance + order.total;
     }
 
     function cashMatchesCancellation() {
+      let order = getAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data))).data;
       return cashOperationType(request.resource.data) == 'cancel_sale'
-        && existsAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data)))
-        && getAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data))).data.status == 'cancelled'
-        && getAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data))).data.cancelledAt == request.time
-        && getAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data))).data.cancelledBy == request.auth.uid
-        && request.resource.data.balance == resource.data.balance
-          - getAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data))).data.total;
+        && order.status == 'cancelled'
+        && order.cancelledAt == request.time
+        && order.cancelledBy == request.auth.uid
+        && request.resource.data.balance == resource.data.balance - order.total;
     }
 
     function cashMatchesWithdrawal() {
+      let withdrawal = getAfter(/databases/$(database)/documents/cashWithdrawals/$(cashOperationId(request.resource.data))).data;
       return cashOperationType(request.resource.data) == 'withdrawal'
-        && existsAfter(/databases/$(database)/documents/cashWithdrawals/$(cashOperationId(request.resource.data)))
-        && getAfter(/databases/$(database)/documents/cashWithdrawals/$(cashOperationId(request.resource.data))).data.createdAt == request.time
-        && getAfter(/databases/$(database)/documents/cashWithdrawals/$(cashOperationId(request.resource.data))).data.createdBy == request.auth.uid
-        && getAfter(/databases/$(database)/documents/cashWithdrawals/$(cashOperationId(request.resource.data))).data.before == resource.data.balance
-        && getAfter(/databases/$(database)/documents/cashWithdrawals/$(cashOperationId(request.resource.data))).data.after == request.resource.data.balance
-        && request.resource.data.balance == resource.data.balance
-          - getAfter(/databases/$(database)/documents/cashWithdrawals/$(cashOperationId(request.resource.data))).data.amount;
+        && withdrawal.createdAt == request.time
+        && withdrawal.createdBy == request.auth.uid
+        && withdrawal.before == resource.data.balance
+        && withdrawal.after == request.resource.data.balance
+        && request.resource.data.balance == resource.data.balance - withdrawal.amount;
     }
 
     match /finance/{docId} {
@@ -363,12 +357,12 @@ service cloud.firestore {
     }
 
     function withdrawalMatchesCash(withdrawalId, data) {
-      return existsAfter(/databases/$(database)/documents/finance/cash)
-        && getAfter(/databases/$(database)/documents/finance/cash).data.lastOperationType == 'withdrawal'
-        && getAfter(/databases/$(database)/documents/finance/cash).data.lastOperationId == withdrawalId
-        && getAfter(/databases/$(database)/documents/finance/cash).data.balance == data.after
-        && getAfter(/databases/$(database)/documents/finance/cash).data.updatedBy == request.auth.uid
-        && getAfter(/databases/$(database)/documents/finance/cash).data.updatedAt == request.time;
+      let cash = getAfter(/databases/$(database)/documents/finance/cash).data;
+      return cash.lastOperationType == 'withdrawal'
+        && cash.lastOperationId == withdrawalId
+        && cash.balance == data.after
+        && cash.updatedBy == request.auth.uid
+        && cash.updatedAt == request.time;
     }
 
     match /cashWithdrawals/{withdrawalId} {

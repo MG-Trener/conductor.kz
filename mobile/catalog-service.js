@@ -22,6 +22,7 @@ export function createCatalogService({ state, currentEmployeeName }) {
       const legacyStock = Number(legacy?.stock || 0);
       const currentStock = Number(unassigned?.stock || 0);
       const nextStock = currentStock + legacyStock;
+      const movementRef = legacyStock > 0 ? doc(collection(state.db, "stockMovements")) : null;
       const creationAudit = unassignedSnap.exists() ? {} : {
         createdAt: serverTimestamp(), createdBy: state.user.uid, createdByName: employee
       };
@@ -33,9 +34,31 @@ export function createCatalogService({ state, currentEmployeeName }) {
         sort: model.sort,
         legacyUnassigned: true,
         active: nextStock > 0,
+        ...(movementRef ? { lastMovementId: movementRef.id } : {}),
         ...creationAudit,
         ...audit
       }, { merge: true });
+
+      if (movementRef) {
+        tx.set(movementRef, {
+          type: "adjustment",
+          inventoryId: `${model.id}_UNASSIGNED`,
+          productId: model.id,
+          productName: `${model.id} · Нераспределено`,
+          colorId: "",
+          colorName: "",
+          qtyDelta: legacyStock,
+          before: currentStock,
+          after: nextStock,
+          unitCost: 0,
+          totalCost: 0,
+          reason: "Миграция старого общего остатка",
+          createdAt: serverTimestamp(),
+          createdAtClient: new Date().toISOString(),
+          createdBy: state.user.uid,
+          createdByName: employee
+        });
+      }
 
       if (legacySnap.exists()) {
         tx.set(legacyRef, {
