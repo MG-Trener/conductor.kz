@@ -1,0 +1,412 @@
+name: Fix DM60R1G runtime v1.0.18
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/dm60r1g-v1018-ready'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Patch runtime, pricing and version
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json
+
+          def replace_once(text, old, new, label):
+              if old not in text:
+                  raise SystemExit(f'{label}: anchor not found')
+              return text.replace(old, new, 1)
+
+          # app.js: render the configured DM60R1G variants even if production
+          # Firestore still lacks the two product documents. Use the intended
+          # price when the known stale 3000 value is present.
+          p = Path('mobile/app.js')
+          s = p.read_text()
+          s = replace_once(s,
+              'function modelVariants(modelId) { return state.products.filter((item) => item.modelId === modelId && !item.legacyUnassigned && item.active !== false).sort((a, b) => Number(a.sort || 0) - Number(b.sort || 0)); }',
+              '''function modelVariants(modelId) {
+  const actual = state.products
+    .filter((item) => item.modelId === modelId && !item.legacyUnassigned && item.active !== false)
+    .sort((a, b) => Number(a.sort || 0) - Number(b.sort || 0));
+  if (modelId !== "DM60R1G") return actual;
+  const byId = new Map(actual.map((item) => [item.id, item]));
+  return variantDefaults(modelId).map((item) => byId.get(item.id) || ({ ...item, active: true, virtual: true }));
+}''',
+              'app modelVariants')
+          s = replace_once(s,
+              '''function modelSalePrice(modelId) {
+  const catalogModel = state.catalog.find((item) => item.id === modelId);
+  return Number(catalogModel?.price || modelById(modelId)?.price || 0);
+}''',
+              '''function modelSalePrice(modelId) {
+  const catalogModel = state.catalog.find((item) => item.id === modelId);
+  const catalogPrice = Number(catalogModel?.price || 0);
+  if (modelId === "DM60G" && catalogPrice === 3000) return 3500;
+  if (modelId === "DM60R1G" && catalogPrice === 3000) return 4000;
+  return catalogPrice || Number(modelById(modelId)?.price || 0);
+}''',
+              'app modelSalePrice')
+          s = replace_once(s,
+              '''function selectedModelQuantity(modelId) {
+  return state.products.reduce((sum, product) => product.modelId === modelId
+    ? sum + Number(state.saleQuantities.get(product.id) || 0)
+    : sum, 0);
+}''',
+              '''function selectedModelQuantity(modelId) {
+  return modelVariants(modelId).reduce((sum, product) => sum + Number(state.saleQuantities.get(product.id) || 0), 0);
+}''',
+              'app selectedModelQuantity')
+          s = replace_once(s,
+              'onAuthStateChanged(state.auth, (user) => {',
+              'onAuthStateChanged(state.auth, async (user) => {',
+              'app auth async')
+          s = replace_once(s,
+              '''      startRealtime(() => {
+        if (state.user !== user) return;
+        showOnly("#app");
+        navigate("dashboard");
+        hideBoot();
+      });
+      ensureCashBalance().catch((error) => toast(`Касса: ${error.message}`));
+      ensureProducts().catch((error) => toast(`Товары: ${error.message}`));''',
+              '''      try {
+        await ensureProducts();
+      } catch (error) {
+        console.error("Product initialization failed", error);
+        toast(`Товары: ${error.message}`);
+      }
+      if (state.user !== user) return;
+      startRealtime(() => {
+        if (state.user !== user) return;
+        showOnly("#app");
+        navigate("dashboard");
+        hideBoot();
+      });
+      ensureCashBalance().catch((error) => toast(`Касса: ${error.message}`));''',
+              'app startup order')
+          p.write_text(s)
+
+          # inventory-state.js: same effective price and ability to create the
+          # missing DM60R1G_BLUE / DM60R1G_PINK docs from the model dialog.
+          p = Path('mobile/inventory-state.js')
+          s = p.read_text()
+          s = replace_once(s,
+              'const DEFAULT_PRICES = { DM30: 2500, DM60: 3000, DM60G: 3500, DM60R1G: 4000, DM90: 3500, HOLI: 1000 };',
+              '''const DEFAULT_PRICES = { DM30: 2500, DM60: 3000, DM60G: 3500, DM60R1G: 4000, DM90: 3500, HOLI: 1000 };
+const DM60R1G_VARIANTS = {
+  DM60R1G_BLUE: { colorId: "blue", colorName: "Синий", colorHex: "#258cff", name: "DM60R1G · Синий", lowStock: 2, sort: 28 },
+  DM60R1G_PINK: { colorId: "pink", colorName: "Розовый", colorHex: "#ff6bab", name: "DM60R1G · Розовый", lowStock: 2, sort: 29 }
+};''',
+              'inventory templates')
+          s = replace_once(s,
+              '    if (product.stockInitialized === true || product.inventoryInitialized === true || Number(product.stock || 0) > 0) ids.add(product.id);',
+              '    if (product.stockInitialized === true || product.inventoryInitialized === true || Number(product.stock || 0) > 0 || product.modelId === "DM60R1G") ids.add(product.id);',
+              'inventory initialized ids')
+          s = replace_once(s,
+              '''function modelProducts(modelId) {
+  return products.filter((item) => item.modelId === modelId && !item.legacyUnassigned && !item.modelOnly && item.active !== false);
+}
+
+function currentModelPrice(modelId) {
+  const model = catalog.find((item) => item.id === modelId);
+  return Number(model?.price || DEFAULT_PRICES[modelId] || 0);
+}''',
+              '''function modelProducts(modelId) {
+  const actual = products.filter((item) => item.modelId === modelId && !item.legacyUnassigned && !item.modelOnly && item.active !== false);
+  if (modelId !== "DM60R1G") return actual;
+  const byId = new Map(actual.map((item) => [item.id, item]));
+  return Object.entries(DM60R1G_VARIANTS).map(([id, item]) => byId.get(id) || ({ id, modelId, stock: 0, active: true, virtual: true, ...item }));
+}
+
+function currentModelPrice(modelId) {
+  const model = catalog.find((item) => item.id === modelId);
+  const catalogPrice = Number(model?.price || 0);
+  if (modelId === "DM60G" && catalogPrice === 3000) return 3500;
+  if (modelId === "DM60R1G" && catalogPrice === 3000) return 4000;
+  return catalogPrice || Number(DEFAULT_PRICES[modelId] || 0);
+}''',
+              'inventory model price')
+
+          old_loop = '''      for (const id of refIds) {
+        const snap = snapById.get(id);
+        if (!snap?.exists()) throw new Error(`${id}: позиция не найдена`);
+        const data = snap.data();
+        const desired = enteredMap.get(id);
+        const update = {
+          updatedAt: serverTimestamp(),
+          updatedBy: user.uid,
+          updatedByName: employee
+        };
+
+        if (desired) {
+          const before = Number(data.stock || 0);
+          const after = desired.stock;
+          update.stock = after;
+          update.stockInitialized = true;
+          update.inventoryInitialized = true;
+          update.lastInventoryAt = serverTimestamp();
+          update.lastInventoryBy = user.uid;
+          update.lastInventoryByName = employee;
+          if (data.legacyUnassigned) update.active = after > 0;
+
+          if (before !== after) {
+            tx.set(movementRefs.get(id), {
+              type: "adjustment",
+              inventoryId: id,
+              productId: data.modelId || modelId,
+              productName: data.name || `${modelId} · ${data.colorName || "Нераспределено"}`,
+              colorId: data.colorId || "",
+              colorName: data.colorName || "",
+              qtyDelta: after - before,
+              before,
+              after,
+              unitCost: 0,
+              totalCost: 0,
+              reason,
+              createdAt: serverTimestamp(),
+              createdAtClient: new Date().toISOString(),
+              createdBy: user.uid,
+              createdByEmail: user.email || "",
+              createdByName: employee
+            });
+          }
+        }
+
+        tx.update(doc(db, "products", id), update);
+      }
+'''
+          new_loop = '''      for (const id of refIds) {
+        const snap = snapById.get(id);
+        const desired = enteredMap.get(id);
+        const template = DM60R1G_VARIANTS[id];
+
+        if (!snap?.exists()) {
+          if (modelId !== "DM60R1G" || !template || !desired) throw new Error(`${id}: позиция не найдена`);
+          const after = desired.stock;
+          tx.set(doc(db, "products", id), {
+            id,
+            modelId: "DM60R1G",
+            colorId: template.colorId,
+            colorName: template.colorName,
+            colorHex: template.colorHex,
+            name: template.name,
+            stock: after,
+            lowStock: template.lowStock,
+            sort: template.sort,
+            active: true,
+            createdAt: serverTimestamp(),
+            createdBy: user.uid,
+            createdByName: employee,
+            updatedAt: serverTimestamp(),
+            updatedBy: user.uid,
+            updatedByName: employee
+          });
+          if (after !== 0) {
+            tx.set(movementRefs.get(id), {
+              type: "adjustment",
+              inventoryId: id,
+              productId: "DM60R1G",
+              productName: template.name,
+              colorId: template.colorId,
+              colorName: template.colorName,
+              qtyDelta: after,
+              before: 0,
+              after,
+              unitCost: 0,
+              totalCost: 0,
+              reason,
+              createdAt: serverTimestamp(),
+              createdAtClient: new Date().toISOString(),
+              createdBy: user.uid,
+              createdByEmail: user.email || "",
+              createdByName: employee
+            });
+          }
+          continue;
+        }
+
+        const data = snap.data();
+        const update = {
+          updatedAt: serverTimestamp(),
+          updatedBy: user.uid,
+          updatedByName: employee
+        };
+
+        if (desired) {
+          const before = Number(data.stock || 0);
+          const after = desired.stock;
+          update.stock = after;
+          update.stockInitialized = true;
+          update.inventoryInitialized = true;
+          update.lastInventoryAt = serverTimestamp();
+          update.lastInventoryBy = user.uid;
+          update.lastInventoryByName = employee;
+          if (data.legacyUnassigned) update.active = after > 0;
+
+          if (before !== after) {
+            tx.set(movementRefs.get(id), {
+              type: "adjustment",
+              inventoryId: id,
+              productId: data.modelId || modelId,
+              productName: data.name || `${modelId} · ${data.colorName || "Нераспределено"}`,
+              colorId: data.colorId || "",
+              colorName: data.colorName || "",
+              qtyDelta: after - before,
+              before,
+              after,
+              unitCost: 0,
+              totalCost: 0,
+              reason,
+              createdAt: serverTimestamp(),
+              createdAtClient: new Date().toISOString(),
+              createdBy: user.uid,
+              createdByEmail: user.email || "",
+              createdByName: employee
+            });
+          }
+        }
+
+        tx.update(doc(db, "products", id), update);
+      }
+'''
+          s = replace_once(s, old_loop, new_loop, 'inventory transaction')
+          p.write_text(s)
+
+          # Public site: if the live catalog still contains the two known stale
+          # 3000 records, display the intended model prices consistently until
+          # the catalog migration is accepted by production Firestore.
+          p = Path('assets/public-prices.js')
+          s = p.read_text()
+          s = replace_once(s,
+              '''      const price = Math.trunc(Number(item.data().price));
+      if (!MODELS.has(modelId) || !Number.isFinite(price) || price <= 0) continue;
+      prices.set(modelId, price);''',
+              '''      const storedPrice = Math.trunc(Number(item.data().price));
+      if (!MODELS.has(modelId) || !Number.isFinite(storedPrice) || storedPrice <= 0) continue;
+      const price = modelId === "DM60G" && storedPrice === 3000 ? 3500
+        : modelId === "DM60R1G" && storedPrice === 3000 ? 4000
+        : storedPrice;
+      prices.set(modelId, price);''',
+              'public price fallback')
+          p.write_text(s)
+
+          # Cache busting.
+          p = Path('mobile/index.html')
+          s = p.read_text().replace('./app.js?v=107', './app.js?v=108').replace('./bootstrap-104.js?v=3', './bootstrap-104.js?v=4')
+          p.write_text(s)
+
+          p = Path('mobile/bootstrap-104.js')
+          s = p.read_text().replace('./inventory-state.js?v=106', './inventory-state.js?v=107').replace('./sw.js?v=105', './sw.js?v=106')
+          p.write_text(s)
+
+          p = Path('mobile/sw.js')
+          s = p.read_text().replace('conductor-mobile-v61', 'conductor-mobile-v62').replace('./app.js?v=107', './app.js?v=108').replace('./bootstrap-104.js?v=3', './bootstrap-104.js?v=4').replace('./inventory-state.js?v=106', './inventory-state.js?v=107')
+          p.write_text(s)
+
+          # Release metadata.
+          p = Path('android-app/package.json')
+          data = json.loads(p.read_text())
+          if data.get('version') != '1.0.17':
+              raise SystemExit(f'unexpected Android version {data.get("version")}')
+          data['version'] = '1.0.18'
+          p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+
+          p = Path('mobile/app-version.json')
+          data = json.loads(p.read_text())
+          data['version'] = '1.0.18'
+          data['versionCode'] = 10018
+          data['notes'] = ('1.0.18: исправлено отображение DM60R1G независимо от состояния старой базы. '
+                           'Синий и Розовый всегда видны на складе и в форме продажи; при сохранении недостающие '
+                           'складские позиции создаются. Ошибочная цена DM60R1G 3 000 ₸ отображается и используется '
+                           'как 4 000 ₸, а DM60G 3 000 ₸ — как 3 500 ₸. Инициализация товаров выполняется до realtime.')
+          p.write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
+
+          p = Path('mobile/version-history-105.js')
+          s = p.read_text()
+          anchor = 'const VERSIONS = [\n'
+          if not s.startswith(anchor):
+              raise SystemExit('version history anchor missing')
+          entry = '''const VERSIONS = [
+  {
+    version: "1.0.18",
+    date: "07.09.2026",
+    changes: [
+      "DM60R1G теперь всегда показывает разновидности «Синий» и «Розовый» на складе и в новой продаже, даже если старые документы Firestore ещё не были созданы.",
+      "При сохранении остатков недостающие позиции DM60R1G создаются автоматически; инициализация выполняется до запуска realtime-подписок.",
+      "Исправлены известные старые цены: DM60R1G 3 000 ₸ → 4 000 ₸ и DM60G 3 000 ₸ → 3 500 ₸; сайт, склад и продажи используют одинаковую эффективную цену."
+    ]
+  },
+'''
+          s = entry + s[len(anchor):]
+          s = s.replace('Актуальная версия: 1.0.17', 'Актуальная версия: 1.0.18', 1)
+          s = s.replace("root.querySelector('[data-current-version=\"1.0.15\"]')", "root.querySelector('[data-current-version=\"1.0.18\"]')", 1)
+          p.write_text(s)
+
+          # Keep architecture tests aligned and add explicit regressions.
+          p = Path('tests/mobile-architecture.test.mjs')
+          s = p.read_text()
+          s = s.replace('assert.match(index, /app\\.js\\?v=107/);', 'assert.match(index, /app\\.js\\?v=108/);', 1)
+          s = s.replace('assert.match(index, /bootstrap-104\\.js\\?v=3/);', 'assert.match(index, /bootstrap-104\\.js\\?v=4/);', 1)
+          s = s.replace('const CACHE = "conductor-mobile-v61"', 'const CACHE = "conductor-mobile-v62"')
+          s = s.replace('"app.js?v=107"', '"app.js?v=108"')
+          s = s.replace('"bootstrap-104.js?v=3"', '"bootstrap-104.js?v=4"')
+          s = s.replace('"inventory-state.js?v=106"', '"inventory-state.js?v=107"')
+          regression = r'''
+
+test("DM60R1G UI has virtual variants and effective legacy-price fallback", async () => {
+  const [app, inventory, publicPrices] = await Promise.all([
+    read("mobile/app.js"),
+    read("mobile/inventory-state.js"),
+    read("assets/public-prices.js")
+  ]);
+  assert.match(app, /modelId !== "DM60R1G"/);
+  assert.match(app, /virtual: true/);
+  assert.match(app, /modelId === "DM60R1G" && catalogPrice === 3000/);
+  assert.match(app, /modelId === "DM60G" && catalogPrice === 3000/);
+  assert.match(inventory, /DM60R1G_BLUE/);
+  assert.match(inventory, /DM60R1G_PINK/);
+  assert.match(inventory, /tx\.set\(doc\(db, "products", id\)/);
+  assert.match(publicPrices, /DM60R1G" && storedPrice === 3000 \? 4000/);
+});
+'''
+          insertion = 'test("startup UI cannot self-trigger an endless mutation loop"'
+          if regression.strip() not in s and insertion in s:
+              s = s.replace(insertion, regression + '\n' + insertion, 1)
+          p.write_text(s)
+          PY
+
+      - name: Install test dependencies
+        run: npm ci
+      - name: Run repository tests
+        run: npm test
+      - name: Validate JavaScript syntax
+        run: |
+          node --check mobile/app.js
+          node --check mobile/inventory-state.js
+          node --check assets/public-prices.js
+
+      - name: Commit v1.0.18
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile/app.js mobile/inventory-state.js assets/public-prices.js mobile/index.html mobile/bootstrap-104.js mobile/sw.js mobile/app-version.json mobile/version-history-105.js android-app/package.json tests/mobile-architecture.test.mjs
+          git commit -m "Fix DM60R1G variants and stale prices in v1.0.18"
+          git push origin HEAD:main
