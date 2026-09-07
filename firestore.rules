@@ -1,8 +1,8 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Only the two explicitly approved Firebase Authentication UIDs can
-    // access warehouse data. Email addresses are metadata, never authorization.
+    // Authorization is bound to the two explicitly approved Firebase Authentication UIDs.
+    // Email addresses are metadata, never authorization.
     function isStaff() {
       return request.auth != null
         && request.auth.uid in [
