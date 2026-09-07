@@ -1,4 +1,66 @@
-const ALLOWED_EMAILS = new Set(["mihagavr@gmail.com", "a.kalashin@gmail.com"]);
+import { createLoginThrottle, formatRemaining } from "./auth-throttle.js";
+
+const throttle = createLoginThrottle();
+let pendingEmail = "";
+let pendingFailureRecorded = false;
+
+function lockMessage(status) {
+  return `Слишком много неверных попыток. Повторите вход через ${formatRemaining(status.remainingMs)}.`;
+}
+
+function installLoginThrottle() {
+  const form = document.getElementById("login-form");
+  const emailInput = document.getElementById("email");
+  const errorNode = document.getElementById("login-error");
+  const currentEmail = document.getElementById("current-user-email");
+  if (!form || !emailInput || !errorNode) return;
+
+  form.addEventListener("submit", (event) => {
+    const email = String(emailInput.value || "").trim().toLowerCase();
+    const status = throttle.status(email);
+    if (status.locked) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      errorNode.textContent = lockMessage(status);
+      return;
+    }
+    pendingEmail = email;
+    pendingFailureRecorded = false;
+  }, true);
+
+  new MutationObserver(() => {
+    const text = String(errorNode.textContent || "");
+    if (!pendingEmail || pendingFailureRecorded || !text) return;
+
+    if (text.includes("Неверный email или пароль") || text.includes("auth/invalid-credential")) {
+      pendingFailureRecorded = true;
+      const status = throttle.recordFailure(pendingEmail);
+      pendingEmail = "";
+      if (status.locked) errorNode.textContent = lockMessage(status);
+      return;
+    }
+
+    if (text.includes("auth/too-many-requests") || text.includes("TOO_MANY_ATTEMPTS_TRY_LATER")) {
+      pendingFailureRecorded = true;
+      const status = throttle.forceDayLock(pendingEmail);
+      pendingEmail = "";
+      errorNode.textContent = lockMessage(status);
+      return;
+    }
+
+    pendingEmail = "";
+  }).observe(errorNode, { childList: true, characterData: true, subtree: true });
+
+  if (currentEmail) {
+    new MutationObserver(() => {
+      const signedInEmail = String(currentEmail.textContent || "").trim().toLowerCase();
+      if (!signedInEmail) return;
+      throttle.clear(pendingEmail || signedInEmail);
+      pendingEmail = "";
+      pendingFailureRecorded = false;
+    }).observe(currentEmail, { childList: true, characterData: true, subtree: true });
+  }
+}
 
 function finishStuckBoot() {
   const boot = document.getElementById("boot");
@@ -6,14 +68,11 @@ function finishStuckBoot() {
 
   const login = document.getElementById("login");
   const app = document.getElementById("app");
-  const currentEmail = String(document.getElementById("current-user-email")?.textContent || "").trim().toLowerCase();
 
-  if (ALLOWED_EMAILS.has(currentEmail)) {
-    login?.classList.add("hidden");
-    app?.classList.remove("hidden");
-    document.getElementById("view-dashboard")?.classList.add("active");
+  // The watchdog must never grant access. It may only reveal a screen that the
+  // Firebase auth flow has already selected, otherwise it falls back to login.
+  if (app && !app.classList.contains("hidden")) {
     boot.classList.add("hide");
-    console.warn("Startup watchdog opened the app after a delayed realtime bootstrap");
     return;
   }
 
@@ -22,8 +81,6 @@ function finishStuckBoot() {
     return;
   }
 
-  // Never leave the user on an endless splash. If auth/bootstrap still has not
-  // resolved, show the login screen where the existing Firebase code can recover.
   if (login) {
     app?.classList.add("hidden");
     login.classList.remove("hidden");
@@ -33,4 +90,5 @@ function finishStuckBoot() {
   }
 }
 
+installLoginThrottle();
 window.setTimeout(finishStuckBoot, 9000);
