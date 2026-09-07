@@ -44,7 +44,9 @@ export function createWarehouseDomain({ state, currentEmployeeName }) {
         initializedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         updatedBy: state.user.uid,
-        updatedByName: employee
+        updatedByName: employee,
+        lastOperationType: "init",
+        lastOperationId: "initial"
       });
     });
     return initialBalance;
@@ -53,6 +55,7 @@ export function createWarehouseDomain({ state, currentEmployeeName }) {
   async function commitSale({ items, note = "", total, baseTotal = total, pricing = null }) {
     if (!state.user || !state.db) throw new Error("Нет активной авторизации.");
     if (!Array.isArray(items) || !items.length) throw new Error("Укажите количество хотя бы одного товара.");
+    if (items.length > 18) throw new Error("В одной продаже можно зафиксировать не более 18 товарных позиций.");
     if (!Number.isFinite(total) || total <= 0) throw new Error("Итоговая сумма должна быть больше нуля.");
 
     await ensureCashBalance();
@@ -79,7 +82,11 @@ export function createWarehouseDomain({ state, currentEmployeeName }) {
         const before = Number(data.stock || 0);
         const after = before - items[index].qty;
         tx.update(productRefs[index], {
-          stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid, updatedByName: employee
+          stock: after,
+          lastMovementId: movementRefs[index].id,
+          updatedAt: serverTimestamp(),
+          updatedBy: state.user.uid,
+          updatedByName: employee
         });
         tx.set(movementRefs[index], {
           type: "sale",
@@ -117,6 +124,8 @@ export function createWarehouseDomain({ state, currentEmployeeName }) {
       });
       tx.update(cashRef, {
         balance: Number(cashSnap.data().balance || 0) + total,
+        lastOperationType: "sale",
+        lastOperationId: saleRef.id,
         updatedAt: serverTimestamp(),
         updatedBy: state.user.uid,
         updatedByName: employee
@@ -146,6 +155,7 @@ export function createWarehouseDomain({ state, currentEmployeeName }) {
       if (sale.status === "cancelled") throw new Error("Продажа уже отменена");
       const items = sale.items || [];
       if (!items.length) throw new Error("В продаже нет товарных позиций");
+      if (items.length > 18) throw new Error("Эта старая продажа содержит слишком много позиций для безопасной отмены.");
 
       const inventoryIds = items.map(inventoryIdForSaleItem);
       const productRefs = inventoryIds.map((id) => doc(state.db, "products", id));
@@ -163,7 +173,13 @@ export function createWarehouseDomain({ state, currentEmployeeName }) {
         const before = Number(data.stock || 0);
         const qty = Number(items[index].qty || 0);
         const after = before + qty;
-        const update = { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid, updatedByName: employee };
+        const update = {
+          stock: after,
+          lastMovementId: movementRefs[index].id,
+          updatedAt: serverTimestamp(),
+          updatedBy: state.user.uid,
+          updatedByName: employee
+        };
         if (data.legacyUnassigned) update.active = true;
         tx.update(productRefs[index], update);
         tx.set(movementRefs[index], {
@@ -195,6 +211,8 @@ export function createWarehouseDomain({ state, currentEmployeeName }) {
       });
       tx.update(cashRef, {
         balance: Number(cashSnap.data().balance || 0) - Number(sale.total || 0),
+        lastOperationType: "cancel_sale",
+        lastOperationId: saleId,
         updatedAt: serverTimestamp(),
         updatedBy: state.user.uid,
         updatedByName: employee
