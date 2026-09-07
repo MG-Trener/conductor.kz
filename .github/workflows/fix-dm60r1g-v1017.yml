@@ -1,0 +1,248 @@
+name: Fix DM60R1G variants and price
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fix-dm60r1g-v1017.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - name: Apply DM60R1G repair
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, re
+
+          app_path = Path('mobile/app.js')
+          app = app_path.read_text()
+
+          new_ensure = r'''async function ensureProducts() {
+            const [productSnap, catalogSnap] = await Promise.all([
+              getDocs(collection(state.db, "products")),
+              getDocs(collection(state.db, "catalog"))
+            ]);
+            const existingProducts = productSnap.docs.map((item) => ({ id: item.id, ...item.data() }));
+            const existingById = new Map(existingProducts.map((item) => [item.id, item]));
+            const catalogById = new Map(catalogSnap.docs.map((item) => [item.id, { id: item.id, ...item.data() }]));
+            const employee = currentEmployeeName();
+
+            // Repair the shared catalog first so an old DM60R1G=3000 document cannot
+            // continue overriding the intended 4000 tenge model price.
+            for (const model of MODELS) {
+              const catalogRef = doc(state.db, "catalog", model.id);
+              const catalogItem = catalogById.get(model.id);
+              if (!catalogItem) {
+                const legacyPrice = model.id === "DM60R1G"
+                  ? 0
+                  : existingProducts.find((item) => item.modelId === model.id && Number(item.price) > 0)?.price;
+                await setDoc(catalogRef, {
+                  modelId: model.id,
+                  name: model.name,
+                  price: Math.trunc(Number(legacyPrice || model.price)),
+                  updatedAt: serverTimestamp(),
+                  updatedBy: state.user.uid,
+                  updatedByName: employee
+                });
+                continue;
+              }
+
+              if (model.id === "DM60R1G" && Number(catalogItem.price) === 3000) {
+                await updateDoc(catalogRef, {
+                  price: model.price,
+                  updatedAt: serverTimestamp(),
+                  updatedBy: state.user.uid,
+                  updatedByName: employee
+                });
+              }
+            }
+
+            // Existing installations may already contain an incomplete/inactive
+            // DM60R1G pair. Create missing variants and reactivate the expected pair
+            // without touching a user's already entered stock quantity.
+            const variantErrors = [];
+            for (const item of defaults) {
+              const productRef = doc(state.db, "products", item.id);
+              const current = existingById.get(item.id);
+              try {
+                if (!current) {
+                  await setDoc(productRef, {
+                    id: item.id,
+                    modelId: item.modelId,
+                    colorId: item.colorId,
+                    colorName: item.colorName,
+                    colorHex: item.colorHex,
+                    name: item.name,
+                    stock: item.stock,
+                    lowStock: item.lowStock,
+                    sort: item.sort,
+                    active: true,
+                    createdAt: serverTimestamp(),
+                    createdBy: state.user.uid,
+                    createdByName: employee,
+                    updatedAt: serverTimestamp(),
+                    updatedBy: state.user.uid,
+                    updatedByName: employee
+                  });
+                  continue;
+                }
+
+                if (item.modelId === "DM60R1G" && (current.active === false || current.modelOnly === true)) {
+                  const repair = {
+                    updatedAt: serverTimestamp(),
+                    updatedBy: state.user.uid,
+                    updatedByName: employee
+                  };
+                  if (current.active === false) repair.active = true;
+                  if (current.modelOnly === true) repair.modelOnly = false;
+                  await updateDoc(productRef, repair);
+                }
+              } catch (error) {
+                if (item.modelId === "DM60R1G") variantErrors.push(`${item.id}: ${error.message}`);
+                else throw error;
+              }
+            }
+
+            for (const model of MODELS) await migrateLegacyModel(model);
+            if (variantErrors.length) throw new Error(`DM60R1G: не удалось восстановить разновидности (${variantErrors.join("; ")})`);
+          }'''
+
+          app, count = re.subn(
+              r'async function ensureProducts\(\) \{[\s\S]*?\n\}\n\nfunction stopRealtime\(\)',
+              new_ensure + '\n\nfunction stopRealtime()',
+              app,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit(f'ensureProducts replacement count={count}')
+
+          old_auth = 'onAuthStateChanged(state.auth, (user) => {'
+          if old_auth not in app:
+              raise SystemExit('auth callback anchor missing')
+          app = app.replace(old_auth, 'onAuthStateChanged(state.auth, async (user) => {', 1)
+
+          old_start = '''      startRealtime(() => {
+                if (state.user !== user) return;
+                showOnly("#app");
+                navigate("dashboard");
+                hideBoot();
+              });
+              ensureCashBalance().catch((error) => toast(`Касса: ${error.message}`));
+              ensureProducts().catch((error) => toast(`Товары: ${error.message}`));'''
+          new_start = '''      try {
+                await ensureProducts();
+              } catch (error) {
+                toast(`Товары: ${error.message}`);
+              }
+              if (state.user !== user) return;
+              startRealtime(() => {
+                if (state.user !== user) return;
+                showOnly("#app");
+                navigate("dashboard");
+                hideBoot();
+              });
+              ensureCashBalance().catch((error) => toast(`Касса: ${error.message}`));'''
+          if old_start not in app:
+              raise SystemExit('realtime startup block missing')
+          app = app.replace(old_start, new_start, 1)
+          app_path.write_text(app)
+
+          index_path = Path('mobile/index.html')
+          index = index_path.read_text()
+          if './app.js?v=106' not in index:
+              raise SystemExit('mobile index app version anchor missing')
+          index_path.write_text(index.replace('./app.js?v=106', './app.js?v=107'))
+
+          sw_path = Path('mobile/sw.js')
+          sw = sw_path.read_text()
+          sw = sw.replace('const CACHE = "conductor-mobile-v60";', 'const CACHE = "conductor-mobile-v61";')
+          sw = sw.replace('./app.js?v=106', './app.js?v=107')
+          sw_path.write_text(sw)
+
+          pkg_path = Path('android-app/package.json')
+          pkg = json.loads(pkg_path.read_text())
+          if pkg.get('version') != '1.0.16':
+              raise SystemExit(f'unexpected Android version {pkg.get("version")}')
+          pkg['version'] = '1.0.17'
+          pkg_path.write_text(json.dumps(pkg, ensure_ascii=False, indent=2) + '\n')
+
+          manifest_path = Path('mobile/app-version.json')
+          manifest = json.loads(manifest_path.read_text())
+          manifest['version'] = '1.0.17'
+          manifest['versionCode'] = 10017
+          manifest['notes'] = ('1.0.17: исправлен DM60R1G в мобильном складе. На существующей базе приложение теперь '
+                               'досоздаёт и восстанавливает разновидности «Синий» и «Розовый», поэтому они отображаются '
+                               'и в карточке склада, и в новой продаже. Ошибочная сохранённая цена DM60R1G 3 000 ₸ '
+                               'автоматически заменяется на правильные 4 000 ₸; дальнейшие вручную изменённые цены не перезаписываются.')
+          manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + '\n')
+
+          history_path = Path('mobile/version-history-105.js')
+          history = history_path.read_text()
+          anchor = 'const VERSIONS = [\n'
+          entry = '''const VERSIONS = [
+            {
+              version: "1.0.17",
+              date: "07.09.2026",
+              changes: [
+                "Исправлен DM60R1G на существующей базе: недостающие разновидности «Синий» и «Розовый» теперь создаются и восстанавливаются автоматически.",
+                "DM60R1G снова отображается с разновидностями и на складе, и в блоке новой продажи.",
+                "Ошибочная цена DM60R1G 3 000 ₸ автоматически исправляется на 4 000 ₸; другие вручную изменённые цены не затрагиваются."
+              ]
+            },
+          '''
+          if not history.startswith(anchor):
+              raise SystemExit('version history anchor missing')
+          history = entry + history[len(anchor):]
+          history = history.replace('Актуальная версия: 1.0.16', 'Актуальная версия: 1.0.17', 1)
+          history_path.write_text(history)
+
+          test_path = Path('tests/mobile-architecture.test.mjs')
+          tests = test_path.read_text()
+          tests = tests.replace('assert.match(index, /app\\.js\\?v=106/);', 'assert.match(index, /app\\.js\\?v=107/);', 1)
+          tests = tests.replace('assert.match(sw, /const CACHE = "conductor-mobile-v60"/);', 'assert.match(sw, /const CACHE = "conductor-mobile-v61"/);', 1)
+          tests = tests.replace('"app.js?v=106"', '"app.js?v=107"', 1)
+          repair_test = r'''
+
+          test("DM60R1G repair restores variants and fixes only the legacy 3000 price", async () => {
+            const app = await read("mobile/app.js");
+            assert.match(app, /model\.id === "DM60R1G" && Number\(catalogItem\.price\) === 3000/);
+            assert.match(app, /item\.modelId === "DM60R1G" && \(current\.active === false \|\| current\.modelOnly === true\)/);
+            assert.match(app, /repair\.active = true/);
+            assert.match(app, /repair\.modelOnly = false/);
+            assert.match(app, /await ensureProducts\(\)/);
+          });
+          '''
+          insertion = 'test("startup UI cannot self-trigger an endless mutation loop"'
+          if insertion not in tests:
+              raise SystemExit('mobile architecture insertion anchor missing')
+          tests = tests.replace(insertion, repair_test + '\n' + insertion, 1)
+          test_path.write_text(tests)
+          PY
+      - name: Install test dependencies
+        run: npm ci
+      - name: Run repository tests
+        run: npm test
+      - name: Commit repair release
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add mobile/app.js mobile/index.html mobile/sw.js mobile/app-version.json mobile/version-history-105.js android-app/package.json tests/mobile-architecture.test.mjs
+          git commit -m "Fix DM60R1G variants and price in Android app"
+          git push origin main
