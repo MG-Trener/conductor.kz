@@ -35,6 +35,8 @@ jobs:
         run: |
           node .github/maintenance-refactor-20260907.mjs
           node .github/maintenance-testfix-20260907.mjs
+          echo "--- transformed firestore.rules ---"
+          nl -ba firestore.rules | sed -n '1,360p'
 
       - name: Generate locked Android dependencies
         working-directory: android-app
