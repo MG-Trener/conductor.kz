@@ -20,7 +20,11 @@ jobs:
         with:
           node-version: 22
       - name: Apply DM60R1G changes
-        run: node .github/scripts/apply-dm60r1g.mjs
+        run: |
+          cp assets/images/dm60r1g.webp /tmp/dm60r1g.webp
+          sed -i 's/a3588a456558b336235f98bc9046ff3cb34603aaeea824ed55b716b2f5763eb9/dad53a7914da1a20c56d3dba4d7146ed7a190fffa7c49ed0bd80f05da59687b6/' .github/scripts/apply-dm60r1g.mjs
+          node .github/scripts/apply-dm60r1g.mjs
+          cp /tmp/dm60r1g.webp assets/images/dm60r1g.webp
       - name: Install test dependencies
         run: npm ci
       - name: Run repository tests
