@@ -1,7 +1,7 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Warehouse access is granted only by a server-managed Firebase Authentication claim.
+    // Warehouse access is granted only by a server-managed Firebase Authentication custom claim.
     function isStaff() {
       return request.auth != null
         && request.auth.token.warehouseStaff == true;
@@ -78,117 +78,87 @@ service cloud.firestore {
       allow read: if true;
       allow create, update: if isStaff()
         && validModelId(modelId)
-        && request.resource.data.keys().hasAll([
-          'modelId', 'name', 'price', 'updatedAt', 'updatedBy', 'updatedByName'
-        ])
-        && request.resource.data.keys().hasOnly([
-          'modelId', 'name', 'price', 'updatedAt', 'updatedBy', 'updatedByName'
-        ])
         && request.resource.data.modelId == modelId
         && request.resource.data.name is string
         && request.resource.data.name.size() > 0
         && request.resource.data.name.size() <= 120
-        && request.resource.data.price is int
-        && request.resource.data.price > 0
-        && request.resource.data.updatedAt == request.time
+        && request.resource.data.price is number
+        && request.resource.data.price >= 0
         && request.resource.data.updatedBy == request.auth.uid
         && request.resource.data.updatedByName is string
-        && request.resource.data.updatedByName.size() <= 80;
-      allow delete: if false;
-    }
-
-    match /publicProducts/{modelId} {
-      allow read, write: if false;
-    }
-
-    function validOrderAudit(data) {
-      return data.source == 'stock-app'
-        && data.status == 'done'
-        && data.createdBy == request.auth.uid
-        && data.createdByName is string
-        && data.createdByName.size() > 0
-        && data.createdByName.size() <= 80
-        && data.createdAt == request.time
-        && data.createdAtClient is string
-        && data.createdAtClient.size() > 0
-        && data.createdAtClient.size() <= 80
-        && data.note is string
-        && data.note.size() <= 300;
-    }
-
-    function validSaleOrder(data) {
-      return data.get('operationType', '') == ''
-        && data.items is list
-        && data.items.size() > 0
-        && data.items.size() <= 200
-        && data.total is number
-        && data.total > 0
-        && (!data.keys().hasAny(['baseTotal']) || (data.baseTotal is number && data.baseTotal > 0))
-        && (!data.keys().hasAny(['pricing']) || data.pricing is map);
-    }
-
-    function validCashOrder(data) {
-      return data.operationType in ['cash_deposit', 'cash_sawmill']
-        && data.amount is int
-        && data.amount > 0
-        && data.cashDelta is int
-        && data.before is int
-        && data.before >= 0
-        && data.after is int
-        && data.after >= 0
-        && data.after == data.before + data.cashDelta
-        && data.items is list
-        && data.items.size() == 0
-        && data.total == data.cashDelta
-        && ((data.operationType == 'cash_deposit' && data.cashDelta == data.amount)
-          || (data.operationType == 'cash_sawmill' && data.cashDelta == -data.amount));
-    }
-
-    match /orders/{orderId} {
-      allow read: if isStaff();
-      allow create: if isStaff()
+        && request.resource.data.updatedByName.size() <= 80
+        && request.resource.data.updatedAt == request.time
         && request.resource.data.keys().hasOnly([
-          'items', 'total', 'baseTotal', 'note', 'pricing',
-          'operationType', 'amount', 'cashDelta', 'before', 'after',
-          'status', 'source', 'createdAt', 'createdAtClient',
-          'createdBy', 'createdByName'
-        ])
-        && validOrderAudit(request.resource.data)
-        && (validSaleOrder(request.resource.data) || validCashOrder(request.resource.data));
-      allow update: if isStaff()
-        && resource.data.status == 'done'
-        && resource.data.get('operationType', '') == ''
-        && request.resource.data.status == 'cancelled'
-        && request.resource.data.cancelledBy == request.auth.uid
-        && request.resource.data.cancelledByName is string
-        && request.resource.data.cancelledByName.size() > 0
-        && request.resource.data.cancelledByName.size() <= 80
-        && request.resource.data.cancelledAt == request.time
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status', 'cancelledAt', 'cancelledBy', 'cancelledByName'
+          'modelId', 'name', 'price', 'updatedAt', 'updatedBy', 'updatedByName'
         ]);
       allow delete: if false;
     }
 
+    function validOrderCreate(data) {
+      return data.keys().hasAll([
+          'items', 'total', 'note', 'status', 'source', 'createdAt', 'createdAtClient',
+          'createdBy', 'createdByName'
+        ])
+        && data.keys().hasOnly([
+          'items', 'total', 'note', 'status', 'source', 'createdAt', 'createdAtClient',
+          'createdBy', 'createdByName'
+        ])
+        && data.createdBy == request.auth.uid
+        && data.createdByName is string
+        && data.createdByName.size() <= 80
+        && data.createdAt == request.time
+        && data.createdAtClient is string
+        && data.status == 'done'
+        && data.source == 'stock-app'
+        && data.items is list
+        && data.items.size() > 0
+        && data.items.size() <= 50
+        && data.total is number
+        && data.total >= 0
+        && data.note is string
+        && data.note.size() <= 500;
+    }
+
+    function validOrderCancel() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'cancelledAt', 'cancelledBy', 'cancelledByName'
+        ])
+        && request.resource.data.status == 'cancelled'
+        && resource.data.status == 'done'
+        && request.resource.data.cancelledAt == request.time
+        && request.resource.data.cancelledBy == request.auth.uid
+        && request.resource.data.cancelledByName is string
+        && request.resource.data.cancelledByName.size() <= 80;
+    }
+
+    match /orders/{orderId} {
+      allow read: if isStaff();
+      allow create: if isStaff() && validOrderCreate(request.resource.data);
+      allow update: if isStaff() && validOrderCancel();
+      allow delete: if false;
+    }
+
+    function validMovementType(value) {
+      return value in ['receipt', 'writeoff', 'adjustment', 'sale', 'sale_return'];
+    }
+
     function validMovement(data) {
       return data.keys().hasAll([
-          'type', 'inventoryId', 'productId', 'productName', 'qtyDelta',
-          'before', 'after', 'unitCost', 'totalCost', 'reason', 'createdAt',
+          'productId', 'modelId', 'name', 'type', 'qtyDelta', 'before', 'after',
+          'unitCost', 'totalCost', 'salePrice', 'orderId', 'reason', 'createdAt',
           'createdAtClient', 'createdBy', 'createdByName'
         ])
         && data.keys().hasOnly([
-          'type', 'inventoryId', 'productId', 'productName', 'colorId',
-          'colorName', 'qtyDelta', 'before', 'after', 'unitCost',
-          'totalCost', 'salePrice', 'orderId', 'reason', 'createdAt',
+          'productId', 'modelId', 'name', 'type', 'qtyDelta', 'before', 'after',
+          'unitCost', 'totalCost', 'salePrice', 'orderId', 'reason', 'createdAt',
           'createdAtClient', 'createdBy', 'createdByName'
         ])
-        && data.type in ['receipt', 'writeoff', 'adjustment', 'sale', 'sale_return']
-        && data.inventoryId is string
-        && validProductId(data.inventoryId)
-        && modelExists(data.productId)
-        && data.productName is string
-        && data.productName.size() > 0
-        && data.productName.size() <= 120
+        && validMovementType(data.type)
+        && validProductId(data.productId)
+        && modelExists(data.modelId)
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 120
         && data.qtyDelta is int
         && data.qtyDelta != 0
         && data.before is int
@@ -200,82 +170,94 @@ service cloud.firestore {
         && data.unitCost >= 0
         && data.totalCost is number
         && data.totalCost >= 0
+        && data.salePrice is number
+        && data.salePrice >= 0
+        && data.orderId is string
+        && data.orderId.size() <= 128
         && data.reason is string
-        && data.reason.size() <= 300
+        && data.reason.size() <= 500
+        && data.createdAt == request.time
         && data.createdAtClient is string
         && data.createdBy == request.auth.uid
         && data.createdByName is string
-        && data.createdByName.size() <= 80
-        && data.createdAt == request.time
-        && getAfter(/databases/$(database)/documents/products/$(data.inventoryId)).data.stock == data.after;
+        && data.createdByName.size() <= 80;
+    }
+
+    function movementMatchesResultingStock(data) {
+      return existsAfter(/databases/$(database)/documents/products/$(data.productId))
+        && getAfter(/databases/$(database)/documents/products/$(data.productId)).data.stock == data.after;
     }
 
     match /stockMovements/{movementId} {
       allow read: if isStaff();
-      allow create: if isStaff() && validMovement(request.resource.data);
+      allow create: if isStaff()
+        && validMovement(request.resource.data)
+        && movementMatchesResultingStock(request.resource.data);
       allow update, delete: if false;
     }
 
-    function validCashAudit(data) {
-      return data.balance is int
+    function validCashState(data) {
+      return data.balance is number
         && data.balance >= 0
         && data.updatedAt == request.time
         && data.updatedBy == request.auth.uid
         && data.updatedByName is string
-        && data.updatedByName.size() > 0
         && data.updatedByName.size() <= 80;
     }
 
-    match /finance/{financeId} {
-      allow read: if isStaff() && financeId == 'cash';
+    match /finance/{docId} {
+      allow read: if isStaff() && docId == 'cash';
       allow create: if isStaff()
-        && financeId == 'cash'
-        && request.resource.data.keys().hasAll([
-          'balance', 'initializedAt', 'updatedAt', 'updatedBy',
-          'updatedByName'
-        ])
+        && docId == 'cash'
+        && validCashState(request.resource.data)
         && request.resource.data.keys().hasOnly([
-          'balance', 'initializedAt', 'updatedAt', 'updatedBy',
-          'updatedByName'
+          'balance', 'initializedAt', 'updatedAt', 'updatedBy', 'updatedByName'
         ])
-        && request.resource.data.initializedAt == request.time
-        && validCashAudit(request.resource.data);
+        && request.resource.data.initializedAt == request.time;
       allow update: if isStaff()
-        && financeId == 'cash'
-        && validCashAudit(request.resource.data)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'balance', 'updatedAt', 'updatedBy', 'updatedByName'
+        && docId == 'cash'
+        && validCashState(request.resource.data)
+        && request.resource.data.keys().hasOnly([
+          'balance', 'initializedAt', 'updatedAt', 'updatedBy', 'updatedByName'
         ]);
       allow delete: if false;
+    }
+
+    function validWithdrawal(data) {
+      return data.keys().hasAll([
+          'amount', 'before', 'after', 'comment', 'createdAt', 'createdAtClient',
+          'createdBy', 'createdByName'
+        ])
+        && data.keys().hasOnly([
+          'amount', 'before', 'after', 'comment', 'createdAt', 'createdAtClient',
+          'createdBy', 'createdByName'
+        ])
+        && data.amount is number
+        && data.amount > 0
+        && data.before is number
+        && data.before >= data.amount
+        && data.after is number
+        && data.after >= 0
+        && data.after == data.before - data.amount
+        && data.comment is string
+        && data.comment.size() <= 500
+        && data.createdAt == request.time
+        && data.createdAtClient is string
+        && data.createdBy == request.auth.uid
+        && data.createdByName is string
+        && data.createdByName.size() <= 80;
+    }
+
+    function withdrawalMatchesCash(data) {
+      return existsAfter(/databases/$(database)/documents/finance/cash)
+        && getAfter(/databases/$(database)/documents/finance/cash).data.balance == data.after;
     }
 
     match /cashWithdrawals/{withdrawalId} {
       allow read: if isStaff();
       allow create: if isStaff()
-        && request.resource.data.keys().hasAll([
-          'amount', 'before', 'after', 'comment', 'createdAt',
-          'createdAtClient', 'createdBy', 'createdByName'
-        ])
-        && request.resource.data.keys().hasOnly([
-          'amount', 'before', 'after', 'comment', 'createdAt',
-          'createdAtClient', 'createdBy', 'createdByName'
-        ])
-        && request.resource.data.amount is int
-        && request.resource.data.amount > 0
-        && request.resource.data.before is int
-        && request.resource.data.before >= 0
-        && request.resource.data.after is int
-        && request.resource.data.after == request.resource.data.before - request.resource.data.amount
-        && request.resource.data.after >= 0
-        && request.resource.data.comment is string
-        && request.resource.data.comment.size() <= 300
-        && request.resource.data.createdAt == request.time
-        && request.resource.data.createdAtClient is string
-        && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.createdByName is string
-        && request.resource.data.createdByName.size() > 0
-        && request.resource.data.createdByName.size() <= 80
-        && getAfter(/databases/$(database)/documents/finance/cash).data.balance == request.resource.data.after;
+        && validWithdrawal(request.resource.data)
+        && withdrawalMatchesCash(request.resource.data);
       allow update, delete: if false;
     }
 
@@ -299,10 +281,6 @@ service cloud.firestore {
     match /requests/{requestId} {
       allow read: if isStaff();
       allow write: if false;
-    }
-
-    match /leads/{leadId} {
-      allow read, write: if false;
     }
 
     match /{document=**} {
