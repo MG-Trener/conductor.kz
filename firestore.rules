@@ -1,7 +1,6 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Warehouse access is granted only by a server-managed Firebase Authentication custom claim.
     function isStaff() {
       return request.auth != null
         && request.auth.token.warehouseStaff == true;
@@ -11,7 +10,6 @@ service cloud.firestore {
       return modelId is string && modelId.matches('^[A-Z0-9]{2,24}$');
     }
 
-    // Warehouse variants are valid only when their model is published in catalog.
     function modelExists(modelId) {
       return validModelId(modelId)
         && exists(/databases/$(database)/documents/catalog/$(modelId));
@@ -22,9 +20,16 @@ service cloud.firestore {
         && productId.matches('^[A-Z0-9]{2,24}_[A-Z0-9]+$');
     }
 
+    function validOperationId(value) {
+      return value is string
+        && value.size() > 0
+        && value.size() <= 128
+        && value.matches('^[A-Za-z0-9_-]+$');
+    }
+
     function validProductState(data) {
       return data.keys().hasAll(['modelId', 'name', 'stock'])
-        && modelExists(data.modelId)
+        && validModelId(data.modelId)
         && data.name is string
         && data.name.size() > 0
         && data.name.size() <= 120
@@ -39,27 +44,57 @@ service cloud.firestore {
         && data.updatedByName.size() <= 80;
     }
 
+    function productLastMovement(data) {
+      return data.keys().hasAny(['lastMovementId']) ? data.lastMovementId : '';
+    }
+
+    function linkedProductMovement(productId, before, after) {
+      let movement = getAfter(/databases/$(database)/documents/stockMovements/$(request.resource.data.lastMovementId)).data;
+      return request.resource.data.keys().hasAny(['lastMovementId'])
+        && validOperationId(request.resource.data.lastMovementId)
+        && movement.inventoryId == productId
+        && movement.productId == request.resource.data.modelId
+        && movement.before == before
+        && movement.after == after
+        && movement.qtyDelta == after - before
+        && movement.createdBy == request.auth.uid
+        && movement.createdAt == request.time;
+    }
+
+    function safeLegacyZeroing(productId) {
+      return !validProductId(productId)
+        && resource.data.stock >= 0
+        && request.resource.data.stock == 0
+        && request.resource.data.active == false
+        && request.resource.data.modelOnly == true
+        && request.resource.data.variantMigrationV2 == true;
+    }
+
     match /products/{productId} {
       allow read: if isStaff();
 
       allow create: if isStaff()
         && validProductId(productId)
         && validProductState(request.resource.data)
+        && modelExists(request.resource.data.modelId)
         && request.resource.data.createdBy == request.auth.uid
         && request.resource.data.createdAt == request.time
         && validProductAuthor(request.resource.data)
         && request.resource.data.keys().hasOnly([
           'id', 'modelId', 'colorId', 'colorName', 'colorHex', 'name',
-          'stock', 'lowStock', 'sort', 'active',
+          'stock', 'lowStock', 'sort', 'active', 'lastMovementId',
           'legacyUnassigned', 'createdAt', 'createdBy',
           'createdByName', 'updatedAt', 'updatedBy', 'updatedByName'
-        ]);
+        ])
+        && ((request.resource.data.stock == 0 && productLastMovement(request.resource.data) == '')
+          || (request.resource.data.stock > 0
+            && linkedProductMovement(productId, 0, request.resource.data.stock)));
 
       allow update: if isStaff()
         && validProductState(request.resource.data)
         && validProductAuthor(request.resource.data)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'stock', 'active', 'modelOnly',
+          'stock', 'active', 'modelOnly', 'lastMovementId',
           'variantMigrationV2', 'stockInitialized', 'inventoryInitialized',
           'lastInventoryAt', 'lastInventoryBy', 'lastInventoryByName',
           'updatedAt', 'updatedBy', 'updatedByName'
@@ -69,7 +104,15 @@ service cloud.firestore {
           'lastInventoryBy', 'lastInventoryByName'
         ])
           || (request.resource.data.lastInventoryAt == request.time
-            && request.resource.data.lastInventoryBy == request.auth.uid));
+            && request.resource.data.lastInventoryBy == request.auth.uid))
+        && (
+          (request.resource.data.stock == resource.data.stock
+            && productLastMovement(request.resource.data) == productLastMovement(resource.data))
+          || (request.resource.data.stock != resource.data.stock
+            && productLastMovement(request.resource.data) != productLastMovement(resource.data)
+            && linkedProductMovement(productId, resource.data.stock, request.resource.data.stock))
+          || safeLegacyZeroing(productId)
+        );
 
       allow delete: if false;
     }
@@ -100,26 +143,36 @@ service cloud.firestore {
           'createdBy', 'createdByName'
         ])
         && data.keys().hasOnly([
-          'items', 'total', 'note', 'status', 'source', 'createdAt', 'createdAtClient',
-          'createdBy', 'createdByName'
+          'items', 'total', 'baseTotal', 'pricing', 'note', 'status', 'source',
+          'createdAt', 'createdAtClient', 'createdBy', 'createdByName'
         ])
         && data.createdBy == request.auth.uid
         && data.createdByName is string
         && data.createdByName.size() <= 80
         && data.createdAt == request.time
         && data.createdAtClient is string
+        && data.createdAtClient.size() <= 64
         && data.status == 'done'
         && data.source == 'stock-app'
         && data.items is list
         && data.items.size() > 0
-        && data.items.size() <= 50
+        && data.items.size() <= 18
         && data.total is number
-        && data.total >= 0
+        && data.total > 0
+        && (!data.keys().hasAny(['baseTotal']) || (data.baseTotal is number && data.baseTotal >= data.total))
         && data.note is string
         && data.note.size() <= 500;
     }
 
-    function validOrderCancel() {
+    function orderMatchesCash(orderId, operationType) {
+      return existsAfter(/databases/$(database)/documents/finance/cash)
+        && getAfter(/databases/$(database)/documents/finance/cash).data.lastOperationType == operationType
+        && getAfter(/databases/$(database)/documents/finance/cash).data.lastOperationId == orderId
+        && getAfter(/databases/$(database)/documents/finance/cash).data.updatedBy == request.auth.uid
+        && getAfter(/databases/$(database)/documents/finance/cash).data.updatedAt == request.time;
+    }
+
+    function validOrderCancel(orderId) {
       return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'status', 'cancelledAt', 'cancelledBy', 'cancelledByName'
         ])
@@ -134,7 +187,7 @@ service cloud.firestore {
     match /orders/{orderId} {
       allow read: if isStaff();
       allow create: if isStaff() && validOrderCreate(request.resource.data);
-      allow update: if isStaff() && validOrderCancel();
+      allow update: if isStaff() && validOrderCancel(orderId);
       allow delete: if false;
     }
 
@@ -144,21 +197,25 @@ service cloud.firestore {
 
     function validMovement(data) {
       return data.keys().hasAll([
-          'productId', 'modelId', 'name', 'type', 'qtyDelta', 'before', 'after',
-          'unitCost', 'totalCost', 'salePrice', 'orderId', 'reason', 'createdAt',
-          'createdAtClient', 'createdBy', 'createdByName'
+          'type', 'inventoryId', 'productId', 'productName', 'colorId', 'colorName',
+          'qtyDelta', 'before', 'after', 'unitCost', 'totalCost', 'reason',
+          'createdAt', 'createdAtClient', 'createdBy', 'createdByName'
         ])
         && data.keys().hasOnly([
-          'productId', 'modelId', 'name', 'type', 'qtyDelta', 'before', 'after',
-          'unitCost', 'totalCost', 'salePrice', 'orderId', 'reason', 'createdAt',
-          'createdAtClient', 'createdBy', 'createdByName'
+          'type', 'inventoryId', 'productId', 'productName', 'colorId', 'colorName',
+          'qtyDelta', 'before', 'after', 'unitCost', 'totalCost', 'salePrice',
+          'orderId', 'reason', 'createdAt', 'createdAtClient', 'createdBy', 'createdByName'
         ])
         && validMovementType(data.type)
-        && validProductId(data.productId)
-        && modelExists(data.modelId)
-        && data.name is string
-        && data.name.size() > 0
-        && data.name.size() <= 120
+        && validProductId(data.inventoryId)
+        && validModelId(data.productId)
+        && data.productName is string
+        && data.productName.size() > 0
+        && data.productName.size() <= 120
+        && data.colorId is string
+        && data.colorId.size() <= 40
+        && data.colorName is string
+        && data.colorName.size() <= 80
         && data.qtyDelta is int
         && data.qtyDelta != 0
         && data.before is int
@@ -170,39 +227,78 @@ service cloud.firestore {
         && data.unitCost >= 0
         && data.totalCost is number
         && data.totalCost >= 0
-        && data.salePrice is number
-        && data.salePrice >= 0
-        && data.orderId is string
-        && data.orderId.size() <= 128
+        && (!data.keys().hasAny(['salePrice']) || (data.salePrice is number && data.salePrice >= 0))
+        && (!data.keys().hasAny(['orderId']) || (data.orderId is string && data.orderId.size() <= 128))
+        && (data.type != 'sale' || (data.keys().hasAll(['salePrice', 'orderId']) && data.orderId.size() > 0))
+        && (data.type != 'sale_return' || (data.keys().hasAll(['orderId']) && data.orderId.size() > 0))
         && data.reason is string
         && data.reason.size() <= 500
         && data.createdAt == request.time
         && data.createdAtClient is string
+        && data.createdAtClient.size() <= 64
         && data.createdBy == request.auth.uid
         && data.createdByName is string
         && data.createdByName.size() <= 80;
     }
 
-    function movementMatchesResultingStock(data) {
-      return existsAfter(/databases/$(database)/documents/products/$(data.productId))
-        && getAfter(/databases/$(database)/documents/products/$(data.productId)).data.stock == data.after;
-    }
-
     match /stockMovements/{movementId} {
       allow read: if isStaff();
       allow create: if isStaff()
-        && validMovement(request.resource.data)
-        && movementMatchesResultingStock(request.resource.data);
+        && validOperationId(movementId)
+        && validMovement(request.resource.data);
       allow update, delete: if false;
     }
 
+    function cashOperationType(data) {
+      return data.keys().hasAny(['lastOperationType']) ? data.lastOperationType : '';
+    }
+
+    function cashOperationId(data) {
+      return data.keys().hasAny(['lastOperationId']) ? data.lastOperationId : '';
+    }
+
     function validCashState(data) {
-      return data.balance is number
+      return data.keys().hasAll([
+          'balance', 'updatedAt', 'updatedBy', 'updatedByName',
+          'lastOperationType', 'lastOperationId'
+        ])
+        && data.balance is number
         && data.balance >= 0
         && data.updatedAt == request.time
         && data.updatedBy == request.auth.uid
         && data.updatedByName is string
-        && data.updatedByName.size() <= 80;
+        && data.updatedByName.size() <= 80
+        && data.lastOperationType is string
+        && data.lastOperationType in ['init', 'sale', 'cancel_sale', 'withdrawal']
+        && validOperationId(data.lastOperationId);
+    }
+
+    function cashMatchesSale() {
+      let order = getAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data))).data;
+      return cashOperationType(request.resource.data) == 'sale'
+        && order.status == 'done'
+        && order.createdAt == request.time
+        && order.createdBy == request.auth.uid
+        && request.resource.data.balance == resource.data.balance + order.total;
+    }
+
+    function cashMatchesCancellation() {
+      let order = getAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data))).data;
+      return cashOperationType(request.resource.data) == 'cancel_sale'
+        && order.status == 'cancelled'
+        && order.cancelledAt == request.time
+        && order.cancelledBy == request.auth.uid
+        && request.resource.data.balance == resource.data.balance - order.total;
+    }
+
+    function cashMatchesWithdrawal() {
+      let withdrawal = getAfter(/databases/$(database)/documents/cashWithdrawals/$(cashOperationId(request.resource.data))).data;
+      return cashOperationType(request.resource.data) == 'withdrawal'
+        && withdrawal.createdAt == request.time
+        && withdrawal.createdBy == request.auth.uid
+        && withdrawal.before == resource.data.balance
+        && withdrawal.after == request.resource.data.balance
+        && request.resource.data.balance == resource.data.balance - withdrawal.amount;
     }
 
     match /finance/{docId} {
@@ -211,15 +307,27 @@ service cloud.firestore {
         && docId == 'cash'
         && validCashState(request.resource.data)
         && request.resource.data.keys().hasOnly([
-          'balance', 'initializedAt', 'updatedAt', 'updatedBy', 'updatedByName'
+          'balance', 'initializedAt', 'updatedAt', 'updatedBy', 'updatedByName',
+          'lastOperationType', 'lastOperationId'
         ])
-        && request.resource.data.initializedAt == request.time;
+        && request.resource.data.initializedAt == request.time
+        && request.resource.data.lastOperationType == 'init'
+        && request.resource.data.lastOperationId == 'initial';
       allow update: if isStaff()
         && docId == 'cash'
         && validCashState(request.resource.data)
         && request.resource.data.keys().hasOnly([
-          'balance', 'initializedAt', 'updatedAt', 'updatedBy', 'updatedByName'
-        ]);
+          'balance', 'initializedAt', 'updatedAt', 'updatedBy', 'updatedByName',
+          'lastOperationType', 'lastOperationId'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'balance', 'updatedAt', 'updatedBy', 'updatedByName',
+          'lastOperationType', 'lastOperationId'
+        ])
+        && request.resource.data.balance != resource.data.balance
+        && (cashOperationId(request.resource.data) != cashOperationId(resource.data)
+          || cashOperationType(request.resource.data) != cashOperationType(resource.data))
+        && (cashMatchesSale() || cashMatchesCancellation() || cashMatchesWithdrawal());
       allow delete: if false;
     }
 
@@ -243,21 +351,27 @@ service cloud.firestore {
         && data.comment.size() <= 500
         && data.createdAt == request.time
         && data.createdAtClient is string
+        && data.createdAtClient.size() <= 64
         && data.createdBy == request.auth.uid
         && data.createdByName is string
         && data.createdByName.size() <= 80;
     }
 
-    function withdrawalMatchesCash(data) {
-      return existsAfter(/databases/$(database)/documents/finance/cash)
-        && getAfter(/databases/$(database)/documents/finance/cash).data.balance == data.after;
+    function withdrawalMatchesCash(withdrawalId, data) {
+      let cash = getAfter(/databases/$(database)/documents/finance/cash).data;
+      return cash.lastOperationType == 'withdrawal'
+        && cash.lastOperationId == withdrawalId
+        && cash.balance == data.after
+        && cash.updatedBy == request.auth.uid
+        && cash.updatedAt == request.time;
     }
 
     match /cashWithdrawals/{withdrawalId} {
       allow read: if isStaff();
       allow create: if isStaff()
+        && validOperationId(withdrawalId)
         && validWithdrawal(request.resource.data)
-        && withdrawalMatchesCash(request.resource.data);
+        && withdrawalMatchesCash(withdrawalId, request.resource.data);
       allow update, delete: if false;
     }
 

@@ -57,7 +57,7 @@ test("DM60R1G seed uses one catalog price and blue/pink warehouse variants", asy
   assert.match(catalog, /id: "DM60R1G", name: "DM60R1G \(интрига\)", price: 4000/);
   assert.match(catalog, /\["BLUE", "Синий", "#258cff"\][\s\S]*\["PINK", "Розовый", "#ff6bab"\]/);
   assert.doesNotMatch(prices, /storedPrice === 3000/);
-  assert.match(rules, /modelExists\(data\.modelId\)/);
+  assert.match(rules, /modelExists\(request\.resource\.data\.modelId\)/);
   for (const html of [home, smoke]) {
     assert.match(html, /data-public-price="DM60R1G"/);
     assert.match(html, /dm60r1g\.webp\?v=1/);
