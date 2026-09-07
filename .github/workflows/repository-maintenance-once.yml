@@ -1,0 +1,99 @@
+name: One-time repository maintenance
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/repository-maintenance-once.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Java for Firestore emulator tests
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Apply repository refactor
+        run: node .github/maintenance-refactor-20260907.mjs
+
+      - name: Generate locked Android dependencies
+        working-directory: android-app
+        run: npm install --ignore-scripts
+
+      - name: Optimize source artwork
+        working-directory: android-app
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+          import sharp from "sharp";
+
+          await sharp("../mobile/warehouse-splash-clean.png")
+            .webp({ quality: 84, effort: 6, smartSubsample: true })
+            .toFile("../mobile/warehouse-splash-clean.webp");
+          await sharp("../mobile/conductor-vintage-title.png")
+            .webp({ quality: 88, effort: 6, smartSubsample: true })
+            .toFile("../mobile/conductor-vintage-title.webp");
+
+          const iconMeta = await sharp("branding/icon.png").metadata();
+          const iconSize = Math.min(1024, iconMeta.width || 1024, iconMeta.height || 1024);
+          await sharp("branding/icon.png")
+            .resize(iconSize, iconSize, { fit: "cover" })
+            .png({ compressionLevel: 9, adaptiveFiltering: true })
+            .toFile("branding/icon.optimized.png");
+          fs.renameSync("branding/icon.optimized.png", "branding/icon.png");
+
+          fs.rmSync("../mobile/warehouse-splash-clean.png");
+          fs.rmSync("../mobile/conductor-vintage-title.png");
+          NODE
+
+      - name: Verify Android lock is reproducible
+        working-directory: android-app
+        run: npm ci --ignore-scripts
+
+      - name: Validate JavaScript syntax
+        run: |
+          node --check mobile/app.js
+          node --check mobile/catalog-core.js
+          node --check mobile/catalog-service.js
+          node --check mobile/warehouse-domain.js
+          node --check mobile/bootstrap.js
+          node --check mobile/version-history.js
+          node --check assets/public-prices.js
+
+      - name: Install repository test dependencies
+        run: npm ci
+
+      - name: Run repository tests
+        run: npm test
+
+      - name: Remove one-time maintenance files
+        run: |
+          rm -f .github/maintenance-refactor-20260907.mjs
+          rm -f .github/workflows/repository-maintenance-once.yml
+
+      - name: Commit verified maintenance changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git status --short
+          git diff --cached --quiet && exit 0
+          git commit -m "refactor: unify catalog and harden mobile build"
+          git push origin HEAD:main
