@@ -18,8 +18,8 @@ test("mobile app uses the compact stock UI entry points", async () => {
     read("mobile/push-notifications.js")
   ]);
 
-  assert.match(index, /app\.js\?v=107/);
-  assert.match(index, /bootstrap-104\.js\?v=3/);
+  assert.match(index, /app\.js\?v=108/);
+  assert.match(index, /bootstrap-104\.js\?v=4/);
   assert.match(index, /core-ui-105\.js/);
   assert.match(index, /version-history-105\.js/);
   assert.match(index, /startup-guard-104\.js/);
@@ -55,6 +55,24 @@ test("DM60R1G repair restores variants and fixes only the legacy 3000 price", as
   assert.match(app, /item\.modelId === "DM60R1G" && \(current\.active === false \|\| current\.modelOnly === true\)/);
   assert.match(app, /repair\.active = true/);
   assert.match(app, /repair\.modelOnly = false/);
+});
+
+
+
+test("DM60R1G UI has virtual variants and effective legacy-price fallback", async () => {
+  const [app, inventory, publicPrices] = await Promise.all([
+    read("mobile/app.js"),
+    read("mobile/inventory-state.js"),
+    read("assets/public-prices.js")
+  ]);
+  assert.match(app, /modelId !== "DM60R1G"/);
+  assert.match(app, /virtual: true/);
+  assert.match(app, /modelId === "DM60R1G" && catalogPrice === 3000/);
+  assert.match(app, /modelId === "DM60G" && catalogPrice === 3000/);
+  assert.match(inventory, /DM60R1G_BLUE/);
+  assert.match(inventory, /DM60R1G_PINK/);
+  assert.match(inventory, /tx\.set\(doc\(db, "products", id\)/);
+  assert.match(publicPrices, /DM60R1G" && storedPrice === 3000 \? 4000/);
 });
 
 test("startup UI cannot self-trigger an endless mutation loop", async () => {
@@ -215,8 +233,8 @@ test("native updater accepts only the warehouse release and verifies SHA-256", a
 
 test("PWA cache contains current settings and UI sound assets", async () => {
   const sw = await read("mobile/sw.js");
-  assert.match(sw, /const CACHE = "conductor-mobile-v61"/);
-  for (const asset of ["release-103.css", "release-105.css?v=2", "app.js?v=107", "bootstrap-104.js?v=3", "core-ui-105.js?v=2", "version-history-105.js?v=2", "startup-guard-104.js", "ui-sounds.js?v=1"]) {
+  assert.match(sw, /const CACHE = "conductor-mobile-v62"/);
+  for (const asset of ["release-103.css", "release-105.css?v=2", "app.js?v=108", "bootstrap-104.js?v=4", "core-ui-105.js?v=2", "version-history-105.js?v=2", "startup-guard-104.js", "ui-sounds.js?v=1"]) {
     assert.ok(sw.includes(`./${asset}`), `${asset} must be cached`);
   }
   assert.match(sw, /fetch\(request, \{ cache: "no-store" \}\)/);

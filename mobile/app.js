@@ -251,15 +251,23 @@ window.addEventListener("pageshow", (event) => {
 
 function modelById(modelId) { return MODELS.find((model) => model.id === modelId); }
 function variantDefaults(modelId) { return defaults.filter((item) => item.modelId === modelId); }
-function modelVariants(modelId) { return state.products.filter((item) => item.modelId === modelId && !item.legacyUnassigned && item.active !== false).sort((a, b) => Number(a.sort || 0) - Number(b.sort || 0)); }
+function modelVariants(modelId) {
+  const actual = state.products
+    .filter((item) => item.modelId === modelId && !item.legacyUnassigned && item.active !== false)
+    .sort((a, b) => Number(a.sort || 0) - Number(b.sort || 0));
+  if (modelId !== "DM60R1G") return actual;
+  const byId = new Map(actual.map((item) => [item.id, item]));
+  return variantDefaults(modelId).map((item) => byId.get(item.id) || ({ ...item, active: true, virtual: true }));
+}
 function modelSalePrice(modelId) {
   const catalogModel = state.catalog.find((item) => item.id === modelId);
-  return Number(catalogModel?.price || modelById(modelId)?.price || 0);
+  const catalogPrice = Number(catalogModel?.price || 0);
+  if (modelId === "DM60G" && catalogPrice === 3000) return 3500;
+  if (modelId === "DM60R1G" && catalogPrice === 3000) return 4000;
+  return catalogPrice || Number(modelById(modelId)?.price || 0);
 }
 function selectedModelQuantity(modelId) {
-  return state.products.reduce((sum, product) => product.modelId === modelId
-    ? sum + Number(state.saleQuantities.get(product.id) || 0)
-    : sum, 0);
+  return modelVariants(modelId).reduce((sum, product) => sum + Number(state.saleQuantities.get(product.id) || 0), 0);
 }
 function salePriceForQuantity(modelId, quantity) {
   if (modelId !== "HOLI") return modelSalePrice(modelId);
@@ -1194,7 +1202,7 @@ async function boot() {
     state.auth = getAuth(app);
     await setPersistence(state.auth, browserLocalPersistence);
 
-    onAuthStateChanged(state.auth, (user) => {
+    onAuthStateChanged(state.auth, async (user) => {
       state.user = user;
       if (!user) {
         stopRealtime();
@@ -1216,6 +1224,13 @@ async function boot() {
       $("#settings-name").textContent = employee;
       $("#settings-email").textContent = user.email || user.uid;
       $("#settings-project").textContent = cfg.projectId;
+      try {
+        await ensureProducts();
+      } catch (error) {
+        console.error("Product initialization failed", error);
+        toast(`Товары: ${error.message}`);
+      }
+      if (state.user !== user) return;
       startRealtime(() => {
         if (state.user !== user) return;
         showOnly("#app");
@@ -1223,7 +1238,6 @@ async function boot() {
         hideBoot();
       });
       ensureCashBalance().catch((error) => toast(`Касса: ${error.message}`));
-      ensureProducts().catch((error) => toast(`Товары: ${error.message}`));
     });
   } catch (error) {
     showOnly("#login");

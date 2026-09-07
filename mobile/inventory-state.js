@@ -12,6 +12,10 @@ import {
 
 const KZT = new Intl.NumberFormat("ru-KZ", { style: "currency", currency: "KZT", maximumFractionDigits: 0 });
 const DEFAULT_PRICES = { DM30: 2500, DM60: 3000, DM60G: 3500, DM60R1G: 4000, DM90: 3500, HOLI: 1000 };
+const DM60R1G_VARIANTS = {
+  DM60R1G_BLUE: { colorId: "blue", colorName: "Синий", colorHex: "#258cff", name: "DM60R1G · Синий", lowStock: 2, sort: 28 },
+  DM60R1G_PINK: { colorId: "pink", colorName: "Розовый", colorHex: "#ff6bab", name: "DM60R1G · Розовый", lowStock: 2, sort: 29 }
+};
 
 let products = [];
 let catalog = [];
@@ -33,7 +37,7 @@ function initializedInventoryIds() {
     if (movement.inventoryId) ids.add(movement.inventoryId);
   }
   for (const product of products) {
-    if (product.stockInitialized === true || product.inventoryInitialized === true || Number(product.stock || 0) > 0) ids.add(product.id);
+    if (product.stockInitialized === true || product.inventoryInitialized === true || Number(product.stock || 0) > 0 || product.modelId === "DM60R1G") ids.add(product.id);
   }
   return ids;
 }
@@ -46,12 +50,18 @@ function modelIdFromDialog() {
 }
 
 function modelProducts(modelId) {
-  return products.filter((item) => item.modelId === modelId && !item.legacyUnassigned && !item.modelOnly && item.active !== false);
+  const actual = products.filter((item) => item.modelId === modelId && !item.legacyUnassigned && !item.modelOnly && item.active !== false);
+  if (modelId !== "DM60R1G") return actual;
+  const byId = new Map(actual.map((item) => [item.id, item]));
+  return Object.entries(DM60R1G_VARIANTS).map(([id, item]) => byId.get(id) || ({ id, modelId, stock: 0, active: true, virtual: true, ...item }));
 }
 
 function currentModelPrice(modelId) {
   const model = catalog.find((item) => item.id === modelId);
-  return Number(model?.price || DEFAULT_PRICES[modelId] || 0);
+  const catalogPrice = Number(model?.price || 0);
+  if (modelId === "DM60G" && catalogPrice === 3000) return 3500;
+  if (modelId === "DM60R1G" && catalogPrice === 3000) return 4000;
+  return catalogPrice || Number(DEFAULT_PRICES[modelId] || 0);
 }
 
 function setText(node, value) {
@@ -251,9 +261,55 @@ async function saveModelInventory(event) {
 
       for (const id of refIds) {
         const snap = snapById.get(id);
-        if (!snap?.exists()) throw new Error(`${id}: позиция не найдена`);
-        const data = snap.data();
         const desired = enteredMap.get(id);
+        const template = DM60R1G_VARIANTS[id];
+
+        if (!snap?.exists()) {
+          if (modelId !== "DM60R1G" || !template || !desired) throw new Error(`${id}: позиция не найдена`);
+          const after = desired.stock;
+          tx.set(doc(db, "products", id), {
+            id,
+            modelId: "DM60R1G",
+            colorId: template.colorId,
+            colorName: template.colorName,
+            colorHex: template.colorHex,
+            name: template.name,
+            stock: after,
+            lowStock: template.lowStock,
+            sort: template.sort,
+            active: true,
+            createdAt: serverTimestamp(),
+            createdBy: user.uid,
+            createdByName: employee,
+            updatedAt: serverTimestamp(),
+            updatedBy: user.uid,
+            updatedByName: employee
+          });
+          if (after !== 0) {
+            tx.set(movementRefs.get(id), {
+              type: "adjustment",
+              inventoryId: id,
+              productId: "DM60R1G",
+              productName: template.name,
+              colorId: template.colorId,
+              colorName: template.colorName,
+              qtyDelta: after,
+              before: 0,
+              after,
+              unitCost: 0,
+              totalCost: 0,
+              reason,
+              createdAt: serverTimestamp(),
+              createdAtClient: new Date().toISOString(),
+              createdBy: user.uid,
+              createdByEmail: user.email || "",
+              createdByName: employee
+            });
+          }
+          continue;
+        }
+
+        const data = snap.data();
         const update = {
           updatedAt: serverTimestamp(),
           updatedBy: user.uid,

@@ -1,5 +1,14 @@
 const VERSIONS = [
   {
+    version: "1.0.18",
+    date: "07.09.2026",
+    changes: [
+      "DM60R1G теперь всегда показывает разновидности «Синий» и «Розовый» на складе и в новой продаже, даже если старые документы Firestore ещё не были созданы.",
+      "При сохранении остатков недостающие позиции DM60R1G создаются автоматически; инициализация выполняется до запуска realtime-подписок.",
+      "Исправлены известные старые цены: DM60R1G 3 000 ₸ → 4 000 ₸ и DM60G 3 000 ₸ → 3 500 ₸; сайт, склад и продажи используют одинаковую эффективную цену."
+    ]
+  },
+  {
     version: "1.0.17",
     date: "07.09.2026",
     changes: [
@@ -64,10 +73,10 @@ function renderCurrentVersionCard() {
 function patchCurrentVersionUi() {
   const button = document.getElementById("version-history-button");
   const copy = button?.querySelector(".version-history-btn-copy small");
-  if (copy) copy.textContent = "Актуальная версия: 1.0.17";
+  if (copy) copy.textContent = "Актуальная версия: 1.0.18";
 
   const root = document.getElementById("version-history-list");
-  if (!root || root.querySelector('[data-current-version="1.0.15"]')) return;
+  if (!root || root.querySelector('[data-current-version="1.0.18"]')) return;
   root.querySelectorAll(".version-history-card.latest").forEach((card) => card.classList.remove("latest"));
   root.querySelectorAll(".version-history-badge").forEach((badge) => badge.remove());
   root.insertAdjacentHTML("afterbegin", renderCurrentVersionCard());

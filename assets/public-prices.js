@@ -93,8 +93,11 @@ function loadPublicPrices() {
     const prices = new Map();
     for (const item of snapshot.docs) {
       const modelId = item.id;
-      const price = Math.trunc(Number(item.data().price));
-      if (!MODELS.has(modelId) || !Number.isFinite(price) || price <= 0) continue;
+      const storedPrice = Math.trunc(Number(item.data().price));
+      if (!MODELS.has(modelId) || !Number.isFinite(storedPrice) || storedPrice <= 0) continue;
+      const price = modelId === "DM60G" && storedPrice === 3000 ? 3500
+        : modelId === "DM60R1G" && storedPrice === 3000 ? 4000
+        : storedPrice;
       prices.set(modelId, price);
       for (const node of document.querySelectorAll(`[data-public-price="${modelId}"]`)) {
         node.textContent = KZT.format(price);
