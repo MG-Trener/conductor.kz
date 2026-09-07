@@ -1,5 +1,14 @@
 const VERSIONS = [
   {
+    version: "1.1.3",
+    date: "07.09.2026",
+    changes: [
+      "Доступ к складу переведён на серверный Firebase custom claim: списки UID и email больше не публикуются в клиентском коде.",
+      "Персональные email больше не записываются в продажи, движения, кассу и push-устройства; старые служебные email очищены из Firestore.",
+      "Пятиступенчатая защита входа 5 минут → 30 минут → 24 часа сохранена."
+    ]
+  },
+  {
     version: "1.1.2",
     date: "07.09.2026",
     changes: [
@@ -102,10 +111,10 @@ function renderCurrentVersionCard() {
 function patchCurrentVersionUi() {
   const button = document.getElementById("version-history-button");
   const copy = button?.querySelector(".version-history-btn-copy small");
-  if (copy) copy.textContent = "Актуальная версия: 1.1.2";
+  if (copy) copy.textContent = "Актуальная версия: 1.1.3";
 
   const root = document.getElementById("version-history-list");
-  if (!root || root.querySelector('[data-current-version="1.1.2"]')) return;
+  if (!root || root.querySelector('[data-current-version="1.1.3"]')) return;
   root.querySelectorAll(".version-history-card.latest").forEach((card) => card.classList.remove("latest"));
   root.querySelectorAll(".version-history-badge").forEach((badge) => badge.remove());
   root.insertAdjacentHTML("afterbegin", renderCurrentVersionCard());

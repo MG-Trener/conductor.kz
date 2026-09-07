@@ -106,12 +106,12 @@ async function saveCashMovement(event) {
       const before = Number(cashSnap.data().balance || 0);
       const after = before + delta;
       if (after < 0) throw new Error(`В кассе доступно только ${KZT.format(before)}.`);
-      tx.update(cashRef, { balance: after, updatedAt: serverTimestamp(), updatedBy: user.uid, updatedByEmail: user.email || "", updatedByName: employee });
+      tx.update(cashRef, { balance: after, updatedAt: serverTimestamp(), updatedBy: user.uid, updatedByName: employee });
       tx.set(operationRef, {
         operationType: type === "deposit" ? "cash_deposit" : "cash_sawmill",
         amount, cashDelta: delta, before, after, items: [], total: delta, note: comment,
         status: "done", source: "stock-app", createdAt: serverTimestamp(), createdAtClient: new Date().toISOString(),
-        createdBy: user.uid, createdByEmail: user.email || "", createdByName: employee
+        createdBy: user.uid, createdByName: employee
       });
     });
     document.getElementById("cash-dialog")?.close();

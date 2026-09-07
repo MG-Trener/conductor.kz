@@ -65,7 +65,7 @@ test("login throttle locks after 5 failures for 5 minutes, then 30 minutes, then
 
 test("successful login clears the escalation history", () => {
   const { throttle, advance } = buildThrottle();
-  const email = "mihagavr@gmail.com";
+  const email = "staff@example.test";
   let status = failFive(throttle, email);
   assert.equal(status.locked, true);
   advance(LOCK_DURATIONS_MS[0] + 1);
@@ -76,7 +76,7 @@ test("successful login clears the escalation history", () => {
 
 test("Firebase server abuse response forces a local 24 hour lock", () => {
   const { throttle } = buildThrottle();
-  const status = throttle.forceDayLock("a.kalashin@gmail.com");
+  const status = throttle.forceDayLock("staff2@example.test");
   assert.equal(status.locked, true);
   assert.equal(status.remainingMs, LOCK_DURATIONS_MS[2]);
 });
@@ -97,17 +97,19 @@ test("mobile has sign-in and password reset only, with no account-registration c
 });
 
 
-test("authorization allowlist is pinned to the two Firebase UIDs", async () => {
-  const [app, rules, push] = await Promise.all([
-    read("mobile/app.js"), read("firestore.rules"), read("push-worker/src/index.js")
+test("authorization uses server-managed custom claims and publishes no staff identifiers", async () => {
+  const [app, rules, push, analytics, sales] = await Promise.all([
+    read("mobile/app.js"),
+    read("firestore.rules"),
+    read("push-worker/src/index.js"),
+    read("mobile/analytics.js"),
+    read("mobile/sales-history.js")
   ]);
-  for (const uid of ["98l4qLx3yzX9XZ2ye8REhURyiRi2", "sIUV6byir4VALmrKBIpJLzD8Evz2"]) {
-    assert.ok(app.includes(uid));
-    assert.ok(rules.includes(uid));
-    assert.ok(push.includes(uid));
-  }
-  assert.match(app, /STAFF_BY_UID/);
-  assert.doesNotMatch(app, /isAllowedStaffEmail/);
-  assert.doesNotMatch(rules, /request\.auth\.token\.email in/);
-  assert.doesNotMatch(push, /ALLOWED_EMAILS/);
+  const combined = [app, rules, push, analytics, sales].join("\n");
+  assert.match(app, /getIdTokenResult\(true\)/);
+  assert.match(rules, /request\.auth\.token\.warehouseStaff == true/);
+  assert.match(push, /claims\?\.warehouseStaff !== true/);
+  assert.doesNotMatch(combined, /STAFF_BY_UID|ALLOWED_UIDS|STAFF_NAMES/);
+  assert.doesNotMatch(combined, /@gmail\.com/);
+  assert.doesNotMatch(combined, /createdByEmail|cancelledByEmail|updatedByEmail/);
 });

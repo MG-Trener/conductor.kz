@@ -49,7 +49,6 @@ async function saveDeviceToken(token) {
   const deviceId = await tokenDocumentId(token);
   await setDoc(doc(window.CONDUCTOR_FIRESTORE, "pushDevices", deviceId), {
     uid: user.uid,
-    email: user.email || "",
     token,
     platform: "android",
     updatedAt: serverTimestamp()

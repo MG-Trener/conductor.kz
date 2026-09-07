@@ -19,11 +19,7 @@ function dateOf(item) {
 }
 
 function employeeName(sale) {
-  if (sale.createdByName) return sale.createdByName;
-  const email = String(sale.createdByEmail || "").trim().toLowerCase();
-  if (email === "mihagavr@gmail.com") return "Михаил";
-  if (email === "a.kalashin@gmail.com") return "Алексей";
-  return "Сотрудник";
+  return sale.createdByName || "Сотрудник";
 }
 
 function formatJournalDate(date) {

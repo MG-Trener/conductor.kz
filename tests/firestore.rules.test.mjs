@@ -16,10 +16,9 @@ import {
 } from "firebase/firestore";
 
 const projectId = "conductor-rules-test";
-const staffUid = "98l4qLx3yzX9XZ2ye8REhURyiRi2";
-const secondStaffUid = "sIUV6byir4VALmrKBIpJLzD8Evz2";
-const staffEmail = "mihagavr@gmail.com";
-const secondStaffEmail = "a.kalashin@gmail.com";
+const staffUid = "staff-user-1";
+const secondStaffUid = "staff-user-2";
+const staffClaims = { warehouseStaff: true, warehouseName: "Сотрудник" };
 let testEnv;
 
 const product = {
@@ -42,11 +41,11 @@ const product = {
 };
 
 function staffDb() {
-  return testEnv.authenticatedContext(staffUid, { email: staffEmail }).firestore();
+  return testEnv.authenticatedContext(staffUid, staffClaims).firestore();
 }
 
 function secondStaffDb() {
-  return testEnv.authenticatedContext(secondStaffUid, { email: secondStaffEmail }).firestore();
+  return testEnv.authenticatedContext(secondStaffUid, staffClaims).firestore();
 }
 
 function movement(overrides = {}) {
@@ -66,7 +65,6 @@ function movement(overrides = {}) {
     createdAt: serverTimestamp(),
     createdAtClient: "2026-08-31T10:00:00.000Z",
     createdBy: staffUid,
-    createdByEmail: staffEmail,
     createdByName: "Сотрудник",
     ...overrides
   };
@@ -111,12 +109,12 @@ after(async () => {
   await testEnv?.cleanup();
 });
 
-test("only the two approved Firebase UIDs can read warehouse products", async () => {
+test("only identities with the warehouseStaff custom claim can read warehouse products", async () => {
   const snapshot = await assertSucceeds(getDoc(doc(staffDb(), "products", "DM30_BLUE")));
   assert.equal(snapshot.data().stock, 4);
   await assertSucceeds(getDoc(doc(secondStaffDb(), "products", "DM30_BLUE")));
-  await assertFails(getDoc(doc(testEnv.authenticatedContext("outsider", { email: "other@example.com" }).firestore(), "products", "DM30_BLUE")));
-  await assertFails(getDoc(doc(testEnv.authenticatedContext("spoofed-uid", { email: staffEmail }).firestore(), "products", "DM30_BLUE")));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext("outsider").firestore(), "products", "DM30_BLUE")));
+  await assertFails(getDoc(doc(testEnv.authenticatedContext("email-only", { email: "staff@example.test" }).firestore(), "products", "DM30_BLUE")));
 });
 
 test("unauthenticated and non-email identities cannot access warehouse data", async () => {
@@ -276,7 +274,6 @@ test("staff can register only its own Android push token and cannot read token d
   const tokenRef = doc(db, "pushDevices", "device-1");
   await assertSucceeds(setDoc(tokenRef, {
     uid: staffUid,
-    email: staffEmail,
     token: "a-valid-firebase-device-token",
     platform: "android",
     updatedAt: serverTimestamp()
@@ -284,14 +281,12 @@ test("staff can register only its own Android push token and cannot read token d
   await assertFails(getDoc(tokenRef));
   await assertFails(setDoc(doc(db, "pushDevices", "forged-device"), {
     uid: "employee-2",
-    email: secondStaffEmail,
     token: "another-valid-firebase-device-token",
     platform: "android",
     updatedAt: serverTimestamp()
   }));
   await assertFails(setDoc(doc(db, "pushDevices", "web-device"), {
     uid: staffUid,
-    email: staffEmail,
     token: "a-valid-firebase-device-token",
     platform: "web",
     updatedAt: serverTimestamp()
@@ -429,8 +424,7 @@ test("sale and cancellation paths remain allowed for the authenticated employee"
       createdAt: serverTimestamp(),
       createdAtClient: "2026-08-31T10:00:00.000Z",
       createdBy: staffUid,
-      createdByEmail: staffEmail,
-      createdByName: "Сотрудник"
+        createdByName: "Сотрудник"
     });
   }));
 
@@ -454,7 +448,6 @@ test("sale and cancellation paths remain allowed for the authenticated employee"
       status: "cancelled",
       cancelledAt: serverTimestamp(),
       cancelledBy: staffUid,
-      cancelledByEmail: staffEmail,
       cancelledByName: "Сотрудник"
     });
   }));
@@ -494,7 +487,6 @@ test("staff can create the cash balance and atomically record a valid withdrawal
     initializedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     updatedBy: staffUid,
-    updatedByEmail: staffEmail,
     updatedByName: "Сотрудник"
   }));
 
@@ -504,8 +496,7 @@ test("staff can create the cash balance and atomically record a valid withdrawal
       balance: 3000,
       updatedAt: serverTimestamp(),
       updatedBy: staffUid,
-      updatedByEmail: staffEmail,
-      updatedByName: "Сотрудник"
+        updatedByName: "Сотрудник"
     });
     transaction.set(doc(db, "cashWithdrawals", "withdrawal-1"), {
       amount: 2000,
@@ -515,8 +506,7 @@ test("staff can create the cash balance and atomically record a valid withdrawal
       createdAt: serverTimestamp(),
       createdAtClient: "2026-09-01T10:00:00.000Z",
       createdBy: staffUid,
-      createdByEmail: staffEmail,
-      createdByName: "Сотрудник"
+        createdByName: "Сотрудник"
     });
   }));
   assert.equal((await getDoc(cashRef)).data().balance, 3000);
@@ -529,8 +519,7 @@ test("cash withdrawals cannot exceed or diverge from the resulting cash balance"
       initializedAt: new Date("2026-09-01T00:00:00Z"),
       updatedAt: new Date("2026-09-01T00:00:00Z"),
       updatedBy: staffUid,
-      updatedByEmail: staffEmail,
-      updatedByName: "Сотрудник"
+        updatedByName: "Сотрудник"
     });
   });
   const db = staffDb();
@@ -542,7 +531,6 @@ test("cash withdrawals cannot exceed or diverge from the resulting cash balance"
     createdAt: serverTimestamp(),
     createdAtClient: "2026-09-01T10:00:00.000Z",
     createdBy: staffUid,
-    createdByEmail: staffEmail,
     createdByName: "Сотрудник"
   }));
   await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), "finance", "cash")));

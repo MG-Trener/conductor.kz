@@ -1,8 +1,3 @@
-const ALLOWED_UIDS = new Set([
-  "98l4qLx3yzX9XZ2ye8REhURyiRi2",
-  "sIUV6byir4VALmrKBIpJLzD8Evz2"
-]);
-
 const ALLOWED_ORIGINS = new Set([
   "https://conductor.kz",
   "https://www.conductor.kz"
@@ -14,6 +9,20 @@ const INVALID_TOKEN_CODES = new Set([
 ]);
 
 let cachedAccessToken = null;
+
+function parseIdTokenClaims(idToken) {
+  const payload = String(idToken || "").split(".")[1];
+  if (!payload) return null;
+  const normalized = payload.replaceAll("-", "+").replaceAll("_", "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  try {
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return null;
+  }
+}
 
 function jsonResponse(request, body, status = 200) {
   const origin = request.headers.get("Origin") || "";
@@ -140,9 +149,9 @@ async function authenticate(request, env) {
   });
   if (!response.ok) return null;
   const user = (await response.json()).users?.[0];
-  const email = String(user?.email || "").toLowerCase();
-  if (!user?.localId || !ALLOWED_UIDS.has(user.localId)) return null;
-  return { uid: user.localId, email };
+  const claims = parseIdTokenClaims(idToken);
+  if (!user?.localId || claims?.warehouseStaff !== true) return null;
+  return { uid: user.localId };
 }
 
 async function readDocument(env, accessToken, path) {

@@ -1,14 +1,10 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Authorization is bound to the two explicitly approved Firebase Authentication UIDs.
-    // Email addresses are metadata, never authorization.
+    // Warehouse access is granted only by a server-managed Firebase Authentication claim.
     function isStaff() {
       return request.auth != null
-        && request.auth.uid in [
-          '98l4qLx3yzX9XZ2ye8REhURyiRi2',
-          'sIUV6byir4VALmrKBIpJLzD8Evz2'
-        ];
+        && request.auth.token.warehouseStaff == true;
     }
 
     function validModelId(modelId) {
@@ -109,7 +105,6 @@ service cloud.firestore {
       return data.source == 'stock-app'
         && data.status == 'done'
         && data.createdBy == request.auth.uid
-        && data.createdByEmail == request.auth.token.email
         && data.createdByName is string
         && data.createdByName.size() > 0
         && data.createdByName.size() <= 80
@@ -156,7 +151,7 @@ service cloud.firestore {
           'items', 'total', 'baseTotal', 'note', 'pricing',
           'operationType', 'amount', 'cashDelta', 'before', 'after',
           'status', 'source', 'createdAt', 'createdAtClient',
-          'createdBy', 'createdByEmail', 'createdByName'
+          'createdBy', 'createdByName'
         ])
         && validOrderAudit(request.resource.data)
         && (validSaleOrder(request.resource.data) || validCashOrder(request.resource.data));
@@ -165,14 +160,12 @@ service cloud.firestore {
         && resource.data.get('operationType', '') == ''
         && request.resource.data.status == 'cancelled'
         && request.resource.data.cancelledBy == request.auth.uid
-        && request.resource.data.cancelledByEmail == request.auth.token.email
         && request.resource.data.cancelledByName is string
         && request.resource.data.cancelledByName.size() > 0
         && request.resource.data.cancelledByName.size() <= 80
         && request.resource.data.cancelledAt == request.time
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'status', 'cancelledAt', 'cancelledBy', 'cancelledByEmail',
-          'cancelledByName'
+          'status', 'cancelledAt', 'cancelledBy', 'cancelledByName'
         ]);
       allow delete: if false;
     }
@@ -181,13 +174,13 @@ service cloud.firestore {
       return data.keys().hasAll([
           'type', 'inventoryId', 'productId', 'productName', 'qtyDelta',
           'before', 'after', 'unitCost', 'totalCost', 'reason', 'createdAt',
-          'createdAtClient', 'createdBy', 'createdByEmail', 'createdByName'
+          'createdAtClient', 'createdBy', 'createdByName'
         ])
         && data.keys().hasOnly([
           'type', 'inventoryId', 'productId', 'productName', 'colorId',
           'colorName', 'qtyDelta', 'before', 'after', 'unitCost',
           'totalCost', 'salePrice', 'orderId', 'reason', 'createdAt',
-          'createdAtClient', 'createdBy', 'createdByEmail', 'createdByName'
+          'createdAtClient', 'createdBy', 'createdByName'
         ])
         && data.type in ['receipt', 'writeoff', 'adjustment', 'sale', 'sale_return']
         && data.inventoryId is string
@@ -211,7 +204,6 @@ service cloud.firestore {
         && data.reason.size() <= 300
         && data.createdAtClient is string
         && data.createdBy == request.auth.uid
-        && data.createdByEmail == request.auth.token.email
         && data.createdByName is string
         && data.createdByName.size() <= 80
         && data.createdAt == request.time
@@ -229,7 +221,6 @@ service cloud.firestore {
         && data.balance >= 0
         && data.updatedAt == request.time
         && data.updatedBy == request.auth.uid
-        && data.updatedByEmail == request.auth.token.email
         && data.updatedByName is string
         && data.updatedByName.size() > 0
         && data.updatedByName.size() <= 80;
@@ -241,11 +232,11 @@ service cloud.firestore {
         && financeId == 'cash'
         && request.resource.data.keys().hasAll([
           'balance', 'initializedAt', 'updatedAt', 'updatedBy',
-          'updatedByEmail', 'updatedByName'
+          'updatedByName'
         ])
         && request.resource.data.keys().hasOnly([
           'balance', 'initializedAt', 'updatedAt', 'updatedBy',
-          'updatedByEmail', 'updatedByName'
+          'updatedByName'
         ])
         && request.resource.data.initializedAt == request.time
         && validCashAudit(request.resource.data);
@@ -253,7 +244,7 @@ service cloud.firestore {
         && financeId == 'cash'
         && validCashAudit(request.resource.data)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'balance', 'updatedAt', 'updatedBy', 'updatedByEmail', 'updatedByName'
+          'balance', 'updatedAt', 'updatedBy', 'updatedByName'
         ]);
       allow delete: if false;
     }
@@ -263,11 +254,11 @@ service cloud.firestore {
       allow create: if isStaff()
         && request.resource.data.keys().hasAll([
           'amount', 'before', 'after', 'comment', 'createdAt',
-          'createdAtClient', 'createdBy', 'createdByEmail', 'createdByName'
+          'createdAtClient', 'createdBy', 'createdByName'
         ])
         && request.resource.data.keys().hasOnly([
           'amount', 'before', 'after', 'comment', 'createdAt',
-          'createdAtClient', 'createdBy', 'createdByEmail', 'createdByName'
+          'createdAtClient', 'createdBy', 'createdByName'
         ])
         && request.resource.data.amount is int
         && request.resource.data.amount > 0
@@ -281,7 +272,6 @@ service cloud.firestore {
         && request.resource.data.createdAt == request.time
         && request.resource.data.createdAtClient is string
         && request.resource.data.createdBy == request.auth.uid
-        && request.resource.data.createdByEmail == request.auth.token.email
         && request.resource.data.createdByName is string
         && request.resource.data.createdByName.size() > 0
         && request.resource.data.createdByName.size() <= 80
@@ -290,10 +280,9 @@ service cloud.firestore {
     }
 
     function validPushDevice(data) {
-      return data.keys().hasAll(['uid', 'email', 'token', 'platform', 'updatedAt'])
-        && data.keys().hasOnly(['uid', 'email', 'token', 'platform', 'updatedAt'])
+      return data.keys().hasAll(['uid', 'token', 'platform', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'token', 'platform', 'updatedAt'])
         && data.uid == request.auth.uid
-        && data.email == request.auth.token.email
         && data.token is string
         && data.token.size() >= 20
         && data.token.size() <= 4096

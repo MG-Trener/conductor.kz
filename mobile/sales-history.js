@@ -1,11 +1,6 @@
 const KZT = new Intl.NumberFormat("ru-KZ", { style: "currency", currency: "KZT", maximumFractionDigits: 0 });
 const MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
 const START_YEAR = 2026;
-const STAFF_NAMES = new Map([
-  ["mihagavr@gmail.com", "Михаил"],
-  ["a.kalashin@gmail.com", "Алексей"]
-]);
-
 let operations = [];
 let selectedYear = Math.max(START_YEAR, new Date().getFullYear());
 let selectedMonth = new Date().getMonth();
@@ -36,13 +31,8 @@ function formatDate(date) {
   });
 }
 
-function employeeName(email = "", explicit = "") {
-  if (explicit) return explicit;
-  return STAFF_NAMES.get(String(email).trim().toLowerCase()) || "Сотрудник";
-}
-
 function createdByName(item) {
-  return employeeName(item.createdByEmail || "", item.createdByName || "");
+  return item.createdByName || "Сотрудник";
 }
 
 function saleItemLabel(item) {
@@ -175,7 +165,7 @@ function saleCard(sale) {
   const items = (sale.items || []).map((item) => `${saleItemLabel(item)} × ${Number(item.qty || 0)}`).join(" · ");
   const cancelled = sale.status === "cancelled";
   const note = sale.note || sale.notes || "";
-  const cancelName = employeeName(sale.cancelledByEmail || "", sale.cancelledByName || "");
+  const cancelName = sale.cancelledByName || "Сотрудник";
   const cancelDate = cancelledDateOf(sale);
   return `<article class="order-card">
     <div class="order-top">

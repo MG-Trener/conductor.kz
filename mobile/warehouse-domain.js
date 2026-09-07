@@ -44,7 +44,6 @@ export function createWarehouseDomain({ state, currentEmployeeName }) {
         initializedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         updatedBy: state.user.uid,
-        updatedByEmail: state.user.email || "",
         updatedByName: employee
       });
     });
@@ -100,7 +99,6 @@ export function createWarehouseDomain({ state, currentEmployeeName }) {
           createdAt: serverTimestamp(),
           createdAtClient: new Date().toISOString(),
           createdBy: state.user.uid,
-          createdByEmail: state.user.email || "",
           createdByName: employee
         });
       });
@@ -115,14 +113,12 @@ export function createWarehouseDomain({ state, currentEmployeeName }) {
         createdAt: serverTimestamp(),
         createdAtClient: new Date().toISOString(),
         createdBy: state.user.uid,
-        createdByEmail: state.user.email || "",
         createdByName: employee
       });
       tx.update(cashRef, {
         balance: Number(cashSnap.data().balance || 0) + total,
         updatedAt: serverTimestamp(),
         updatedBy: state.user.uid,
-        updatedByEmail: state.user.email || "",
         updatedByName: employee
       });
     });
@@ -187,7 +183,6 @@ export function createWarehouseDomain({ state, currentEmployeeName }) {
           createdAt: serverTimestamp(),
           createdAtClient: new Date().toISOString(),
           createdBy: state.user.uid,
-          createdByEmail: state.user.email || "",
           createdByName: employee
         });
       });
@@ -196,14 +191,12 @@ export function createWarehouseDomain({ state, currentEmployeeName }) {
         status: "cancelled",
         cancelledAt: serverTimestamp(),
         cancelledBy: state.user.uid,
-        cancelledByEmail: state.user.email || "",
         cancelledByName: employee
       });
       tx.update(cashRef, {
         balance: Number(cashSnap.data().balance || 0) - Number(sale.total || 0),
         updatedAt: serverTimestamp(),
         updatedBy: state.user.uid,
-        updatedByEmail: state.user.email || "",
         updatedByName: employee
       });
     });

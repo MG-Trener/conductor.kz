@@ -32,11 +32,6 @@ import { createWarehouseDomain } from "./warehouse-domain.js";
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const KZT = new Intl.NumberFormat("ru-KZ", { style: "currency", currency: "KZT", maximumFractionDigits: 0 });
-const STAFF_BY_UID = new Map([
-  ["98l4qLx3yzX9XZ2ye8REhURyiRi2", "Михаил"],
-  ["sIUV6byir4VALmrKBIpJLzD8Evz2", "Алексей"]
-]);
-
 const MODELS = LEGACY_CATALOG_SEED;
 const defaults = LEGACY_VARIANT_DEFAULTS;
 
@@ -52,6 +47,7 @@ const state = {
   auth: null,
   db: null,
   user: null,
+  staffName: "Сотрудник",
   catalog: [],
   products: [],
   sales: [],
@@ -67,14 +63,15 @@ const state = {
 
 function config() { return window.CONDUCTOR_FIREBASE_CONFIG || null; }
 
-function employeeNameFromUser(user) {
-  return STAFF_BY_UID.get(String(user?.uid || "")) || "Сотрудник";
+async function loadStaffClaims(user) {
+  const token = await user.getIdTokenResult(true);
+  if (token.claims?.warehouseStaff !== true) return null;
+  const name = String(token.claims?.warehouseName || "").trim();
+  return { name: name || "Сотрудник" };
 }
 
-function isAllowedStaffUser(user) { return STAFF_BY_UID.has(String(user?.uid || "")); }
-
 function currentEmployeeName() {
-  return employeeNameFromUser(state.user);
+  return state.staffName || "Сотрудник";
 }
 
 const catalogService = createCatalogService({ state, currentEmployeeName });
@@ -336,7 +333,6 @@ async function withdrawCash(event) {
         balance: after,
         updatedAt: serverTimestamp(),
         updatedBy: state.user.uid,
-        updatedByEmail: state.user.email || "",
         updatedByName: employee
       });
       tx.set(withdrawalRef, {
@@ -347,7 +343,6 @@ async function withdrawCash(event) {
         createdAt: serverTimestamp(),
         createdAtClient: new Date().toISOString(),
         createdBy: state.user.uid,
-        createdByEmail: state.user.email || "",
         createdByName: employee
       });
     });
@@ -363,7 +358,7 @@ function saleItemLabel(item) {
 }
 
 function saleEmployee(sale) {
-  return sale.createdByName || employeeNameFromEmail(sale.createdByEmail || "");
+  return sale.createdByName || "Сотрудник";
 }
 
 function saleCard(sale) {
@@ -582,7 +577,7 @@ function renderStock() {
 }
 
 function movementEmployee(movement) {
-  return movement.createdByName || employeeNameFromEmail(movement.createdByEmail || "");
+  return movement.createdByName || "Сотрудник";
 }
 
 function renderMovements() {
@@ -771,7 +766,6 @@ async function saveModelBalances(event) {
             createdAt: serverTimestamp(),
             createdAtClient: new Date().toISOString(),
             createdBy: state.user.uid,
-            createdByEmail: state.user.email || "",
             createdByName: employee
           });
         }
@@ -856,7 +850,6 @@ async function applyStockOperation(event) {
         createdAt: serverTimestamp(),
         createdAtClient: new Date().toISOString(),
         createdBy: state.user.uid,
-        createdByEmail: state.user.email || "",
         createdByName: employee
       });
     });
@@ -946,12 +939,15 @@ async function boot() {
     onAuthStateChanged(state.auth, async (user) => {
       state.user = user;
       if (!user) {
+        state.staffName = "Сотрудник";
         stopRealtime();
         showOnly("#login");
         hideBoot();
         return;
       }
-      if (!isAllowedStaffUser(user)) {
+      const staffClaims = await loadStaffClaims(user).catch(() => null);
+      if (!staffClaims) {
+        state.staffName = "Сотрудник";
         stopRealtime();
         showOnly("#login");
         $("#login-error").textContent = "У этой учётной записи нет доступа к складу.";
@@ -959,6 +955,7 @@ async function boot() {
         signOut(state.auth);
         return;
       }
+      state.staffName = staffClaims.name;
       const employee = currentEmployeeName();
       $("#current-user-name").textContent = employee;
       $("#current-user-email").textContent = user.email || "";
