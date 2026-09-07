@@ -1,0 +1,69 @@
+name: Verify warehouse security branch
+
+on:
+  push:
+    branches:
+      - security/high-integrity-guards
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout security branch
+        uses: actions/checkout@v4
+        with:
+          ref: security/high-integrity-guards
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Apply integrity client patch
+        run: python3 .github/security-integrity-patch.py
+
+      - name: Validate active JavaScript
+        run: |
+          node --check mobile/app.js
+          node --check mobile/catalog-service.js
+          node --check mobile/warehouse-domain.js
+          node --check mobile/version-history.js
+          node -e "const p=require('./android-app/package.json'); const m=require('./mobile/app-version.json'); if(p.version!==m.version) throw new Error('version mismatch'); if(m.versionCode!==10104) throw new Error('versionCode mismatch');"
+
+      - name: Install locked test dependencies
+        run: npm ci
+
+      - name: Run full repository tests
+        run: npm test
+
+      - name: Commit verified patch to security branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout origin/main -- .github/workflows/build-android-apk.yml
+          git rm .github/workflows/security-integrity-patch.yml .github/security-integrity-patch.py
+          git add \
+            mobile/app.js \
+            mobile/catalog-service.js \
+            mobile/app-version.json \
+            mobile/version-history.js \
+            android-app/package.json \
+            android-app/package-lock.json \
+            tests/firestore.rules.test.mjs \
+            .github/workflows/build-android-apk.yml
+          git diff --cached --check
+          git commit -m "security: enforce linked warehouse and cash mutations"
+          git push origin HEAD:security/high-integrity-guards
