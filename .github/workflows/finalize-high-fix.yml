@@ -1,0 +1,59 @@
+name: Verify final HIGH integrity fix
+
+on:
+  push:
+    branches:
+      - security/high-integrity-guards
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout security branch
+        uses: actions/checkout@v4
+        with:
+          ref: security/high-integrity-guards
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Apply final fix
+        run: python3 .github/finalize-high-fix.py
+
+      - name: Validate JavaScript
+        run: |
+          node --check mobile/app.js
+          node --check mobile/catalog-service.js
+          node --check mobile/warehouse-domain.js
+          node --check mobile/version-history.js
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run full tests
+        run: npm test
+
+      - name: Commit verified final fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/finalize-high-fix.yml .github/finalize-high-fix.py
+          git add firestore.rules tests/firestore.rules.test.mjs
+          git diff --cached --check
+          git commit -m "security: allow linked sale cancellation without weakening guards"
+          git push origin HEAD:security/high-integrity-guards
