@@ -1,204 +1,54 @@
 const VERSIONS = [
   {
-    version: "1.0.12",
+    version: "1.0.13",
     date: "07.09.2026",
     changes: [
-      "Добавлены отдельные звуковые эффекты кликов для нижней панели навигации, склада, продаж и операций, аналитики и настроек.",
-      "Звуки сделаны лёгкими и короткими через Web Audio API, без тяжёлых аудиофайлов внутри APK.",
-      "В карточке версии в Настройках теперь всегда показывается блок «Последние изменения» с описанием опубликованной сборки.",
-      "Сборка теперь проверяет наличие описания изменений и актуальной записи текущей версии в истории перед публикацией APK."
+      "Исправлена цена гендерного дыма DM60G в мобильном складе: ошибочные 3 000 ₸ автоматически приводятся к правильным 3 500 ₸.",
+      "Исправление выполняется в общем каталоге, поэтому правильная цена используется не только в карточке склада, но и при продаже, расчёте стоимости склада и на сайте.",
+      "Миграция ограничена исходной ошибочной записью DM60G и не будет перезаписывать последующие ручные изменения цены."
     ]
-  },
-  {
-    version: "1.0.11",
-    date: "06.09.2026",
-    changes: [
-      "Исправлена установка обновлений Android: восстановлена монотонная схема versionCode, чтобы новая версия не воспринималась системой как откат.",
-      "Перед публикацией APK автоматически проходит проверки apksigner и zipalign."
-    ]
-  },
-  {
-    version: "1.0.10",
-    date: "06.09.2026",
-    changes: [
-      "Полностью оптимизирован размер Android-приложения: иконки генерируются под реальные Android-плотности.",
-      "Удалены неиспользуемые старые заставки, активная графика переведена в WebP внутри APK, включено удаление неиспользуемого кода и ресурсов."
-    ]
-  },
-  {
-    version: "1.0.9",
-    date: "06.09.2026",
-    changes: [
-      "Значительно уменьшен размер Android-приложения: иконки генерируются в нужных разрешениях вместо многократного копирования исходного PNG.",
-      "Включено удаление неиспользуемого кода и ресурсов и оптимизирована крупная графика заставки без изменения внешнего вида."
-    ]
-  },
-  {
-    version: "1.0.8",
-    date: "06.09.2026",
-    changes: [
-      "Исправлено дублирование подписи «Настройки» в нижней навигации.",
-      "Восстановлена карточка проверки обновлений в разделе «Настройки».",
-      "Кнопки «Проверить ещё раз» и «Обновить» снова доступны в Android-приложении.",
-      "Карточка обновления приведена к компактному стилю остальных настроек."
-    ]
-  },
-  {
-    version: "1.0.7",
-    date: "06.09.2026",
-    changes: [
-      "Нижняя навигация зафиксирована в один ряд из четырёх равных кнопок.",
-      "Пункт «Ещё» заменён на прямую кнопку «Настройки».",
-      "Экран настроек приведён к компактному карточному стилю истории изменений.",
-      "Информация Firebase project скрыта из пользовательского интерфейса.",
-      "Удалён справочный блок «Как вносить остатки»."
-    ]
-  },
-  {
-    version: "1.0.6",
-    date: "06.09.2026",
-    changes: [
-      "Функционал «Новая продажа» перенесён прямо в «Обзор» сразу после верхних показателей.",
-      "Отдельный раздел «Продажа» и дублирующие кнопки продажи удалены.",
-      "Нижнее меню сокращено до четырёх пунктов: Обзор, Операции, Склад и Ещё.",
-      "После сохранения продажи приложение переходит в «Операции», где сразу видна созданная запись.",
-      "Обновлён PWA-кэш для новой компоновки интерфейса."
-    ]
-  },
-  {
-    version: "1.0.5",
-    date: "06.09.2026",
-    changes: [
-      "Карточки склада сделаны компактнее: уменьшены вертикальные отступы между цветами.",
-      "Между строками цветов добавлены тонкие разделители, чтобы название цвета и остаток справа легче сопоставлялись взглядом.",
-      "Нулевые остатки теперь отображаются приглушённым серым, включая менее яркий цветовой маркер.",
-      "Малые остатки 1–2 единицы выделяются предупреждающим оттенком.",
-      "Количество по-прежнему остаётся выровненным по правому краю карточки."
-    ]
-  },
-  {
-    version: "1.0.4",
-    date: "06.09.2026",
-    changes: [
-      "Исправлено зависание приложения на заставке после обновления 1.0.3.",
-      "Удалён зацикленный MutationObserver, который блокировал завершение запуска Firebase.",
-      "Добавлена защита от повторного зависания стартового экрана при задержке сети или Firestore."
-    ]
-  },
-  {
-    version: "1.0.3",
-    date: "06.09.2026",
-    changes: [
-      "В разделе «Операции» физически удалена дублирующая кнопка «+ Продажа».",
-      "Журнал движения остатков перенесён из-под карточек товаров в отдельное компактное окно по кнопке «Журнал».",
-      "Разновидности товара выводятся вертикально с цветными кружками без счётчика цветов."
-    ]
-  },
-  {
-    version: "1.0.2",
-    date: "06.09.2026",
-    changes: [
-      "Добавлена очистка WebView-кэша при смене Android-версии приложения.",
-      "Добавлены правки компактного склада и отдельного журнала движения.",
-      "Усилена синхронизация выбранного количества при продаже DM60."
-    ]
-  },
-  {
-    version: "1.0.1",
-    date: "06.09.2026",
-    changes: [
-      "Первая попытка исправить отображение склада, журнала движения и кнопку продажи в разделе операций.",
-      "Добавлена синхронизация выбранного количества между основной формой продажи и расширенным подтверждением."
-    ]
-  },
-  {
-    version: "1.0.0",
-    date: "06.09.2026",
-    changes: [
-      "Первый стабильный релиз новой архитектуры Android-приложения склада.",
-      "Добавлены единый bootstrap, проверки сборки и постоянная Android-подпись.",
-      "Обновления APK проверяются по SHA-256 перед системной установкой Android."
-    ]
-  },
-  { version: "0.7.0", date: "06.09.2026", changes: ["Мобильная сборка синхронизирована с актуальным интерфейсом склада.", "В Настройки добавлена история версий."] },
-  { version: "0.6.9", date: "06.09.2026", changes: ["Раздел «Продажи» переработан в журнал «Операции».", "Добавлено ручное движение кассы."] },
-  { version: "0.6.8", date: "03.09.2026", changes: ["Добавлена фильтрация журнала продаж по году и месяцу."] },
-  { version: "0.6.7", date: "03.09.2026", changes: ["Добавлена аналитика продаж и календарь 12 месяцев."] },
-  { version: "0.6.6", date: "03.09.2026", changes: ["Добавлены Android Push-уведомления о новой продаже второму сотруднику."] },
-  { version: "0.6.5", date: "01.09.2026", changes: ["Исправлено наложение системных панелей Android на интерфейс."] },
-  { version: "0.6.4", date: "01.09.2026", changes: ["Добавлен фирменный значок приложения с ретро-паровозом."] },
-  { version: "0.6.3", date: "01.09.2026", changes: ["Обновление APK переведено на стандартную проверку версии."] },
-  { version: "0.6.2", date: "01.09.2026", changes: ["Убрана дублирующая нативная заставка Android."] },
-  { version: "0.6.1", date: "01.09.2026", changes: ["Исправлено отображение заставки на широких экранах."] },
-  { version: "0.6.0", date: "01.09.2026", changes: ["Добавлена анимированная ретро-заставка CONDUCTOR.KZ."] },
-  { version: "0.5.1", date: "01.09.2026", changes: ["Обновлена винтажная заставка приложения."] },
-  { version: "0.5.0", date: "01.09.2026", changes: ["Добавлена работа с заявками покупателей."] },
-  { version: "0.4.3", date: "01.09.2026", changes: ["Исправлено отображение складской заставки в PWA и Android."] },
-  { version: "0.4.2", date: "01.09.2026", changes: ["Исправлен встроенный механизм обновления APK."] },
-  { version: "0.4.1", date: "01.09.2026", changes: ["Восстановлено изображение ретро-локомотива вместо чёрного экрана."] },
-  { version: "0.4.0", date: "01.09.2026", changes: ["Добавлена шестисекундная полноэкранная заставка склада."] },
-  { version: "0.3.0", date: "01.09.2026", changes: ["Добавлены первый фирменный значок и полноэкранная заставка."] },
-  { version: "0.2.0", date: "01.09.2026", changes: ["Добавлена встроенная проверка обновлений и постоянный GitHub Release."] },
-  { version: "0.1.0", date: "31.08.2026", changes: ["Первая Android-сборка CONDUCTOR Склад."] }
+  }
 ];
 
 function escapeHtml(value = "") {
   return String(value).replace(/[&<>'\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
 }
 
-function renderHistory() {
-  const root = document.getElementById("version-history-list");
-  if (!root) return;
-  root.innerHTML = VERSIONS.map((item, index) => `
-    <article class="version-history-card${index === 0 ? " latest" : ""}">
+function renderCurrentVersionCard() {
+  const item = VERSIONS[0];
+  return `
+    <article class="version-history-card latest" data-current-version="${escapeHtml(item.version)}">
       <div class="version-history-meta">
-        <div class="version-history-version">v${escapeHtml(item.version)}${index === 0 ? '<span class="version-history-badge">Последняя</span>' : ""}</div>
+        <div class="version-history-version">v${escapeHtml(item.version)}<span class="version-history-badge">Последняя</span></div>
         <span class="version-history-date">${escapeHtml(item.date)}</span>
       </div>
       <ul>${item.changes.map((change) => `<li>${escapeHtml(change)}</li>`).join("")}</ul>
-    </article>`).join("");
+    </article>`;
 }
 
-function ensureHistoryUi() {
-  const settings = document.getElementById("view-settings");
-  if (!settings) return;
+function patchCurrentVersionUi() {
+  const button = document.getElementById("version-history-button");
+  const copy = button?.querySelector(".version-history-btn-copy small");
+  if (copy) copy.textContent = "Актуальная версия: 1.0.13";
 
-  let button = document.getElementById("version-history-button");
-  if (!button) {
-    button = document.createElement("button");
-    button.id = "version-history-button";
-    button.type = "button";
-    button.className = "btn full version-history-btn";
-    button.innerHTML = '<span class="version-history-btn-copy"><b>История изменений</b><small>Актуальная версия: 1.0.12</small></span><span aria-hidden="true">›</span>';
-    settings.querySelector(".settings-panel")?.insertAdjacentElement("afterend", button);
-  }
+  const root = document.getElementById("version-history-list");
+  if (!root || root.querySelector('[data-current-version="1.0.13"]')) return;
+  root.querySelectorAll(".version-history-card.latest").forEach((card) => card.classList.remove("latest"));
+  root.querySelectorAll(".version-history-badge").forEach((badge) => badge.remove());
+  root.insertAdjacentHTML("afterbegin", renderCurrentVersionCard());
+}
 
-  let dialog = document.getElementById("version-history-dialog");
-  if (!dialog) {
-    dialog = document.createElement("dialog");
-    dialog.id = "version-history-dialog";
-    dialog.className = "stock-dialog version-history-dialog";
-    dialog.innerHTML = `
-      <div class="stock-dialog-card">
-        <div class="dialog-head">
-          <div><div class="eyebrow">CONDUCTOR Склад</div><h2>История изменений</h2></div>
-          <button id="version-history-close" class="dialog-close" type="button" aria-label="Закрыть">×</button>
-        </div>
-        <div id="version-history-list" class="version-history-list"></div>
-      </div>`;
-    document.body.appendChild(dialog);
-  }
-
-  renderHistory();
-  if (button.dataset.bound105 !== "1") {
-    button.dataset.bound105 = "1";
-    button.addEventListener("click", () => dialog.showModal());
-    dialog.querySelector("#version-history-close")?.addEventListener("click", () => dialog.close());
+async function startVersionHistory() {
+  try {
+    await import("./version-history-105-archive.js?v=1");
+    patchCurrentVersionUi();
+  } catch (error) {
+    console.error("Version history failed to load", error);
   }
 }
 
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", ensureHistoryUi, { once: true });
+  document.addEventListener("DOMContentLoaded", startVersionHistory, { once: true });
 } else {
-  ensureHistoryUi();
+  startVersionHistory();
 }
