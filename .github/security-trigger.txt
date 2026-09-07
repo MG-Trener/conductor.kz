@@ -1,1 +1,1 @@
-verify-integrity-hardening
+verify-integrity-hardening-v2
