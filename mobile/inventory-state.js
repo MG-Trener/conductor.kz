@@ -11,7 +11,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
 
 const KZT = new Intl.NumberFormat("ru-KZ", { style: "currency", currency: "KZT", maximumFractionDigits: 0 });
-const DEFAULT_PRICES = { DM30: 2500, DM60: 3000, DM90: 3500, HOLI: 1000 };
+const DEFAULT_PRICES = { DM30: 2500, DM60: 3000, DM60G: 3500, DM90: 3500, HOLI: 1000 };
 
 let products = [];
 let catalog = [];

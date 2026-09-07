@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import test from "node:test";
 
@@ -17,8 +18,8 @@ test("mobile app uses the compact stock UI entry points", async () => {
     read("mobile/push-notifications.js")
   ]);
 
-  assert.match(index, /app\.js\?v=104/);
-  assert.match(index, /bootstrap-104\.js/);
+  assert.match(index, /app\.js\?v=105/);
+  assert.match(index, /bootstrap-104\.js\?v=2/);
   assert.match(index, /core-ui-105\.js/);
   assert.match(index, /version-history-105\.js/);
   assert.match(index, /startup-guard-104\.js/);
@@ -35,7 +36,8 @@ test("mobile app uses the compact stock UI entry points", async () => {
     "push-notifications.js",
     "firestore-error-help.js"
   ]) {
-    assert.equal(bootstrap.split(`./${moduleName}?v=104`).length - 1, 1, `${moduleName} must be imported once by bootstrap-104.js`);
+    const version = ["sales-history.js", "warehouse-enhancements.js", "inventory-state.js"].includes(moduleName) ? 105 : 104;
+    assert.equal(bootstrap.split(`./${moduleName}?v=${version}`).length - 1, 1, `${moduleName} must be imported once by bootstrap-104.js`);
   }
   assert.equal(bootstrap.split("./ui-sounds.js?v=1").length - 1, 1, "ui-sounds.js must be imported once by bootstrap-104.js");
 
@@ -158,7 +160,7 @@ test("section-specific UI sounds cover navigation, stock, sales, analytics and s
 
 test("mobile UI scripts pass syntax validation", async () => {
   for (const file of ["mobile/bootstrap-104.js", "mobile/core-ui-105.js", "mobile/version-history-105.js", "mobile/startup-guard-104.js", "mobile/ui-sounds.js"]) {
-    await execFileAsync(process.execPath, ["--check", new URL(file, root).pathname]);
+    await execFileAsync(process.execPath, ["--check", fileURLToPath(new URL(file, root))]);
   }
 });
 
@@ -195,8 +197,8 @@ test("native updater accepts only the warehouse release and verifies SHA-256", a
 
 test("PWA cache contains current settings and UI sound assets", async () => {
   const sw = await read("mobile/sw.js");
-  assert.match(sw, /const CACHE = "conductor-mobile-v58"/);
-  for (const asset of ["release-103.css", "release-105.css?v=2", "app.js?v=104", "bootstrap-104.js", "core-ui-105.js?v=2", "version-history-105.js", "startup-guard-104.js", "ui-sounds.js?v=1"]) {
+  assert.match(sw, /const CACHE = "conductor-mobile-v59"/);
+  for (const asset of ["release-103.css", "release-105.css?v=2", "app.js?v=105", "bootstrap-104.js?v=2", "core-ui-105.js?v=2", "version-history-105.js", "startup-guard-104.js", "ui-sounds.js?v=1"]) {
     assert.ok(sw.includes(`./${asset}`), `${asset} must be cached`);
   }
   assert.match(sw, /fetch\(request, \{ cache: "no-store" \}\)/);

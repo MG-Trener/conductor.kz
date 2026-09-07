@@ -12,7 +12,7 @@ import {
 const KZT = new Intl.NumberFormat("ru-KZ", { style: "currency", currency: "KZT", maximumFractionDigits: 0 });
 const MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
 const START_YEAR = 2026;
-const MODEL_IDS = new Set(["DM30", "DM60", "DM90", "HOLI"]);
+const MODEL_IDS = new Set(["DM30", "DM60", "DM60G", "DM90", "HOLI"]);
 const STAFF_NAMES = new Map([
   ["mihagavr@gmail.com", "Михаил"],
   ["a.kalashin@gmail.com", "Алексей"]

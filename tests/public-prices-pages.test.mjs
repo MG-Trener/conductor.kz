@@ -22,7 +22,7 @@ const publicRequestModule = new URL("../assets/js/request-form.js", import.meta.
 test("all public product pages load the shared live price module", async () => {
   for (const [name, url] of Object.entries(pages)) {
     const html = await readFile(url, "utf8");
-    assert.match(html, /\/assets\/public-prices\.js\?v=4/, `${name} is missing the current price module`);
+    assert.match(html, /\/assets\/public-prices\.js\?v=5/, `${name} is missing the current price module`);
     assert.equal((html.match(/assets\/public-prices\.js/g) || []).length, 1, `${name} loads public prices more than once`);
     assert.match(html, /data-public-price-ready/, `${name} is missing the loading-state CSS`);
   }
@@ -31,10 +31,24 @@ test("all public product pages load the shared live price module", async () => {
 test("home and smoke pages bind every smoke model price", async () => {
   for (const name of ["home", "smoke"]) {
     const html = await readFile(pages[name], "utf8");
-    for (const modelId of ["DM30", "DM60", "DM90"]) {
+    for (const modelId of ["DM30", "DM60", "DM60G", "DM90"]) {
       assert.match(html, new RegExp(`data-public-price="${modelId}"`), `${name} is missing ${modelId}`);
     }
   }
+});
+
+test("DM60G is one shared catalog model with blue and pink warehouse variants", async () => {
+  const [app, prices, rules] = await Promise.all([
+    readFile(mobileApp, "utf8"),
+    readFile(publicPriceModule, "utf8"),
+    readFile(new URL("../firestore.rules", import.meta.url), "utf8")
+  ]);
+
+  assert.match(app, /id: "DM60G", name: "Гендерный дым DM60G", price: 3500/);
+  assert.match(app, /\["BLUE", "Синий", "#258cff"\][\s\S]*\["PINK", "Розовый", "#ff6bab"\]/);
+  assert.match(prices, /"DM60G"/);
+  assert.match(rules, /'DM60G'/);
+  assert.match(rules, /DM60G\|DM90/);
 });
 
 test("home and Holi detail pages bind the retail Holi price", async () => {
@@ -96,6 +110,7 @@ test("product images are optimized, watermark-free assets with stable dimensions
       assert.match(html, new RegExp(`${modelId}-clean\\.webp\\?v=1`));
     }
     assert.doesNotMatch(html, /dm(?:30|60|90)-natural\.png/);
+    assert.match(html, /dm60g\.webp\?v=1/);
     assert.match(html, /width="960" height="\d+"/);
     assert.match(html, /decoding="async"/);
   }
@@ -205,14 +220,15 @@ test("product order buttons open WhatsApp directly", async () => {
   ]);
   for (const [name, html] of Object.entries({ home, smoke, holi })) {
     assert.match(html, /assets\/css\/request-form\.css\?v=1/, `${name} has no request form styles`);
-    assert.match(html, /assets\/js\/request-form\.js\?v=1/, `${name} has no request form module`);
+    assert.match(html, /assets\/js\/request-form\.js\?v=2/, `${name} has no request form module`);
     assert.match(html, /href="#request-form" data-request-product-id=/, `${name} has no request button`);
   }
   assert.match(home, /https:\/\/wa\.me\//, "home lost the WhatsApp contact link");
-  for (const modelId of ["DM30", "DM60", "DM90", "HOLI"]) {
+  for (const modelId of ["DM30", "DM60", "DM60G", "DM90", "HOLI"]) {
     assert.match(home, new RegExp(`data-request-product-id="${modelId}"`));
   }
-  assert.match(requestScript, /https:\/\/wa\.me\/\$\{SALES_WHATSAPP\}/);
+  assert.match(requestScript, /productId === "HOLI" \? HOLI_WHATSAPP : SMOKE_WHATSAPP/);
+  assert.match(requestScript, /https:\/\/wa\.me\/\$\{whatsapp\}/);
   assert.match(requestScript, /button\.href = whatsappOrderUrl\(productId\)/);
   assert.doesNotMatch(requestScript, /addDoc\(collection\(db, "requests"\)/);
 });

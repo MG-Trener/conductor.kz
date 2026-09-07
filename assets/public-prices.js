@@ -10,7 +10,7 @@ const config = {
   appId: "1:249591037242:web:e534b60202dca9245ee403"
 };
 
-const MODELS = new Set(["DM30", "DM60", "DM90", "HOLI"]);
+const MODELS = new Set(["DM30", "DM60", "DM60G", "DM90", "HOLI"]);
 const KZT = new Intl.NumberFormat("ru-KZ", {
   style: "currency",
   currency: "KZT",
@@ -37,8 +37,8 @@ function updateStructuredData(prices) {
       const faq = graph.find((item) => item?.["@type"] === "FAQPage");
       for (const entry of faq?.mainEntity || []) {
         if (entry?.name === "Сколько стоит цветной дым?"
-          && ["DM30", "DM60", "DM90"].every((modelId) => prices.has(modelId))) {
-          entry.acceptedAnswer.text = `DM30 стоит ${KZT.format(prices.get("DM30"))}, DM60 — ${KZT.format(prices.get("DM60"))}, DM90 — ${KZT.format(prices.get("DM90"))}.`;
+          && ["DM30", "DM60", "DM60G", "DM90"].every((modelId) => prices.has(modelId))) {
+          entry.acceptedAnswer.text = `DM30 стоит ${KZT.format(prices.get("DM30"))}, DM60 — ${KZT.format(prices.get("DM60"))}, DM60G — ${KZT.format(prices.get("DM60G"))}, DM90 — ${KZT.format(prices.get("DM90"))}.`;
         }
         if (entry?.name === "Сколько стоят краски Холи?" && prices.has("HOLI")) {
           entry.acceptedAnswer.text = `Розничная цена — ${KZT.format(prices.get("HOLI"))} за пакет. Для оптовых заказов действуют отдельные цены.`;
@@ -54,21 +54,22 @@ function updateStructuredData(prices) {
 function updateSeoMetadata(prices) {
   const dm30 = prices.get("DM30");
   const dm60 = prices.get("DM60");
+  const dm60g = prices.get("DM60G");
   const dm90 = prices.get("DM90");
   const holi = prices.get("HOLI");
-  if (![dm30, dm60, dm90, holi].every(Boolean)) return;
+  if (![dm30, dm60, dm60g, dm90, holi].every(Boolean)) return;
 
   let description = "";
   let social = "";
   if (location.pathname.startsWith("/cvetnoy-dym")) {
-    description = `Цветной дым в Казахстане: DM30 — ${KZT.format(dm30)}, DM60 — ${KZT.format(dm60)}, DM90 — ${KZT.format(dm90)}. Для фотосессий, праздников и мероприятий.`;
-    social = `DM30, DM60 и DM90 — от ${KZT.format(Math.min(dm30, dm60, dm90))}. Заказ в Казахстане.`;
+    description = `Цветной дым в Казахстане: DM30 — ${KZT.format(dm30)}, DM60 — ${KZT.format(dm60)}, гендерный дым DM60G — ${KZT.format(dm60g)}, DM90 — ${KZT.format(dm90)}.`;
+    social = `DM30, DM60, DM60G и DM90 — от ${KZT.format(Math.min(dm30, dm60, dm60g, dm90))}. Заказ в Казахстане.`;
   } else if (location.pathname.startsWith("/kraski-holi")) {
     description = `Краски Холи в Казахстане: 8 цветов, розница ${KZT.format(holi)} и специальные оптовые цены. Заказ по Казахстану.`;
     social = `Краски Холи: 8 цветов, розничная цена ${KZT.format(holi)} и оптовые предложения.`;
   } else {
-    description = `Купить цветной дым и краски Холи в Казахстане. DM30 — ${KZT.format(dm30)}, DM60 — ${KZT.format(dm60)}, DM90 — ${KZT.format(dm90)}, Холи — ${KZT.format(holi)}.`;
-    social = `DM30, DM60, DM90 и краски Холи. Актуальные цены и заказ в Казахстане.`;
+    description = `Купить цветной и гендерный дым, краски Холи в Казахстане. DM30 — ${KZT.format(dm30)}, DM60 — ${KZT.format(dm60)}, DM60G — ${KZT.format(dm60g)}, DM90 — ${KZT.format(dm90)}, Холи — ${KZT.format(holi)}.`;
+    social = `DM30, DM60, гендерный дым DM60G, DM90 и краски Холи. Актуальные цены и заказ в Казахстане.`;
   }
 
   const metaDescription = document.querySelector('meta[name="description"]');

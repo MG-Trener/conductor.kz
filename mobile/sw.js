@@ -1,4 +1,4 @@
-const CACHE = "conductor-mobile-v58";
+const CACHE = "conductor-mobile-v59";
 // Legacy regression markers only; they are not cached or loaded:
 // "./app.js?v=103" "./inventory-state.js?v=103" "./push-notifications.js?v=103"
 const APP_SHELL = [
@@ -10,8 +10,8 @@ const APP_SHELL = [
   "./splash.css?v=3",
   "./release-103.css",
   "./release-105.css?v=2",
-  "./app.js?v=104",
-  "./bootstrap-104.js",
+  "./app.js?v=105",
+  "./bootstrap-104.js?v=2",
   "./core-ui-105.js?v=2",
   "./version-history-105.js",
   "./startup-guard-104.js",
@@ -19,9 +19,9 @@ const APP_SHELL = [
   "./push-config.js?v=1",
   "./app-update.js?v=104",
   "./analytics.js?v=104",
-  "./sales-history.js?v=104",
-  "./warehouse-enhancements.js?v=104",
-  "./inventory-state.js?v=104",
+  "./sales-history.js?v=105",
+  "./warehouse-enhancements.js?v=105",
+  "./inventory-state.js?v=105",
   "./push-notifications.js?v=104",
   "./firestore-error-help.js?v=104",
   "./ui-sounds.js?v=1",

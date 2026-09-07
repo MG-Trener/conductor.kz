@@ -152,6 +152,40 @@ test("public visitors can read the single catalog price but only approved staff 
   }));
 });
 
+test("approved staff can create DM60G catalog and its two warehouse variants", async () => {
+  const db = staffDb();
+  await assertSucceeds(setDoc(doc(db, "catalog", "DM60G"), {
+    modelId: "DM60G",
+    name: "Гендерный дым DM60G",
+    price: 3500,
+    updatedAt: serverTimestamp(),
+    updatedBy: staffUid,
+    updatedByName: "Сотрудник"
+  }));
+
+  for (const [key, colorName, colorHex, colorId, sort] of [
+    ["BLUE", "Синий", "#258cff", "blue", 26],
+    ["PINK", "Розовый", "#ff6bab", "pink", 27]
+  ]) {
+    await assertSucceeds(setDoc(doc(db, "products", `DM60G_${key}`), {
+      ...product,
+      id: `DM60G_${key}`,
+      modelId: "DM60G",
+      colorId,
+      colorName,
+      colorHex,
+      name: `DM60G · ${colorName}`,
+      sort,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }));
+  }
+
+  const publicDb = testEnv.unauthenticatedContext().firestore();
+  assert.equal((await assertSucceeds(getDoc(doc(publicDb, "catalog", "DM60G")))).data().price, 3500);
+  await assertFails(getDoc(doc(publicDb, "products", "DM60G_BLUE")));
+});
+
 test("historical requests are read-only for staff and closed to public visitors", async () => {
   const publicDb = testEnv.unauthenticatedContext().firestore();
   const requestRef = doc(publicDb, "requests", "request-1");
