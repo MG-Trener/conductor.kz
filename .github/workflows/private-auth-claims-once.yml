@@ -25,6 +25,20 @@ jobs:
       - name: Install one-time Firebase Admin SDK
         run: npm install --no-save --package-lock=false firebase-admin@13.4.0
 
+      - name: Repair and syntax-check one-time migration parser
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('.github/private-auth-claims-once.mjs')
+          text = path.read_text()
+          old = r'/\[\"([^\"]+)\",\s*\"([^\"]+)\"\]/gu'
+          new = r'/\["([^"]+)",\s*"([^"]+)"\]/gu'
+          if old not in text:
+              raise SystemExit('one-time parser marker not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          node --check .github/private-auth-claims-once.mjs
+
       - name: Assign server claims, scrub email audit data, and migrate source
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
