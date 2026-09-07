@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/workflows/repository-maintenance-once.yml"
       - ".github/maintenance-testfix-20260907.mjs"
+      - ".github/maintenance-preflight-20260907.mjs"
 
 permissions:
   contents: write
@@ -33,6 +34,7 @@ jobs:
 
       - name: Apply repository refactor
         run: |
+          node .github/maintenance-preflight-20260907.mjs
           node .github/maintenance-refactor-20260907.mjs
           node .github/maintenance-testfix-20260907.mjs
           echo "--- transformed firestore.rules ---"
@@ -96,6 +98,7 @@ jobs:
         run: |
           rm -f .github/maintenance-refactor-20260907.mjs
           rm -f .github/maintenance-testfix-20260907.mjs
+          rm -f .github/maintenance-preflight-20260907.mjs
           rm -f .github/workflows/repository-maintenance-once.yml
 
       - name: Commit verified maintenance changes
