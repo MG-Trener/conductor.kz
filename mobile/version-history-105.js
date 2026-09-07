@@ -1,5 +1,14 @@
 const VERSIONS = [
   {
+    version: "1.0.15",
+    date: "07.09.2026",
+    changes: [
+      "Устранено расхождение цены DM60G: внешняя карточка склада и цена внутри модели теперь используют одну эффективную цену.",
+      "Старая ошибочная запись DM60G = 3 000 ₸ больше не перекрывает настроенную для модели цену 3 500 ₸.",
+      "Одинаковая цена применяется в карточке склада, стоимости склада, выборе товара и подтверждении продажи; другие вручную сохранённые цены продолжают учитываться."
+    ]
+  },
+  {
     version: "1.0.14",
     date: "07.09.2026",
     changes: [
@@ -37,10 +46,10 @@ function renderCurrentVersionCard() {
 function patchCurrentVersionUi() {
   const button = document.getElementById("version-history-button");
   const copy = button?.querySelector(".version-history-btn-copy small");
-  if (copy) copy.textContent = "Актуальная версия: 1.0.14";
+  if (copy) copy.textContent = "Актуальная версия: 1.0.15";
 
   const root = document.getElementById("version-history-list");
-  if (!root || root.querySelector('[data-current-version="1.0.14"]')) return;
+  if (!root || root.querySelector('[data-current-version="1.0.15"]')) return;
   root.querySelectorAll(".version-history-card.latest").forEach((card) => card.classList.remove("latest"));
   root.querySelectorAll(".version-history-badge").forEach((badge) => badge.remove());
   root.insertAdjacentHTML("afterbegin", renderCurrentVersionCard());
