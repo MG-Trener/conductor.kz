@@ -34,6 +34,7 @@ jobs:
         run: |
           python3 .github/security-integrity-patch.py
           python3 .github/security-rules-patch.py
+          python3 .github/security-diagnostic-patch.py
 
       - name: Validate active JavaScript
         run: |
@@ -60,6 +61,7 @@ jobs:
             .github/workflows/security-integrity-patch.yml \
             .github/security-integrity-patch.py \
             .github/security-rules-patch.py \
+            .github/security-diagnostic-patch.py \
             .github/security-trigger.txt
           git add \
             firestore.rules \
