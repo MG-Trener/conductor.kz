@@ -30,8 +30,10 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Apply integrity client patch
-        run: python3 .github/security-integrity-patch.py
+      - name: Apply integrity patches
+        run: |
+          python3 .github/security-integrity-patch.py
+          python3 .github/security-rules-patch.py
 
       - name: Validate active JavaScript
         run: |
@@ -54,8 +56,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout origin/main -- .github/workflows/build-android-apk.yml
-          git rm .github/workflows/security-integrity-patch.yml .github/security-integrity-patch.py
+          git rm \
+            .github/workflows/security-integrity-patch.yml \
+            .github/security-integrity-patch.py \
+            .github/security-rules-patch.py \
+            .github/security-trigger.txt
           git add \
+            firestore.rules \
             mobile/app.js \
             mobile/catalog-service.js \
             mobile/app-version.json \
