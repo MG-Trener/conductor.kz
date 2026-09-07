@@ -1,4 +1,5 @@
-import { collection, onSnapshot } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import { collection, doc, onSnapshot, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
 
 const originalAddEventListener = document.addEventListener;
 let capturedSaleSubmit = null;
@@ -6,6 +7,12 @@ let resolveCapturedSaleSubmit;
 const capturedSaleSubmitPromise = new Promise((resolve) => { resolveCapturedSaleSubmit = resolve; });
 let listenerPatchActive = true;
 let bypassEnhancedSubmit = false;
+
+const DM60G_PRICE_MIGRATION_CUTOFF = Date.parse("2026-09-07T05:30:00Z");
+const STAFF_NAMES = new Map([
+  ["mihagavr@gmail.com", "Михаил"],
+  ["a.kalashin@gmail.com", "Алексей"]
+]);
 
 function isCapture(options) {
   return options === true || Boolean(options && typeof options === "object" && options.capture);
@@ -44,6 +51,67 @@ async function waitForDatabase(timeoutMs = 5000) {
     await delay(40);
   }
   return window.CONDUCTOR_FIRESTORE;
+}
+
+function waitForAuthenticatedUser(timeoutMs = 5000) {
+  const auth = getAuth();
+  if (auth.currentUser) return Promise.resolve(auth.currentUser);
+  return new Promise((resolve) => {
+    let settled = false;
+    let unsubscribe = null;
+    const finish = (user = null) => {
+      if (settled) return;
+      settled = true;
+      try { unsubscribe?.(); } catch {}
+      resolve(user);
+    };
+    const timer = setTimeout(() => finish(null), timeoutMs);
+    unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (!user) return;
+      clearTimeout(timer);
+      finish(user);
+    }, () => {
+      clearTimeout(timer);
+      finish(null);
+    });
+  });
+}
+
+function employeeNameFromEmail(email = "") {
+  return STAFF_NAMES.get(String(email).trim().toLowerCase()) || "Сотрудник";
+}
+
+async function migrateDm60gCatalogPrice(db) {
+  if (!db) return;
+  const user = await waitForAuthenticatedUser();
+  if (!user) return;
+  const catalogRef = doc(db, "catalog", "DM60G");
+
+  try {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(catalogRef);
+      if (!snap.exists()) return;
+      const data = snap.data();
+      const currentPrice = Number(data.price || 0);
+      const updatedAtMs = data.updatedAt?.toMillis?.() ?? 0;
+
+      // The first DM60G catalog record could inherit DM60's legacy 3 000 ₸ price.
+      // Repair only the initial bad record; later intentional price changes remain untouched.
+      if (currentPrice !== 3000) return;
+      if (updatedAtMs && updatedAtMs > DM60G_PRICE_MIGRATION_CUTOFF) return;
+
+      tx.set(catalogRef, {
+        modelId: "DM60G",
+        name: String(data.name || "Гендерный дым DM60G").slice(0, 120),
+        price: 3500,
+        updatedAt: serverTimestamp(),
+        updatedBy: user.uid,
+        updatedByName: employeeNameFromEmail(user.email || "")
+      });
+    });
+  } catch (error) {
+    console.error("DM60G price migration failed", error);
+  }
 }
 
 function waitForProductsSnapshot(db, timeoutMs = 5000) {
@@ -121,9 +189,10 @@ function resilientSaleSubmit(event) {
     ]);
 
     restoreDocumentListener();
+    const db = await waitForDatabase();
+    await migrateDm60gCatalogPrice(db);
     if (!listener) return;
 
-    const db = await waitForDatabase();
     await waitForProductsSnapshot(db);
     originalAddEventListener.call(document, "submit", resilientSaleSubmit, true);
   } catch (error) {
