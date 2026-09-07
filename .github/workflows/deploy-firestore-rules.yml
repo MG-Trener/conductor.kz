@@ -1,10 +1,11 @@
 name: Deploy Firestore rules
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - '.github/firestore-rules-deploy-ready'
+      - 'firestore.rules'
 
 permissions:
   contents: read
