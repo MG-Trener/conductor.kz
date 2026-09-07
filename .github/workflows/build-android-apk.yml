@@ -5,7 +5,6 @@ on:
   push:
     branches:
       - main
-      - feature/in-app-updates
     paths:
       - "android-app/**"
       - "mobile/**"
@@ -33,18 +32,19 @@ jobs:
 
       - name: Validate mobile and updater scripts
         run: |
+          node --check mobile/app.js
           node --check mobile/app-update.js
           node --check mobile/bootstrap.js
+          node --check mobile/core-ui.js
+          node --check mobile/startup-guard.js
           node --check mobile/push-notifications.js
           node --check mobile/firestore-error-help.js
           node --check mobile/analytics.js
           node --check mobile/sales-history.js
-          node --check mobile/warehouse-enhancements.js
+          node --check mobile/warehouse-ui.js
           node --check mobile/version-history.js
-          node --check mobile/version-history-105.js
+          node --check mobile/version-history-archive.js
           node --check mobile/ui-sounds.js
-          node --check mobile/ui-fixes-070.js
-          node --check mobile/inventory-state.js
           node --check android-app/configure-android.mjs
           node --check android-app/configure-updater.mjs
           node - <<'NODE'
@@ -61,15 +61,22 @@ jobs:
             throw new Error(`Invalid Android versionCode ${m.versionCode} for ${p.version}; expected ${expectedCode}. Lower codes make Android treat updates as downgrades.`);
           }
           if (typeof m.notes !== 'string' || m.notes.trim().length < 40) {
-            throw new Error('Every Android release must contain meaningful information in app-version.json notes / Последние изменения.');
+            throw new Error('Every Android release must contain meaningful latest-change notes.');
           }
-          const history = fs.readFileSync('./mobile/version-history-105.js', 'utf8');
+          const history = fs.readFileSync('./mobile/version-history.js', 'utf8');
           const firstHistoryVersion = history.match(/const VERSIONS = \[\s*\{\s*version: "([^"]+)"/)?.[1];
           if (firstHistoryVersion !== p.version) {
-            throw new Error(`Version history must start with current release ${p.version}; found ${firstHistoryVersion || 'none'}.`);
+            throw new Error(`Version history must start with ${p.version}; found ${firstHistoryVersion || 'none'}.`);
           }
           if (!history.includes(`Актуальная версия: ${p.version}`)) {
-            throw new Error(`Version history button must show current release ${p.version}.`);
+            throw new Error(`Version history UI must show ${p.version}.`);
+          }
+          const ui = fs.readFileSync('./mobile/warehouse-ui.js', 'utf8');
+          if (/onSnapshot\s*\(/.test(ui) || /collection\(.*"products"/.test(ui) || /collection\(.*"catalog"/.test(ui)) {
+            throw new Error('warehouse-ui.js must not own catalog/products realtime state');
+          }
+          if (!ui.includes('api.commitSale')) {
+            throw new Error('warehouse-ui.js must delegate sale commit to the core app');
           }
           NODE
 
@@ -117,6 +124,10 @@ jobs:
           test -f android-app/www/index.html
           test -f android-app/www/bootstrap.js
           test -f android-app/www/app.js
+          test -f android-app/www/warehouse-ui.js
+          test ! -f android-app/www/inventory-state.js
+          test ! -f android-app/www/warehouse-enhancements-legacy.js
+          test ! -f android-app/www/warehouse-enhancements.js
 
       - name: Install Capacitor dependencies
         working-directory: android-app
@@ -145,7 +156,10 @@ jobs:
           if (config.server?.url) throw new Error(`Production Android build must not use remote server.url: ${config.server.url}`);
           const webIndex = 'android-app/android/app/src/main/assets/public/index.html';
           const bootstrap = 'android-app/android/app/src/main/assets/public/bootstrap.js';
-          if (!fs.existsSync(webIndex) || !fs.existsSync(bootstrap)) throw new Error('Bundled mobile UI was not copied into the Android app');
+          const ui = 'android-app/android/app/src/main/assets/public/warehouse-ui.js';
+          if (!fs.existsSync(webIndex) || !fs.existsSync(bootstrap) || !fs.existsSync(ui)) {
+            throw new Error('Bundled mobile UI was not copied into the Android app');
+          }
           NODE
 
       - name: Install Firebase Android configuration
@@ -226,6 +240,12 @@ jobs:
             cp android-app/android/app/build/outputs/apk/debug/app-debug.apk dist/CONDUCTOR-Sklad.apk
           fi
           sha256sum dist/CONDUCTOR-Sklad.apk
+          APK_SIZE=$(stat -c%s dist/CONDUCTOR-Sklad.apk)
+          echo "APK size: ${APK_SIZE} bytes"
+          if [ "$APK_SIZE" -gt $((8 * 1024 * 1024)) ]; then
+            echo "::error::APK unexpectedly exceeds 8 MiB: $APK_SIZE bytes"
+            exit 1
+          fi
           BUILD_TOOLS="$ANDROID_HOME/build-tools/36.0.0"
           "$BUILD_TOOLS/zipalign" -c -P 16 -v 4 dist/CONDUCTOR-Sklad.apk
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs dist/CONDUCTOR-Sklad.apk
