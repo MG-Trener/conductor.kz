@@ -1,9 +1,11 @@
 {
   "name": "conductor-warehouse-android",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "private": true,
   "type": "module",
-  "engines": {"node": ">=22"},
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "postinstall": "node patch-bundled-price-source.mjs",
     "android:init": "cap add android",

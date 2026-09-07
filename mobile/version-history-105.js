@@ -1,5 +1,14 @@
 const VERSIONS = [
   {
+    version: "1.0.17",
+    date: "07.09.2026",
+    changes: [
+      "Исправлен DM60R1G на существующей базе: недостающие разновидности «Синий» и «Розовый» теперь создаются и восстанавливаются автоматически.",
+      "DM60R1G снова отображается с разновидностями и на складе, и в блоке новой продажи.",
+      "Ошибочная цена DM60R1G 3 000 ₸ автоматически исправляется на 4 000 ₸; другие вручную изменённые цены не затрагиваются."
+    ]
+  },
+  {
     version: "1.0.16",
     date: "07.09.2026",
     changes: [
@@ -55,7 +64,7 @@ function renderCurrentVersionCard() {
 function patchCurrentVersionUi() {
   const button = document.getElementById("version-history-button");
   const copy = button?.querySelector(".version-history-btn-copy small");
-  if (copy) copy.textContent = "Актуальная версия: 1.0.16";
+  if (copy) copy.textContent = "Актуальная версия: 1.0.17";
 
   const root = document.getElementById("version-history-list");
   if (!root || root.querySelector('[data-current-version="1.0.15"]')) return;

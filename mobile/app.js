@@ -365,39 +365,81 @@ async function ensureProducts() {
     getDocs(collection(state.db, "catalog"))
   ]);
   const existingProducts = productSnap.docs.map((item) => ({ id: item.id, ...item.data() }));
-  const existing = new Set(existingProducts.map((item) => item.id));
-  const existingCatalog = new Set(catalogSnap.docs.map((item) => item.id));
+  const existingById = new Map(existingProducts.map((item) => [item.id, item]));
+  const catalogById = new Map(catalogSnap.docs.map((item) => [item.id, { id: item.id, ...item.data() }]));
   const employee = currentEmployeeName();
-  await Promise.all(defaults.filter((item) => !existing.has(item.id)).map((item) => setDoc(doc(state.db, "products", item.id), {
-    id: item.id,
-    modelId: item.modelId,
-    colorId: item.colorId,
-    colorName: item.colorName,
-    colorHex: item.colorHex,
-    name: item.name,
-    stock: item.stock,
-    lowStock: item.lowStock,
-    sort: item.sort,
-    active: true,
-    createdAt: serverTimestamp(),
-    createdBy: state.user.uid,
-    createdByName: employee,
-    updatedAt: serverTimestamp(),
-    updatedBy: state.user.uid,
-    updatedByName: employee
-  })));
-  await Promise.all(MODELS.filter((model) => !existingCatalog.has(model.id)).map((model) => {
-    const legacyPrice = existingProducts.find((item) => item.modelId === model.id && Number(item.price) > 0)?.price;
-    return setDoc(doc(state.db, "catalog", model.id), {
-      modelId: model.id,
-      name: model.name,
-      price: Math.trunc(Number(legacyPrice || model.price)),
-      updatedAt: serverTimestamp(),
-      updatedBy: state.user.uid,
-      updatedByName: employee
-    });
-  }));
+
+  for (const model of MODELS) {
+    const catalogRef = doc(state.db, "catalog", model.id);
+    const catalogItem = catalogById.get(model.id);
+    if (!catalogItem) {
+      const legacyPrice = model.id === "DM60R1G"
+        ? 0
+        : existingProducts.find((item) => item.modelId === model.id && Number(item.price) > 0)?.price;
+      await setDoc(catalogRef, {
+        modelId: model.id,
+        name: model.name,
+        price: Math.trunc(Number(legacyPrice || model.price)),
+        updatedAt: serverTimestamp(),
+        updatedBy: state.user.uid,
+        updatedByName: employee
+      });
+      continue;
+    }
+    if (model.id === "DM60R1G" && Number(catalogItem.price) === 3000) {
+      await updateDoc(catalogRef, {
+        price: model.price,
+        updatedAt: serverTimestamp(),
+        updatedBy: state.user.uid,
+        updatedByName: employee
+      });
+    }
+  }
+
+  const variantErrors = [];
+  for (const item of defaults) {
+    const productRef = doc(state.db, "products", item.id);
+    const current = existingById.get(item.id);
+    try {
+      if (!current) {
+        await setDoc(productRef, {
+          id: item.id,
+          modelId: item.modelId,
+          colorId: item.colorId,
+          colorName: item.colorName,
+          colorHex: item.colorHex,
+          name: item.name,
+          stock: item.stock,
+          lowStock: item.lowStock,
+          sort: item.sort,
+          active: true,
+          createdAt: serverTimestamp(),
+          createdBy: state.user.uid,
+          createdByName: employee,
+          updatedAt: serverTimestamp(),
+          updatedBy: state.user.uid,
+          updatedByName: employee
+        });
+        continue;
+      }
+      if (item.modelId === "DM60R1G" && (current.active === false || current.modelOnly === true)) {
+        const repair = {
+          updatedAt: serverTimestamp(),
+          updatedBy: state.user.uid,
+          updatedByName: employee
+        };
+        if (current.active === false) repair.active = true;
+        if (current.modelOnly === true) repair.modelOnly = false;
+        await updateDoc(productRef, repair);
+      }
+    } catch (error) {
+      if (item.modelId === "DM60R1G") variantErrors.push(`${item.id}: ${error.message}`);
+      else throw error;
+    }
+  }
+
   for (const model of MODELS) await migrateLegacyModel(model);
+  if (variantErrors.length) throw new Error(`DM60R1G: не удалось восстановить разновидности (${variantErrors.join("; ")})`);
 }
 
 function stopRealtime() {

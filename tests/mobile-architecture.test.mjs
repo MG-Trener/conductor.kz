@@ -18,7 +18,7 @@ test("mobile app uses the compact stock UI entry points", async () => {
     read("mobile/push-notifications.js")
   ]);
 
-  assert.match(index, /app\.js\?v=106/);
+  assert.match(index, /app\.js\?v=107/);
   assert.match(index, /bootstrap-104\.js\?v=3/);
   assert.match(index, /core-ui-105\.js/);
   assert.match(index, /version-history-105\.js/);
@@ -45,6 +45,16 @@ test("mobile app uses the compact stock UI entry points", async () => {
   assert.doesNotMatch(firebaseConfig, /loadUiModule|setTimeout\(.*inventory-state/s);
   assert.doesNotMatch(errorHelper, /import\s+["']\.\//);
   assert.doesNotMatch(push, /analytics\.js/);
+});
+
+
+
+test("DM60R1G repair restores variants and fixes only the legacy 3000 price", async () => {
+  const app = await read("mobile/app.js");
+  assert.match(app, /model\.id === "DM60R1G" && Number\(catalogItem\.price\) === 3000/);
+  assert.match(app, /item\.modelId === "DM60R1G" && \(current\.active === false \|\| current\.modelOnly === true\)/);
+  assert.match(app, /repair\.active = true/);
+  assert.match(app, /repair\.modelOnly = false/);
 });
 
 test("startup UI cannot self-trigger an endless mutation loop", async () => {
@@ -205,8 +215,8 @@ test("native updater accepts only the warehouse release and verifies SHA-256", a
 
 test("PWA cache contains current settings and UI sound assets", async () => {
   const sw = await read("mobile/sw.js");
-  assert.match(sw, /const CACHE = "conductor-mobile-v60"/);
-  for (const asset of ["release-103.css", "release-105.css?v=2", "app.js?v=106", "bootstrap-104.js?v=3", "core-ui-105.js?v=2", "version-history-105.js?v=2", "startup-guard-104.js", "ui-sounds.js?v=1"]) {
+  assert.match(sw, /const CACHE = "conductor-mobile-v61"/);
+  for (const asset of ["release-103.css", "release-105.css?v=2", "app.js?v=107", "bootstrap-104.js?v=3", "core-ui-105.js?v=2", "version-history-105.js?v=2", "startup-guard-104.js", "ui-sounds.js?v=1"]) {
     assert.ok(sw.includes(`./${asset}`), `${asset} must be cached`);
   }
   assert.match(sw, /fetch\(request, \{ cache: "no-store" \}\)/);
