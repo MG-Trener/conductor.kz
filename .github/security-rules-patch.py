@@ -48,41 +48,6 @@ if text.count(orders_old) != 1:
     raise SystemExit(f"expected one cyclic order guard, found {text.count(orders_old)}")
 text = text.replace(orders_old, orders_new, 1)
 
-movement_anchor = '''    function validMovementType(value) {
-      return value in ['receipt', 'writeoff', 'adjustment', 'sale', 'sale_return'];
-    }
-
-    function validMovement(data) {'''
-movement_replacement = '''    function validMovementType(value) {
-      return value in ['receipt', 'writeoff', 'adjustment', 'sale', 'sale_return'];
-    }
-
-    function linkedMovementOrder(data) {
-      let order = getAfter(/databases/$(database)/documents/orders/$(data.orderId)).data;
-      return validOperationId(data.orderId)
-        && ((data.type == 'sale'
-            && order.status == 'done'
-            && order.createdAt == request.time
-            && order.createdBy == request.auth.uid)
-          || (data.type == 'sale_return'
-            && order.status == 'cancelled'
-            && order.cancelledAt == request.time
-            && order.cancelledBy == request.auth.uid));
-    }
-
-    function validMovement(data) {'''
-if text.count(movement_anchor) != 1:
-    raise SystemExit("movement order helper anchor not found")
-text = text.replace(movement_anchor, movement_replacement, 1)
-
-sale_guard_old = '''        && (data.type != 'sale' || (data.keys().hasAll(['salePrice', 'orderId']) && data.orderId.size() > 0))
-        && (data.type != 'sale_return' || (data.keys().hasAll(['orderId']) && data.orderId.size() > 0))'''
-sale_guard_new = '''        && (data.type != 'sale' || (data.keys().hasAll(['salePrice', 'orderId']) && data.orderId.size() > 0 && linkedMovementOrder(data)))
-        && (data.type != 'sale_return' || (data.keys().hasAll(['orderId']) && data.orderId.size() > 0 && linkedMovementOrder(data)))'''
-if text.count(sale_guard_old) != 1:
-    raise SystemExit("sale movement order guard not found")
-text = text.replace(sale_guard_old, sale_guard_new, 1)
-
 replace_function("cashMatchesSale", '''    function cashMatchesSale() {
       let order = getAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data))).data;
       return cashOperationType(request.resource.data) == 'sale'
