@@ -21,6 +21,55 @@ if (rules.includes("productId.matches('^' + modelId") || rules.includes("validPr
 }
 write("firestore.rules", rules);
 
+let rulesTests = read("tests/firestore.rules.test.mjs");
+const productTestStartMarker = 'test("staff can seed a fixed catalogue variant but not an arbitrary product"';
+const productTestStart = rulesTests.indexOf(productTestStartMarker);
+if (productTestStart < 0) throw new Error("Legacy fixed-model test not found");
+const productTestEnd = rulesTests.indexOf('\ntest("receipt transaction updates stock without tracking purchase cost"', productTestStart);
+if (productTestEnd < 0) throw new Error("Legacy fixed-model test end not found");
+const productTestReplacement = `test("staff can seed a variant only for a model that already exists in catalog", async () => {
+  const db = staffDb();
+  await assertSucceeds(setDoc(doc(db, "products", "DM30_YELLOW"), {
+    id: "DM30_YELLOW",
+    modelId: "DM30",
+    colorId: "yellow",
+    colorName: "Жёлтый",
+    colorHex: "#ffd42a",
+    name: "DM30 · Жёлтый",
+    stock: 0,
+    lowStock: 2,
+    sort: 12,
+    active: true,
+    createdAt: serverTimestamp(),
+    createdBy: staffUid,
+    createdByName: "Сотрудник",
+    updatedAt: serverTimestamp(),
+    updatedBy: staffUid,
+    updatedByName: "Сотрудник"
+  }));
+  await assertFails(setDoc(doc(db, "products", "OTHER_BLUE"), {
+    id: "OTHER_BLUE",
+    modelId: "OTHER",
+    colorId: "blue",
+    colorName: "Синий",
+    colorHex: "#258cff",
+    name: "OTHER · Синий",
+    stock: 0,
+    lowStock: 2,
+    sort: 90,
+    active: true,
+    createdAt: serverTimestamp(),
+    createdBy: staffUid,
+    createdByName: "Сотрудник",
+    updatedAt: serverTimestamp(),
+    updatedBy: staffUid,
+    updatedByName: "Сотрудник"
+  }));
+});
+`;
+rulesTests = rulesTests.slice(0, productTestStart) + productTestReplacement + rulesTests.slice(productTestEnd);
+write("tests/firestore.rules.test.mjs", rulesTests);
+
 let architecture = read("tests/mobile-architecture.test.mjs");
 architecture = architecture.replaceAll("});});", "});");
 write("tests/mobile-architecture.test.mjs", architecture);
