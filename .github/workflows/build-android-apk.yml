@@ -33,6 +33,7 @@ jobs:
       - name: Validate mobile and updater scripts
         run: |
           node --check mobile/app.js
+          node --check mobile/auth-throttle.js
           node --check mobile/catalog-core.js
           node --check mobile/catalog-service.js
           node --check mobile/warehouse-domain.js
