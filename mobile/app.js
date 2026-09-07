@@ -483,14 +483,15 @@ function startRealtime(onInitialData) {
     markInitialCollection("products");
   }, (error) => { toast(`Склад: ${error.message}`); markInitialCollection("products"); }));
 
-  state.unsubs.push(onSnapshot(query(collection(state.db, "orders"), orderBy("createdAt", "desc"), limit(100)), (snap) => {
+  state.unsubs.push(onSnapshot(query(collection(state.db, "orders"), orderBy("createdAt", "desc")), (snap) => {
     state.sales = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
     renderSales();
     renderDashboard();
+    window.dispatchEvent(new CustomEvent("conductor:orders-changed", { detail: { count: state.sales.length } }));
     markInitialCollection("orders");
   }, (error) => { toast(`Продажи: ${error.message}`); markInitialCollection("orders"); }));
 
-  state.unsubs.push(onSnapshot(query(collection(state.db, "stockMovements"), orderBy("createdAt", "desc"), limit(100)), (snap) => {
+  state.unsubs.push(onSnapshot(query(collection(state.db, "stockMovements"), orderBy("createdAt", "desc"), limit(500)), (snap) => {
     state.movements = snap.docs.map((item) => ({ id: item.id, ...item.data() }));
     renderMovements();
     renderDashboard();
@@ -764,97 +765,122 @@ function updateSaleTotal() {
   }
 }
 
-async function createSale(event) {
-  event.preventDefault();
-  const errorNode = $("#sale-error");
-  errorNode.textContent = "";
-  const items = selectedItems();
-  if (!items.length) { errorNode.textContent = "Укажите количество хотя бы одного товара."; return; }
+async function commitSale({ items, note = "", total, baseTotal = total, pricing = null }) {
+  if (!state.user || !state.db) throw new Error("Нет активной авторизации.");
+  if (!Array.isArray(items) || !items.length) throw new Error("Укажите количество хотя бы одного товара.");
+  if (!Number.isFinite(total) || total <= 0) throw new Error("Итоговая сумма должна быть больше нуля.");
 
-  const note = $("#sale-notes").value.trim();
-  const total = items.reduce((sum, item) => sum + item.lineTotal, 0);
-  const submit = event.submitter;
+  await ensureCashBalance();
   const employee = currentEmployeeName();
-  submit.disabled = true;
+  const productRefs = items.map((item) => doc(state.db, "products", item.inventoryId));
+  const movementRefs = items.map(() => doc(collection(state.db, "stockMovements")));
+  const saleRef = doc(collection(state.db, "orders"));
+  const cashRef = doc(state.db, "finance", "cash");
 
-  try {
-    await ensureCashBalance();
-    const productRefs = items.map((item) => doc(state.db, "products", item.inventoryId));
-    const movementRefs = items.map(() => doc(collection(state.db, "stockMovements")));
-    const saleRef = doc(collection(state.db, "orders"));
-    const cashRef = doc(state.db, "finance", "cash");
+  await runTransaction(state.db, async (tx) => {
+    const snaps = [];
+    for (const ref of productRefs) snaps.push(await tx.get(ref));
+    const cashSnap = await tx.get(cashRef);
+    if (!cashSnap.exists()) throw new Error("Баланс кассы ещё не создан. Повторите сохранение.");
 
-    await runTransaction(state.db, async (tx) => {
-      const snaps = [];
-      for (const ref of productRefs) snaps.push(await tx.get(ref));
-      const cashSnap = await tx.get(cashRef);
-      if (!cashSnap.exists()) throw new Error("Баланс кассы ещё не создан. Повторите сохранение.");
-      snaps.forEach((snap, index) => {
-        if (!snap.exists()) throw new Error(`${items[index].name}: товар не найден`);
-        const stock = Number(snap.data().stock || 0);
-        if (stock < items[index].qty) throw new Error(`${items[index].name}: на складе только ${stock}`);
+    snaps.forEach((snap, index) => {
+      if (!snap.exists()) throw new Error(`${items[index].name}: товар не найден`);
+      const stock = Number(snap.data().stock || 0);
+      if (stock < items[index].qty) throw new Error(`${items[index].name}: на складе только ${stock}`);
+    });
+
+    snaps.forEach((snap, index) => {
+      const data = snap.data();
+      const before = Number(data.stock || 0);
+      const after = before - items[index].qty;
+      tx.update(productRefs[index], {
+        stock: after,
+        updatedAt: serverTimestamp(),
+        updatedBy: state.user.uid,
+        updatedByName: employee
       });
-
-      snaps.forEach((snap, index) => {
-        const data = snap.data();
-        const before = Number(data.stock || 0);
-        const after = before - items[index].qty;
-        tx.update(productRefs[index], { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid, updatedByName: employee });
-        tx.set(movementRefs[index], {
-          type: "sale",
-          inventoryId: items[index].inventoryId,
-          productId: items[index].productId,
-          productName: items[index].name,
-          colorId: items[index].colorId,
-          colorName: items[index].colorName,
-          qtyDelta: -items[index].qty,
-          before,
-          after,
-          unitCost: 0,
-          totalCost: 0,
-          salePrice: items[index].price,
-          orderId: saleRef.id,
-          reason: note,
-          createdAt: serverTimestamp(),
-          createdAtClient: new Date().toISOString(),
-          createdBy: state.user.uid,
-          createdByEmail: state.user.email || "",
-          createdByName: employee
-        });
-      });
-
-      tx.set(saleRef, {
-        items,
-        total,
-        note,
-        status: "done",
-        source: "stock-app",
+      tx.set(movementRefs[index], {
+        type: "sale",
+        inventoryId: items[index].inventoryId,
+        productId: items[index].productId,
+        productName: items[index].name,
+        colorId: items[index].colorId,
+        colorName: items[index].colorName,
+        qtyDelta: -items[index].qty,
+        before,
+        after,
+        unitCost: 0,
+        totalCost: 0,
+        salePrice: items[index].price,
+        orderId: saleRef.id,
+        reason: note,
         createdAt: serverTimestamp(),
         createdAtClient: new Date().toISOString(),
         createdBy: state.user.uid,
         createdByEmail: state.user.email || "",
         createdByName: employee
       });
-      tx.update(cashRef, {
-        balance: Number(cashSnap.data().balance || 0) + total,
-        updatedAt: serverTimestamp(),
-        updatedBy: state.user.uid,
-        updatedByEmail: state.user.email || "",
-        updatedByName: employee
-      });
     });
 
-    const pushResult = await requestSalePush(saleRef.id);
-    event.target.reset();
-    state.saleQuantities.clear();
-    state.saleOpenModelId = null;
-    renderProducts();
-    toast(pushResult.configured && !pushResult.delivered
-      ? `Продажа записана · push временно не отправлен`
-      : `Продажа записана · ${employee}`);
-    navigate("sales");
-  } catch (error) { errorNode.textContent = error.message; }
-  finally { submit.disabled = false; }
+    tx.set(saleRef, {
+      items,
+      total,
+      ...(pricing ? { baseTotal, pricing } : {}),
+      note,
+      status: "done",
+      source: "stock-app",
+      createdAt: serverTimestamp(),
+      createdAtClient: new Date().toISOString(),
+      createdBy: state.user.uid,
+      createdByEmail: state.user.email || "",
+      createdByName: employee
+    });
+    tx.update(cashRef, {
+      balance: Number(cashSnap.data().balance || 0) + total,
+      updatedAt: serverTimestamp(),
+      updatedBy: state.user.uid,
+      updatedByEmail: state.user.email || "",
+      updatedByName: employee
+    });
+  });
+
+  const pushResult = await requestSalePush(saleRef.id);
+  return { saleId: saleRef.id, employee, pushResult };
+}
+
+function finalizeSale(result) {
+  $("#sale-form")?.reset();
+  state.saleQuantities.clear();
+  state.saleOpenModelId = null;
+  renderProducts();
+  toast(result?.pushResult?.configured && !result?.pushResult?.delivered
+    ? "Продажа записана · push временно не отправлен"
+    : `Продажа записана · ${result?.employee || currentEmployeeName()}`);
+  navigate("sales");
+}
+
+async function createSale(event) {
+  event.preventDefault();
+  const errorNode = $("#sale-error");
+  if (errorNode) errorNode.textContent = "";
+  const items = selectedItems();
+  if (!items.length) {
+    if (errorNode) errorNode.textContent = "Укажите количество хотя бы одного товара.";
+    return;
+  }
+
+  const note = $("#sale-notes").value.trim();
+  const total = items.reduce((sum, item) => sum + item.lineTotal, 0);
+  const submit = event.submitter || event.target.querySelector('button[type="submit"]');
+  if (submit) submit.disabled = true;
+  try {
+    const result = await commitSale({ items, note, total });
+    finalizeSale(result);
+  } catch (error) {
+    if (errorNode) errorNode.textContent = friendlyError(error);
+  } finally {
+    if (submit) submit.disabled = false;
+  }
 }
 
 function inventoryIdForSaleItem(item) {
@@ -932,10 +958,27 @@ async function cancelSale(saleId) {
   });
 }
 
+function initializedInventoryIds() {
+  const ids = new Set(state.movements.map((item) => item.inventoryId).filter(Boolean));
+  for (const product of state.products) {
+    if (product.stockInitialized === true
+      || product.inventoryInitialized === true
+      || Number(product.stock || 0) > 0
+      || product.modelId === "DM60R1G") ids.add(product.id);
+  }
+  return ids;
+}
+
 function compactColorSummary(modelId) {
   const variants = modelVariants(modelId);
   const unassigned = unassignedForModel(modelId);
-  return `<div class="stock-color-summary">${variants.map((item) => `<span>${colorDot(item)}${escapeHtml(item.colorName)} <b>${Number(item.stock || 0)}</b></span>`).join("")}${unassigned ? `<span class="warning">⚠ Нераспр. <b>${Number(unassigned.stock || 0)}</b></span>` : ""}</div>`;
+  const initialized = initializedInventoryIds();
+  const rows = variants.map((item) => {
+    const ready = initialized.has(item.id) || item.virtual;
+    const value = ready ? String(Number(item.stock || 0)) : "—";
+    return `<span>${colorDot(item)}${escapeHtml(item.colorName)} <b class="${ready ? "" : "inventory-not-set"}">${value}</b></span>`;
+  }).join("");
+  return `<div class="stock-color-summary">${rows}${unassigned ? `<span class="warning">⚠ Нераспр. <b>${Number(unassigned.stock || 0)}</b></span>` : ""}</div>`;
 }
 
 function renderStock() {
@@ -972,22 +1015,42 @@ function renderMovements() {
   }).join("") : `<div class="empty">Движений склада пока нет.</div>`;
 }
 
+function friendlyError(error) {
+  if (error?.code === "permission-denied" || String(error?.message || "").toLowerCase().includes("permission")) {
+    return "Firebase отклонил сохранение: проверьте доступ аккаунта и публикацию актуальных Firestore Rules.";
+  }
+  return error?.message || "Не удалось сохранить изменения.";
+}
+
 function renderModelDialog(modelId) {
   const model = modelById(modelId);
   if (!model) return;
   const variants = modelVariants(modelId);
   const unassigned = unassignedForModel(modelId);
+  const initialized = initializedInventoryIds();
   $("#model-dialog-title").textContent = model.name;
   $("#model-dialog-total").textContent = `Всего по модели: ${modelTotal(modelId)} ед. · внесите фактические остатки по цветам`;
-  $("#model-variant-list").innerHTML = variants.map((item) => `<div class="model-variant-row">
-    <div class="model-variant-info"><span>${colorDot(item)}</span><div><b>${escapeHtml(item.colorName)}</b><small>Сейчас: ${Number(item.stock || 0)}</small></div></div>
-    <input type="number" min="0" step="1" inputmode="numeric" value="${Number(item.stock || 0)}" data-model-balance="${item.id}" aria-label="${escapeHtml(item.colorName)}">
-    <div class="model-variant-actions"><button type="button" data-variant-op="receipt" data-product-id="${item.id}">＋</button><button type="button" data-variant-op="writeoff" data-product-id="${item.id}">−</button></div>
-  </div>`).join("") + (unassigned ? `<div class="model-variant-row unassigned-row">
+
+  const priceRow = `<label class="model-sale-price-row">Цена продажи модели, ₸<input id="model-sale-price" type="number" min="1" step="1" inputmode="numeric" required value="${Math.trunc(modelSalePrice(modelId))}"></label>`;
+  const variantRows = variants.map((item) => {
+    const ready = initialized.has(item.id) || item.virtual;
+    const current = ready ? String(Number(item.stock || 0)) : "не внесено";
+    const value = ready ? String(Number(item.stock || 0)) : "";
+    const actions = item.virtual
+      ? `<div class="model-variant-actions model-variant-actions-disabled" title="Сначала сохраните фактический остаток">—</div>`
+      : `<div class="model-variant-actions"><button type="button" data-variant-op="receipt" data-product-id="${item.id}">＋</button><button type="button" data-variant-op="writeoff" data-product-id="${item.id}">−</button></div>`;
+    return `<div class="model-variant-row">
+      <div class="model-variant-info"><span>${colorDot(item)}</span><div><b>${escapeHtml(item.colorName)}</b><small>Сейчас: ${current}</small></div></div>
+      <input type="number" min="0" step="1" inputmode="numeric" value="${value}" data-model-balance="${item.id}" aria-label="${escapeHtml(item.colorName)}">
+      ${actions}
+    </div>`;
+  }).join("");
+  const unassignedRow = unassigned ? `<div class="model-variant-row unassigned-row">
     <div class="model-variant-info"><span>⚠</span><div><b>Нераспределено</b><small>Старый общий остаток</small></div></div>
     <input type="number" min="0" step="1" inputmode="numeric" value="${Number(unassigned.stock || 0)}" data-model-balance="${unassigned.id}" aria-label="Нераспределено">
     <div></div>
-  </div>` : "");
+  </div>` : "";
+  $("#model-variant-list").innerHTML = priceRow + variantRows + unassignedRow;
 
   $$('[data-variant-op]').forEach((button) => button.addEventListener("click", () => {
     $("#model-dialog").close();
@@ -1006,63 +1069,147 @@ function openModelDialog(modelId) {
 async function saveModelBalances(event) {
   event.preventDefault();
   const modelId = state.modelDialogId;
-  if (!modelId) return;
   const model = modelById(modelId);
-  const inputs = $$('[data-model-balance]');
-  const desired = inputs.map((input) => ({ id: input.dataset.modelBalance, stock: Math.trunc(Number(input.value)) })).filter((item) => Number.isFinite(item.stock) && item.stock >= 0);
-  const changed = desired.filter((item) => {
-    const current = state.products.find((product) => product.id === item.id);
-    return current && Number(current.stock || 0) !== item.stock;
-  });
-  const errorNode = $("#model-balance-error");
-  errorNode.textContent = "";
-  if (!changed.length) { errorNode.textContent = "Остатки не изменились."; return; }
+  if (!model) return;
 
+  const errorNode = $("#model-balance-error");
+  const submit = event.submitter || event.target.querySelector('button[type="submit"]');
+  if (errorNode) errorNode.textContent = "";
+
+  const price = Math.trunc(Number($("#model-sale-price")?.value));
+  if (!Number.isInteger(price) || price <= 0) {
+    if (errorNode) errorNode.textContent = "Укажите цену продажи модели больше нуля.";
+    return;
+  }
+
+  const inputs = $$('[data-model-balance]');
+  const invalid = inputs.some((input) => input.value.trim() !== "" && (!Number.isInteger(Number(input.value)) || Number(input.value) < 0));
+  if (invalid) {
+    if (errorNode) errorNode.textContent = "Остаток должен быть целым числом не меньше нуля.";
+    return;
+  }
+
+  const desired = inputs.map((input) => ({
+    id: input.dataset.modelBalance,
+    raw: input.value.trim(),
+    stock: Math.trunc(Number(input.value))
+  })).filter((item) => item.raw !== "" && Number.isInteger(item.stock) && item.stock >= 0);
+
+  const existingById = new Map(state.products.map((item) => [item.id, item]));
+  const templates = new Map(variantDefaults(modelId).map((item) => [item.id, item]));
+  const catalogRow = state.catalog.find((item) => item.id === modelId);
+  const storedPrice = Number(catalogRow?.price || model.price);
+  const priceChanged = storedPrice !== price;
+  const productChanged = desired.some((item) => {
+    const current = existingById.get(item.id);
+    return !current || Number(current.stock || 0) !== item.stock || current.active === false || current.modelOnly === true;
+  });
+
+  if (!priceChanged && !productChanged) {
+    if (errorNode) errorNode.textContent = "Цена и остатки не изменились.";
+    return;
+  }
+
+  if (submit) submit.disabled = true;
   const employee = currentEmployeeName();
   const reason = $("#model-balance-reason").value.trim() || `Инвентаризация ${modelId}`;
-  const submit = event.submitter;
-  submit.disabled = true;
 
   try {
-    const productRefs = changed.map((item) => doc(state.db, "products", item.id));
-    const movementRefs = changed.map(() => doc(collection(state.db, "stockMovements")));
+    const productRefs = desired.map((item) => doc(state.db, "products", item.id));
+    const catalogRef = doc(state.db, "catalog", modelId);
     await runTransaction(state.db, async (tx) => {
       const snaps = [];
       for (const ref of productRefs) snaps.push(await tx.get(ref));
-      snaps.forEach((snap, index) => { if (!snap.exists()) throw new Error(`${changed[index].id}: позиция не найдена`); });
-      snaps.forEach((snap, index) => {
-        const data = snap.data();
-        const before = Number(data.stock || 0);
-        const after = changed[index].stock;
-        const delta = after - before;
-        const update = { stock: after, updatedAt: serverTimestamp(), updatedBy: state.user.uid, updatedByName: employee };
-        if (data.legacyUnassigned) update.active = after > 0;
-        tx.update(productRefs[index], update);
-        tx.set(movementRefs[index], {
-          type: "adjustment",
-          inventoryId: changed[index].id,
-          productId: data.modelId || modelId,
-          productName: data.name || `${modelId} · ${data.colorName || "Нераспределено"}`,
-          colorId: data.colorId || "",
-          colorName: data.colorName || "",
-          qtyDelta: delta,
-          before,
-          after,
-          unitCost: 0,
-          totalCost: 0,
-          reason,
-          createdAt: serverTimestamp(),
-          createdAtClient: new Date().toISOString(),
-          createdBy: state.user.uid,
-          createdByEmail: state.user.email || "",
-          createdByName: employee
-        });
-      });
+
+      for (let index = 0; index < desired.length; index += 1) {
+        const desiredItem = desired[index];
+        const ref = productRefs[index];
+        const snap = snaps[index];
+        const template = templates.get(desiredItem.id);
+        const before = snap.exists() ? Number(snap.data().stock || 0) : 0;
+        const after = desiredItem.stock;
+
+        if (!snap.exists()) {
+          if (!template) throw new Error(`${desiredItem.id}: позиция не найдена`);
+          tx.set(ref, {
+            id: template.id,
+            modelId: template.modelId,
+            colorId: template.colorId,
+            colorName: template.colorName,
+            colorHex: template.colorHex,
+            name: template.name,
+            stock: after,
+            lowStock: template.lowStock,
+            sort: template.sort,
+            active: true,
+            createdAt: serverTimestamp(),
+            createdBy: state.user.uid,
+            createdByName: employee,
+            updatedAt: serverTimestamp(),
+            updatedBy: state.user.uid,
+            updatedByName: employee
+          });
+        } else {
+          const data = snap.data();
+          const update = {
+            stock: after,
+            stockInitialized: true,
+            inventoryInitialized: true,
+            lastInventoryAt: serverTimestamp(),
+            lastInventoryBy: state.user.uid,
+            lastInventoryByName: employee,
+            updatedAt: serverTimestamp(),
+            updatedBy: state.user.uid,
+            updatedByName: employee
+          };
+          if (data.legacyUnassigned) update.active = after > 0;
+          else if (data.active === false) update.active = true;
+          if (data.modelOnly === true) update.modelOnly = false;
+          tx.update(ref, update);
+        }
+
+        if (before !== after) {
+          const data = snap.exists() ? snap.data() : template;
+          const movementRef = doc(collection(state.db, "stockMovements"));
+          tx.set(movementRef, {
+            type: "adjustment",
+            inventoryId: desiredItem.id,
+            productId: data.modelId || modelId,
+            productName: data.name || `${modelId} · ${data.colorName || "Нераспределено"}`,
+            colorId: data.colorId || "",
+            colorName: data.colorName || "",
+            qtyDelta: after - before,
+            before,
+            after,
+            unitCost: 0,
+            totalCost: 0,
+            reason,
+            createdAt: serverTimestamp(),
+            createdAtClient: new Date().toISOString(),
+            createdBy: state.user.uid,
+            createdByEmail: state.user.email || "",
+            createdByName: employee
+          });
+        }
+      }
+
+      tx.set(catalogRef, {
+        modelId,
+        name: model.name,
+        price,
+        updatedAt: serverTimestamp(),
+        updatedBy: state.user.uid,
+        updatedByName: employee
+      }, { merge: true });
     });
+
     $("#model-dialog").close();
-    toast(`${model.id}: остатки обновил ${employee}`);
-  } catch (error) { errorNode.textContent = error.message; }
-  finally { submit.disabled = false; }
+    toast(`${model.id}: цена и остатки сохранены · ${employee}`);
+  } catch (error) {
+    if (errorNode) errorNode.textContent = friendlyError(error);
+  } finally {
+    if (submit) submit.disabled = false;
+  }
 }
 
 function openStockDialog(productId, type) {
@@ -1153,7 +1300,18 @@ async function resetPassword(email) {
 
 function wireUi() {
   $$('[data-nav]').forEach((button) => button.addEventListener("click", () => navigate(button.dataset.nav)));
-  $("#sale-form").addEventListener("submit", createSale);
+  $("#sale-form").addEventListener("submit", (event) => {
+    const confirmer = window.CONDUCTOR_SALE_CONFIRM;
+    if (typeof confirmer === "function") {
+      event.preventDefault();
+      Promise.resolve(confirmer(event)).catch((error) => {
+        const node = $("#sale-error");
+        if (node) node.textContent = friendlyError(error);
+      });
+      return;
+    }
+    createSale(event);
+  });
   $("#model-balance-form").addEventListener("submit", saveModelBalances);
   $("#model-dialog-close").addEventListener("click", () => $("#model-dialog").close());
   $("#stock-operation-form").addEventListener("submit", applyStockOperation);
@@ -1186,7 +1344,6 @@ function wireUi() {
 
 async function boot() {
   wireUi();
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
   const cfg = config();
   if (!cfg?.apiKey || !cfg?.authDomain || !cfg?.projectId || !cfg?.appId) {
     showOnly("#login");
@@ -1245,5 +1402,21 @@ async function boot() {
     hideBoot();
   }
 }
+
+
+window.CONDUCTOR_APP_API = Object.freeze({
+  getDb: () => state.db,
+  getUser: () => state.user,
+  getOrders: () => state.sales.map((item) => ({ ...item })),
+  getSelectedItems: () => selectedItems().map((item) => ({ ...item })),
+  getModelPrice: (modelId) => modelSalePrice(modelId),
+  getCashBalance: () => availableCash(),
+  currentEmployeeName,
+  commitSale,
+  cancelSale,
+  finalizeSale,
+  navigate,
+  toast
+});
 
 boot();

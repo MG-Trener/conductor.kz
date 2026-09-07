@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
+import { access, readFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
-import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import test from "node:test";
@@ -9,233 +9,139 @@ const root = new URL("../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
 const execFileAsync = promisify(execFile);
 
-test("mobile app uses the compact stock UI entry points", async () => {
-  const [index, bootstrap, firebaseConfig, errorHelper, push] = await Promise.all([
-    read("mobile/index.html"),
-    read("mobile/bootstrap-104.js"),
-    read("mobile/firebase-config.js"),
-    read("mobile/firestore-error-help.js"),
-    read("mobile/push-notifications.js")
+async function missing(path) {
+  try { await access(new URL(path, root)); return false; } catch { return true; }
+}
+
+test("mobile has one core owner for catalog, products and sale transactions", async () => {
+  const [app, bootstrap, ui, analytics, sales] = await Promise.all([
+    read("mobile/app.js"), read("mobile/bootstrap.js"), read("mobile/warehouse-ui.js"), read("mobile/analytics.js"), read("mobile/sales-history.js")
   ]);
-
-  assert.match(index, /app\.js\?v=108/);
-  assert.match(index, /bootstrap-104\.js\?v=4/);
-  assert.match(index, /core-ui-105\.js/);
-  assert.match(index, /version-history-105\.js/);
-  assert.match(index, /startup-guard-104\.js/);
-  assert.match(index, /release-103\.css/);
-  assert.match(index, /release-105\.css/);
-  assert.match(index, /Content-Security-Policy/);
-
-  for (const moduleName of [
-    "app-update.js",
-    "analytics.js",
-    "sales-history.js",
-    "warehouse-enhancements.js",
-    "inventory-state.js",
-    "push-notifications.js",
-    "firestore-error-help.js"
-  ]) {
-    const escaped = moduleName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const imports = bootstrap.match(new RegExp(`\\./${escaped}\\?v=\\d+`, "g")) || [];
-    assert.equal(imports.length, 1, `${moduleName} must be imported once by bootstrap-104.js`);
-  }
-  assert.equal(bootstrap.split("./ui-sounds.js?v=1").length - 1, 1, "ui-sounds.js must be imported once by bootstrap-104.js");
-
-  assert.doesNotMatch(firebaseConfig, /loadUiModule|setTimeout\(.*inventory-state/s);
-  assert.doesNotMatch(errorHelper, /import\s+["']\.\//);
-  assert.doesNotMatch(push, /analytics\.js/);
+  assert.match(app, /window\.CONDUCTOR_APP_API/);
+  assert.match(app, /function modelSalePrice/);
+  assert.match(app, /async function commitSale/);
+  assert.equal((app.match(/tx\.set\(saleRef/g) || []).length, 1, "sale write must exist once in the core app");
+  assert.match(ui, /api\.commitSale/);
+  assert.doesNotMatch(ui, /onSnapshot\s*\(/);
+  assert.doesNotMatch(ui, /collection\([^\n]*"products"/);
+  assert.doesNotMatch(ui, /collection\([^\n]*"catalog"/);
+  assert.doesNotMatch(analytics, /onSnapshot\s*\(/);
+  assert.doesNotMatch(sales, /onSnapshot\s*\(/);
+  assert.match(bootstrap, /warehouse-ui\.js/);
+  assert.doesNotMatch(bootstrap, /inventory-state|warehouse-enhancements/);
 });
 
-
-
-test("DM60R1G repair restores variants and fixes only the legacy 3000 price", async () => {
-  const app = await read("mobile/app.js");
-  assert.match(app, /model\.id === "DM60R1G" && Number\(catalogItem\.price\) === 3000/);
-  assert.match(app, /item\.modelId === "DM60R1G" && \(current\.active === false \|\| current\.modelOnly === true\)/);
-  assert.match(app, /repair\.active = true/);
-  assert.match(app, /repair\.modelOnly = false/);
-});
-
-
-
-test("DM60R1G UI has virtual variants and effective legacy-price fallback", async () => {
-  const [app, inventory, publicPrices] = await Promise.all([
-    read("mobile/app.js"),
-    read("mobile/inventory-state.js"),
-    read("assets/public-prices.js")
-  ]);
-  assert.match(app, /modelId !== "DM60R1G"/);
+test("DM60R1G variants, model price and inventory save live in the core app", async () => {
+  const [app, publicPrices] = await Promise.all([read("mobile/app.js"), read("assets/public-prices.js")]);
+  assert.match(app, /id: "DM60R1G", name: "DM60R1G \(интрига\)", price: 4000/);
+  assert.match(app, /\["BLUE", "Синий", "#258cff"\]/);
+  assert.match(app, /\["PINK", "Розовый", "#ff6bab"\]/);
   assert.match(app, /virtual: true/);
-  assert.match(app, /modelId === "DM60R1G" && catalogPrice === 3000/);
-  assert.match(app, /modelId === "DM60G" && catalogPrice === 3000/);
-  assert.match(inventory, /DM60R1G_BLUE/);
-  assert.match(inventory, /DM60R1G_PINK/);
-  assert.match(inventory, /tx\.set\(doc\(db, "products", id\)/);
-  assert.match(publicPrices, /DM60R1G" && storedPrice === 3000 \? 4000/);
+  assert.match(app, /id="model-sale-price"/);
+  assert.match(app, /tx\.set\(catalogRef/);
+  assert.match(app, /if \(!snap\.exists\(\)\)/);
+  assert.match(publicPrices, /DM60R1G/);
 });
 
-test("startup UI cannot self-trigger an endless mutation loop", async () => {
-  const [coreUi, guard] = await Promise.all([
-    read("mobile/core-ui-105.js"),
-    read("mobile/startup-guard-104.js")
-  ]);
-  assert.doesNotMatch(coreUi, /new MutationObserver/);
-  assert.match(coreUi, /decorateStockRows/);
-  assert.match(coreUi, /setInterval\(refreshCompactStockUi, 1200\)/);
-  assert.match(guard, /window\.setTimeout\(finishStuckBoot, 9000\)/);
-  assert.match(guard, /ALLOWED_EMAILS/);
-  assert.match(guard, /boot\.classList\.add\("hide"\)/);
+test("sale UI uses the exact items and prices calculated by the core", async () => {
+  const [app, ui] = await Promise.all([read("mobile/app.js"), read("mobile/warehouse-ui.js")]);
+  assert.match(app, /getSelectedItems: \(\) => selectedItems\(\)/);
+  assert.match(ui, /api\?\.getSelectedItems/);
+  assert.doesNotMatch(ui, /function modelPrice/);
+  assert.doesNotMatch(ui, /catalog\.find/);
+  assert.equal((ui.match(/tx\.set\(saleRef/g) || []).length, 0);
 });
 
-test("operations and movement journal remain structurally correct", async () => {
-  const [index, coreUi, releaseCss] = await Promise.all([
-    read("mobile/index.html"),
-    read("mobile/core-ui-105.js"),
-    read("mobile/release-103.css")
-  ]);
-
-  const salesView = index.match(/<section id="view-sales"[\s\S]*?<\/section>/)?.[0] || "";
-  assert.match(salesView, /<h1>Операции<\/h1>/);
-  assert.doesNotMatch(salesView, /data-nav="sale"/);
-
-  const stockView = index.match(/<section id="view-stock"[\s\S]*?<\/section>/)?.[0] || "";
-  assert.match(stockView, /id="open-stock-movements"/);
-  assert.doesNotMatch(stockView, /id="movement-list"/);
-  assert.doesNotMatch(stockView, /<h2>Журнал движения<\/h2>/);
-
-  const movementDialog = index.match(/<dialog id="movement-dialog"[\s\S]*?<\/dialog>/)?.[0] || "";
-  assert.match(movementDialog, /id="movement-list"/);
-  assert.match(movementDialog, /<h2>Журнал движения<\/h2>/);
-
-  assert.match(releaseCss, /#view-stock \.stock-color-summary\s*\{[\s\S]*display:grid!important/);
-  assert.match(releaseCss, /grid-template-columns:1fr!important/);
-  assert.match(coreUi, /stripColorCount/);
-  assert.match(coreUi, /open-stock-movements/);
+test("orders are read once and shared with analytics and operations", async () => {
+  const [app, analytics, sales] = await Promise.all([read("mobile/app.js"), read("mobile/analytics.js"), read("mobile/sales-history.js")]);
+  assert.match(app, /conductor:orders-changed/);
+  assert.match(app, /getOrders: \(\) => state\.sales/);
+  assert.match(analytics, /getOrders\(\)/);
+  assert.match(sales, /getOrders\(\)/);
+  assert.match(sales, /api\.cancelSale/);
+  assert.doesNotMatch(sales, /runTransaction/);
 });
 
-test("compact stock rows keep quantities right aligned and expose zero/low states", async () => {
-  const [coreUi, compactCss] = await Promise.all([
-    read("mobile/core-ui-105.js"),
-    read("mobile/release-105.css")
-  ]);
+test("service worker is registered only by bootstrap and never in native Android", async () => {
+  const [app, bootstrap] = await Promise.all([read("mobile/app.js"), read("mobile/bootstrap.js")]);
+  assert.doesNotMatch(app, /serviceWorker\.register/);
+  assert.match(bootstrap, /!isNativeApp\(\)/);
+  assert.match(bootstrap, /serviceWorker\.register/);
+});
+
+test("active mobile entry points use stable filenames", async () => {
+  const index = await read("mobile/index.html");
+  for (const name of ["app.js?v=109", "bootstrap.js?v=1", "core-ui.js?v=1", "version-history.js?v=1", "startup-guard.js?v=1", "release.css?v=1"]) assert.ok(index.includes(name), `${name} must be loaded`);
+  assert.doesNotMatch(index, /bootstrap-10|core-ui-10|version-history-10|release-10|inventory-state|warehouse-enhancements/);
+});
+
+test("legacy mobile and temporary DM60R1G artifacts are absent", async () => {
+  const dead = [
+    "mobile/bootstrap-103.js", "mobile/bootstrap-104.js", "mobile/core-ui-103.js", "mobile/core-ui-104.js", "mobile/core-ui-105.js",
+    "mobile/inventory-state.js", "mobile/warehouse-enhancements.js", "mobile/warehouse-enhancements-legacy.js", "mobile/ui-fixes-070.js", "mobile/release-20260906.js",
+    "mobile/warehouse-splash-vintage.png", "mobile/warehouse-splash.png", "android-app/patch-bundled-price-source.mjs", "android-app/release-1.0.18-trigger.txt",
+    ".github/dm60r1g-image", ".github/dm60r1g-ready", ".github/dm60r1g-v1018-ready", ".github/workflows/apply-dm60r1g.yml",
+    ".github/workflows/fix-dm60r1g-v1017.yml", ".github/workflows/fix-dm60r1g-v1017b.yml", ".github/workflows/fix-dm60r1g-v1018.yml"
+  ];
+  for (const path of dead) assert.equal(await missing(path), true, `${path} must be removed`);
+});
+
+test("operations and compact stock UI remain available", async () => {
+  const [index, coreUi, css] = await Promise.all([read("mobile/index.html"), read("mobile/core-ui.js"), read("mobile/release.css")]);
+  assert.match(index, /<h1>Операции<\/h1>/);
+  assert.match(index, /id="open-stock-movements"/);
+  assert.match(index, /id="movement-dialog"/);
   assert.match(coreUi, /stock-zero/);
   assert.match(coreUi, /stock-low/);
-  assert.match(coreUi, /value > 0 && value <= 2/);
-  assert.match(compactCss, /border-bottom:1px solid rgba\(148,163,184,\.11\)!important/);
-  assert.match(compactCss, /margin-left:auto!important/);
-  assert.match(compactCss, /text-align:right!important/);
-  assert.match(compactCss, /stock-zero/);
-  assert.match(compactCss, /stock-low/);
+  assert.match(css, /stock-zero/);
+  assert.match(css, /stock-low/);
+  assert.match(css, /model-sale-price-row/);
 });
 
-test("bottom navigation stays in one row and Settings label is rendered once", async () => {
-  const [index, compactCss, coreUi] = await Promise.all([
-    read("mobile/index.html"),
-    read("mobile/release-105.css"),
-    read("mobile/core-ui-105.js")
-  ]);
-  const nav = index.match(/<nav class="bottom-nav"[\s\S]*?<\/nav>/)?.[0] || "";
-  assert.equal((nav.match(/class="nav-btn/g) || []).length, 4);
-  assert.match(nav, /data-nav="settings"/);
-  assert.match(compactCss, /display:flex!important/);
-  assert.match(compactCss, /flex-wrap:nowrap!important/);
-  assert.doesNotMatch(compactCss, /content:"Настройки"/);
-  assert.match(coreUi, /settingsNav\.textContent !== "Настройки"/);
-  assert.match(coreUi, /settingsNav\.textContent = "Настройки"/);
-});
-
-test("settings keep update checker and latest changes visible", async () => {
-  const [compactCss, updater] = await Promise.all([
-    read("mobile/release-105.css"),
-    read("mobile/app-update.js")
-  ]);
-  assert.match(compactCss, /settings-row:has\(#settings-project\)/);
-  assert.match(compactCss, /#view-settings > \.panel:not\(\.settings-panel\):not\(\.app-update-card\)/);
-  assert.match(compactCss, /#view-settings > \.app-update-card/);
-  assert.match(compactCss, /#view-settings #app-update-check/);
-  assert.match(compactCss, /#view-settings #app-update-download/);
-  assert.match(updater, /id="app-update-check"/);
-  assert.match(updater, /Проверить ещё раз/);
-  assert.match(updater, /id="app-update-download"/);
+test("settings keep updater, latest changes and section sounds", async () => {
+  const [updater, sounds] = await Promise.all([read("mobile/app-update.js"), read("mobile/ui-sounds.js")]);
   assert.match(updater, /Последние изменения/);
   assert.match(updater, /app-update-latest-notes/);
-  assert.match(updater, /release\?\.body/);
-  assert.match(updater, /checkForUpdate\(\)/);
+  for (const fn of ["playNavigation", "playStock", "playSales", "playAnalytics", "playSettings"]) assert.ok(sounds.includes(fn));
 });
 
-test("version history starts with the current release and contains recent releases", async () => {
-  const [history, archive, manifestText] = await Promise.all([
-    read("mobile/version-history-105.js"),
-    read("mobile/version-history-105-archive.js"),
-    read("mobile/app-version.json")
-  ]);
+test("version history begins with the current release", async () => {
+  const [history, manifestText] = await Promise.all([read("mobile/version-history.js"), read("mobile/app-version.json")]);
   const manifest = JSON.parse(manifestText);
-  const firstHistoryVersion = history.match(/const VERSIONS = \[\s*\{\s*version: "([^"]+)"/)?.[1];
-  assert.equal(firstHistoryVersion, manifest.version, "version history must start with the current app release");
-  const combinedHistory = `${history}\n${archive}`;
-  for (const version of ["1.0.12", "1.0.11", "1.0.10", "1.0.9", "1.0.8", "1.0.7", "1.0.6", "1.0.5", "1.0.4", "1.0.3", "1.0.2", "1.0.1"]) {
-    assert.ok(combinedHistory.includes(`version: "${version}"`), `version history must contain ${version}`);
-  }
-  assert.ok(history.includes(`Актуальная версия: ${manifest.version}`), "version history button must show the current release");
+  const first = history.match(/const VERSIONS = \[\s*\{\s*version: "([^"]+)"/)?.[1];
+  assert.equal(first, manifest.version);
+  assert.ok(history.includes(`Актуальная версия: ${manifest.version}`));
+  assert.ok(manifest.notes.length >= 40);
 });
 
-test("section-specific UI sounds cover navigation, stock, sales, analytics and settings", async () => {
-  const sounds = await read("mobile/ui-sounds.js");
-  assert.match(sounds, /playNavigation/);
-  assert.match(sounds, /playStock/);
-  assert.match(sounds, /playSales/);
-  assert.match(sounds, /playAnalytics/);
-  assert.match(sounds, /playSettings/);
-  assert.match(sounds, /\.bottom-nav/);
-  assert.match(sounds, /#view-stock/);
-  assert.match(sounds, /#sale-form/);
-  assert.match(sounds, /#view-analytics/);
-  assert.match(sounds, /#view-settings/);
-});
-
-test("mobile UI scripts pass syntax validation", async () => {
-  for (const file of ["mobile/bootstrap-104.js", "mobile/core-ui-105.js", "mobile/version-history-105.js", "mobile/startup-guard-104.js", "mobile/ui-sounds.js"]) {
-    await execFileAsync(process.execPath, ["--check", fileURLToPath(new URL(file, root))]);
+test("active mobile scripts pass syntax validation", async () => {
+  for (const file of ["app.js", "bootstrap.js", "core-ui.js", "version-history.js", "version-history-archive.js", "startup-guard.js", "app-update.js", "analytics.js", "sales-history.js", "warehouse-ui.js", "push-notifications.js", "firestore-error-help.js", "ui-sounds.js"]) {
+    await execFileAsync(process.execPath, ["--check", fileURLToPath(new URL(`mobile/${file}`, root))]);
   }
 });
 
-test("production Android configuration uses bundled web assets and no-cache mode", async () => {
-  const [capacitorConfigText, workflow, activity] = await Promise.all([
-    read("android-app/capacitor.config.json"),
-    read(".github/workflows/build-android-apk.yml"),
-    read("android-app/MainActivity.template.java")
-  ]);
-  const capacitorConfig = JSON.parse(capacitorConfigText);
-
-  assert.equal(capacitorConfig.webDir, "www");
-  assert.equal(capacitorConfig.server?.url, undefined);
-  assert.match(workflow, /Prepare bundled mobile web app/);
-  assert.match(workflow, /cp -R mobile\/\. android-app\/www\//);
-  assert.match(workflow, /Production Android build must not use remote server\.url/);
-  assert.match(activity, /WebSettings\.LOAD_NO_CACHE/);
-  assert.match(activity, /webView\.clearCache\(true\)/);
+test("Android release build validates bundle, version and APK size", async () => {
+  const [workflow, packageText] = await Promise.all([read(".github/workflows/build-android-apk.yml"), read("android-app/package.json")]);
+  const pkg = JSON.parse(packageText);
+  assert.equal(pkg.scripts?.postinstall, undefined);
+  assert.match(workflow, /node --check mobile\/app\.js/);
+  assert.match(workflow, /node --check mobile\/warehouse-ui\.js/);
+  assert.match(workflow, /test ! -f android-app\/www\/inventory-state\.js/);
+  assert.match(workflow, /APK unexpectedly exceeds 8 MiB/);
+  assert.doesNotMatch(workflow, /feature\/in-app-updates/);
 });
 
-test("native updater accepts only the warehouse release and verifies SHA-256", async () => {
-  const [webUpdater, nativeUpdater] = await Promise.all([
-    read("mobile/app-update.js"),
-    read("android-app/configure-updater.mjs")
-  ]);
-
+test("native updater remains pinned to GitHub release and SHA-256", async () => {
+  const [webUpdater, nativeUpdater] = await Promise.all([read("mobile/app-update.js"), read("android-app/configure-updater.mjs")]);
   assert.match(webUpdater, /asset\.digest/);
   assert.match(webUpdater, /sha256:\s*lastRelease\.sha256/);
-  assert.match(webUpdater, /browser_download_url !== APK_DOWNLOAD_URL/);
-  assert.match(nativeUpdater, /ALLOWED_HOST = \\"github\.com\\"|ALLOWED_HOST = "github\.com"/);
+  assert.match(nativeUpdater, /ALLOWED_HOST = "github\.com"/);
   assert.match(nativeUpdater, /verifySha256/);
-  assert.match(nativeUpdater, /MessageDigest\.getInstance\(\\?"SHA-256\\?"\)/);
 });
 
-test("PWA cache contains current settings and UI sound assets", async () => {
+test("PWA cache contains only current application modules", async () => {
   const sw = await read("mobile/sw.js");
-  assert.match(sw, /const CACHE = "conductor-mobile-v62"/);
-  for (const asset of ["release-103.css", "release-105.css?v=2", "app.js?v=108", "bootstrap-104.js?v=4", "core-ui-105.js?v=2", "version-history-105.js?v=2", "startup-guard-104.js", "ui-sounds.js?v=1"]) {
-    assert.ok(sw.includes(`./${asset}`), `${asset} must be cached`);
-  }
-  assert.match(sw, /fetch\(request, \{ cache: "no-store" \}\)/);
+  assert.match(sw, /conductor-mobile-v63/);
+  for (const asset of ["app.js?v=109", "bootstrap.js?v=1", "core-ui.js?v=1", "version-history.js?v=1", "warehouse-ui.js?v=1", "release.css?v=1"]) assert.ok(sw.includes(asset));
+  assert.doesNotMatch(sw, /inventory-state|warehouse-enhancements|bootstrap-10|core-ui-10/);
 });

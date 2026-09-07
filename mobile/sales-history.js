@@ -1,18 +1,6 @@
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-auth.js";
-import {
-  collection,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-  runTransaction,
-  serverTimestamp
-} from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
-
 const KZT = new Intl.NumberFormat("ru-KZ", { style: "currency", currency: "KZT", maximumFractionDigits: 0 });
 const MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
 const START_YEAR = 2026;
-const MODEL_IDS = new Set(["DM30", "DM60", "DM60G", "DM90", "HOLI"]);
 const STAFF_NAMES = new Map([
   ["mihagavr@gmail.com", "Михаил"],
   ["a.kalashin@gmail.com", "Алексей"]
@@ -21,8 +9,6 @@ const STAFF_NAMES = new Map([
 let operations = [];
 let selectedYear = Math.max(START_YEAR, new Date().getFullYear());
 let selectedMonth = new Date().getMonth();
-let unsubscribeOrders = null;
-let currentUser = null;
 
 function escapeHtml(value = "") {
   return String(value).replace(/[&<>'\"]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
@@ -57,10 +43,6 @@ function employeeName(email = "", explicit = "") {
 
 function createdByName(item) {
   return employeeName(item.createdByEmail || "", item.createdByName || "");
-}
-
-function currentEmployeeName() {
-  return employeeName(currentUser?.email || "");
 }
 
 function saleItemLabel(item) {
@@ -245,131 +227,38 @@ function render() {
   });
 }
 
-function inventoryIdForSaleItem(item) {
-  if (item.inventoryId) return item.inventoryId;
-  if (MODEL_IDS.has(item.productId)) return `${item.productId}_UNASSIGNED`;
-  return item.productId;
+async function waitForCoreApi() {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    if (window.CONDUCTOR_APP_API) return window.CONDUCTOR_APP_API;
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
+  }
+  throw new Error("Данные приложения ещё не готовы.");
 }
 
 async function cancelSale(saleId) {
-  if (!currentUser) throw new Error("Нужно войти в приложение заново.");
-  const db = window.CONDUCTOR_FIRESTORE;
-  if (!db) throw new Error("База данных ещё не готова.");
-
-  const employee = currentEmployeeName();
-  const saleRef = doc(db, "orders", saleId);
-  const cashRef = doc(db, "finance", "cash");
-
-  await runTransaction(db, async (tx) => {
-    const saleSnap = await tx.get(saleRef);
-    if (!saleSnap.exists()) throw new Error("Продажа не найдена");
-    const sale = saleSnap.data();
-    if (isCashOperation(sale)) throw new Error("Движение денег нельзя отменить как продажу.");
-    if (sale.status === "cancelled") throw new Error("Продажа уже отменена");
-    const items = sale.items || [];
-    if (!items.length) throw new Error("В продаже нет товарных позиций");
-
-    const inventoryIds = items.map(inventoryIdForSaleItem);
-    const productRefs = inventoryIds.map((id) => doc(db, "products", id));
-    const productSnaps = [];
-    for (const ref of productRefs) productSnaps.push(await tx.get(ref));
-    const cashSnap = await tx.get(cashRef);
-    if (!cashSnap.exists()) throw new Error("Баланс кассы ещё не создан. Повторите отмену.");
-    const movementRefs = items.map(() => doc(collection(db, "stockMovements")));
-
-    productSnaps.forEach((snap, index) => {
-      if (!snap.exists()) throw new Error(`${items[index].name || items[index].productId}: товар не найден`);
-    });
-
-    productSnaps.forEach((snap, index) => {
-      const data = snap.data();
-      const before = Number(data.stock || 0);
-      const qty = Number(items[index].qty || 0);
-      const after = before + qty;
-      const update = {
-        stock: after,
-        updatedAt: serverTimestamp(),
-        updatedBy: currentUser.uid,
-        updatedByName: employee
-      };
-      if (data.legacyUnassigned) update.active = true;
-      tx.update(productRefs[index], update);
-      tx.set(movementRefs[index], {
-        type: "sale_return",
-        inventoryId: inventoryIds[index],
-        productId: data.modelId || items[index].productId,
-        productName: data.name || items[index].name || items[index].productId,
-        colorId: data.colorId || items[index].colorId || "",
-        colorName: data.colorName || items[index].colorName || "",
-        qtyDelta: qty,
-        before,
-        after,
-        unitCost: 0,
-        totalCost: 0,
-        orderId: saleId,
-        reason: "Отмена продажи",
-        createdAt: serverTimestamp(),
-        createdAtClient: new Date().toISOString(),
-        createdBy: currentUser.uid,
-        createdByEmail: currentUser.email || "",
-        createdByName: employee
-      });
-    });
-
-    tx.update(saleRef, {
-      status: "cancelled",
-      cancelledAt: serverTimestamp(),
-      cancelledBy: currentUser.uid,
-      cancelledByEmail: currentUser.email || "",
-      cancelledByName: employee
-    });
-    tx.update(cashRef, {
-      balance: Number(cashSnap.data().balance || 0) - Number(sale.total || 0),
-      updatedAt: serverTimestamp(),
-      updatedBy: currentUser.uid,
-      updatedByEmail: currentUser.email || "",
-      updatedByName: employee
-    });
-  });
+  const api = await waitForCoreApi();
+  await api.cancelSale(saleId);
+  api.toast("Продажа отменена, товар возвращён");
 }
 
-async function waitForDatabase() {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    if (window.CONDUCTOR_FIRESTORE) return window.CONDUCTOR_FIRESTORE;
-    await new Promise((resolve) => window.setTimeout(resolve, 150));
-  }
-  throw new Error("База данных ещё не готова.");
-}
-
-async function startOrdersListener() {
-  const db = await waitForDatabase();
-  unsubscribeOrders?.();
-  unsubscribeOrders = onSnapshot(query(collection(db, "orders"), orderBy("createdAt", "desc")), (snapshot) => {
-    operations = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-    render();
-  }, (error) => {
-    const list = document.querySelector("#sales-period-list");
-    if (list) list.innerHTML = `<div class="empty">Не удалось загрузить операции: ${escapeHtml(error.message)}</div>`;
-  });
+function syncOperationsFromCore() {
+  const api = window.CONDUCTOR_APP_API;
+  if (!api) return;
+  operations = api.getOrders();
+  render();
 }
 
 async function boot() {
   injectUi();
-  await waitForDatabase();
-  const auth = getAuth();
-  onAuthStateChanged(auth, (user) => {
-    currentUser = user;
-    if (!user) {
-      unsubscribeOrders?.();
-      unsubscribeOrders = null;
-      operations = [];
-      return;
-    }
-    startOrdersListener().catch((error) => {
-      const list = document.querySelector("#sales-period-list");
-      if (list) list.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
-    });
-  });
+  try {
+    const api = await waitForCoreApi();
+    operations = api.getOrders();
+    render();
+    window.addEventListener("conductor:orders-changed", syncOperationsFromCore);
+  } catch (error) {
+    const list = document.querySelector("#sales-period-list");
+    if (list) list.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+  }
 }
 
 boot().catch(() => {});

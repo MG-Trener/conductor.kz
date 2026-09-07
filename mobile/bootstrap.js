@@ -1,29 +1,21 @@
-import "./app-update.js";
-import "./analytics.js";
-import "./sales-history.js";
-import "./warehouse-enhancements.js";
-import "./version-history.js";
-import "./ui-fixes-070.js";
-import "./inventory-state.js";
-import "./push-notifications.js";
-import "./firestore-error-help.js";
+import "./app-update.js?v=1";
+import "./analytics.js?v=1";
+import "./sales-history.js?v=1";
+import "./warehouse-ui.js?v=1";
+import "./push-notifications.js?v=1";
+import "./firestore-error-help.js?v=1";
+import "./ui-sounds.js?v=1";
 
 function isNativeApp() {
   try {
-    return window.Capacitor?.getPlatform?.() === "android"
-      || window.Capacitor?.isNativePlatform?.() === true;
+    return window.Capacitor?.getPlatform?.() === "android" || window.Capacitor?.isNativePlatform?.() === true;
   } catch {
     return false;
   }
 }
 
-function registerPwaWorker() {
-  if (isNativeApp() || !("serviceWorker" in navigator)) return;
+if (!isNativeApp() && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch((error) => {
-      console.warn("Service Worker registration failed", error);
-    });
+    navigator.serviceWorker.register("./sw.js?v=1").catch((error) => console.warn("Service Worker registration failed", error));
   }, { once: true });
 }
-
-registerPwaWorker();

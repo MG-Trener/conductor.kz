@@ -1,1 +1,0 @@
-Release trigger for DM60R1G runtime repair v1.0.18

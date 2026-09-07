@@ -1,5 +1,3 @@
-import { collection, onSnapshot, orderBy, query } from "https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js";
-
 const KZT = new Intl.NumberFormat("ru-KZ", { style: "currency", currency: "KZT", maximumFractionDigits: 0 });
 const MONTHS = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
 const START_YEAR = 2026;
@@ -8,7 +6,6 @@ const START_MONTH_2026 = 8;
 let analyticsSales = [];
 let selectedYear = Math.max(START_YEAR, new Date().getFullYear());
 let selectedMonth = new Date().getMonth();
-let unsubscribeOrders = null;
 let analyticsStarted = false;
 
 function escapeHtml(value = "") {
@@ -78,7 +75,7 @@ function injectStyles() {
   const style = document.createElement("style");
   style.id = "analytics-styles";
   style.textContent = `
-    .bottom-nav{grid-template-columns:repeat(6,1fr)}
+    .bottom-nav{grid-template-columns:repeat(5,1fr)}
     .analytics-nav span{font-size:19px}
     .analytics-year-card{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:4px 0 12px;padding:14px;border:1px solid var(--line);border-radius:18px;background:linear-gradient(145deg,rgba(56,166,255,.12),transparent 58%),var(--panel)}
     .analytics-year-copy span,.analytics-year-copy b{display:block}.analytics-year-copy span{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.analytics-year-copy b{margin-top:5px;font-size:25px}
@@ -236,12 +233,12 @@ function renderAnalytics() {
   renderJournal(journalSales);
 }
 
-async function waitForDatabase() {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
-    if (window.CONDUCTOR_FIRESTORE) return window.CONDUCTOR_FIRESTORE;
-    await new Promise((resolve) => window.setTimeout(resolve, 150));
+async function waitForCoreApi() {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    if (window.CONDUCTOR_APP_API) return window.CONDUCTOR_APP_API;
+    await new Promise((resolve) => window.setTimeout(resolve, 100));
   }
-  throw new Error("База данных ещё не готова. Повторите открытие аналитики.");
+  throw new Error("Данные приложения ещё не готовы. Повторите открытие аналитики.");
 }
 
 async function startAnalytics() {
@@ -250,18 +247,20 @@ async function startAnalytics() {
   const root = document.querySelector("#analytics-sales-list");
   if (root) root.innerHTML = `<div class="analytics-loading">Загружаю историю продаж…</div>`;
   try {
-    const db = await waitForDatabase();
-    unsubscribeOrders = onSnapshot(query(collection(db, "orders"), orderBy("createdAt", "desc")), (snapshot) => {
-      analyticsSales = snapshot.docs.map((item) => ({ id: item.id, ...item.data() }));
-      renderAnalytics();
-    }, (error) => {
-      analyticsStarted = false;
-      if (root) root.innerHTML = `<div class="empty">Не удалось загрузить аналитику: ${escapeHtml(error.message)}</div>`;
-    });
+    const api = await waitForCoreApi();
+    analyticsSales = api.getOrders();
+    renderAnalytics();
   } catch (error) {
     analyticsStarted = false;
     if (root) root.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
   }
+}
+
+function syncAnalyticsFromCore() {
+  const api = window.CONDUCTOR_APP_API;
+  if (!api) return;
+  analyticsSales = api.getOrders();
+  if (analyticsStarted) renderAnalytics();
 }
 
 function openAnalytics() {
@@ -274,12 +273,5 @@ function openAnalytics() {
   startAnalytics();
 }
 
-function cleanupAnalytics() {
-  unsubscribeOrders?.();
-  unsubscribeOrders = null;
-  analyticsStarted = false;
-  analyticsSales = [];
-}
-
 injectUi();
-document.querySelector("#logout")?.addEventListener("click", cleanupAnalytics);
+window.addEventListener("conductor:orders-changed", syncAnalyticsFromCore);

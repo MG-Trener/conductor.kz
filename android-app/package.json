@@ -1,13 +1,12 @@
 {
   "name": "conductor-warehouse-android",
-  "version": "1.0.18",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "postinstall": "node patch-bundled-price-source.mjs",
     "android:init": "cap add android",
     "android:sync": "cap sync android",
     "android:open": "cap open android"
