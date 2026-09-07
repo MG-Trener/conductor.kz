@@ -31,7 +31,9 @@ jobs:
           java-version: "21"
 
       - name: Apply repository refactor
-        run: node .github/maintenance-refactor-20260907.mjs
+        run: |
+          node .github/maintenance-refactor-20260907.mjs
+          node .github/maintenance-testfix-20260907.mjs
 
       - name: Generate locked Android dependencies
         working-directory: android-app
@@ -67,7 +69,7 @@ jobs:
         working-directory: android-app
         run: npm ci --ignore-scripts
 
-      - name: Validate JavaScript syntax
+      - name: Validate JavaScript and test syntax
         run: |
           node --check mobile/app.js
           node --check mobile/catalog-core.js
@@ -76,6 +78,10 @@ jobs:
           node --check mobile/bootstrap.js
           node --check mobile/version-history.js
           node --check assets/public-prices.js
+          node --check tests/mobile-architecture.test.mjs
+          node --check tests/public-prices-pages.test.mjs
+          node --check tests/splash-assets.test.mjs
+          node --check tests/firestore.rules.test.mjs
 
       - name: Install repository test dependencies
         run: npm ci
@@ -86,6 +92,7 @@ jobs:
       - name: Remove one-time maintenance files
         run: |
           rm -f .github/maintenance-refactor-20260907.mjs
+          rm -f .github/maintenance-testfix-20260907.mjs
           rm -f .github/workflows/repository-maintenance-once.yml
 
       - name: Commit verified maintenance changes
