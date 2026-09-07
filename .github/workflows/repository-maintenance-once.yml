@@ -37,8 +37,6 @@ jobs:
           node .github/maintenance-preflight-20260907.mjs
           node .github/maintenance-refactor-20260907.mjs
           node .github/maintenance-testfix-20260907.mjs
-          echo "--- transformed firestore.rules ---"
-          nl -ba firestore.rules | sed -n '1,360p'
 
       - name: Generate locked Android dependencies
         working-directory: android-app
@@ -94,12 +92,14 @@ jobs:
       - name: Run repository tests
         run: npm test
 
-      - name: Remove one-time maintenance files
+      - name: Prepare publishable changes
         run: |
+          # The GITHUB_TOKEN used by Actions may not update workflow files.
+          # Keep workflow updates out of this commit; they are applied separately after validation.
+          git checkout HEAD -- .github/workflows/build-android-apk.yml
           rm -f .github/maintenance-refactor-20260907.mjs
           rm -f .github/maintenance-testfix-20260907.mjs
           rm -f .github/maintenance-preflight-20260907.mjs
-          rm -f .github/workflows/repository-maintenance-once.yml
 
       - name: Commit verified maintenance changes
         run: |
