@@ -31,11 +31,21 @@ jobs:
           from pathlib import Path
           path = Path('.github/private-auth-claims-once.mjs')
           text = path.read_text()
-          old = r'/\[\"([^\"]+)\",\s*\"([^\"]+)\"\]/gu'
-          new = r'/\["([^"]+)",\s*"([^"]+)"\]/gu'
-          if old not in text:
-              raise SystemExit('one-time parser marker not found')
-          path.write_text(text.replace(old, new, 1))
+          replacements = {
+              r'/\[\"([^\"]+)\",\s*\"([^\"]+)\"\]/gu':
+                  r'/\["([^"]+)",\s*"([^"]+)"\]/gu',
+              r'/function employeeName\(email = \"\", explicit = \"\"\) \{[\s\S]*?function createdByName\(item\) \{[\s\S]*?\n\}/u':
+                  r'/function employeeName\(email = "", explicit = ""\) \{[\s\S]*?function createdByName\(item\) \{[\s\S]*?\n\}/u',
+              r'/test\(\"authorization allowlist is pinned to the two Firebase UIDs\", async \(\) => \{[\s\S]*?\n\}\);\n?$/u':
+                  r'/test\("authorization allowlist is pinned to the two Firebase UIDs", async \(\) => \{[\s\S]*?\n\}\);\n?$/u',
+              r'/const staffUid = \"[^\"]+\";\nconst secondStaffUid = \"[^\"]+\";\nconst staffEmail = \"[^\"]+\";\nconst secondStaffEmail = \"[^\"]+\";/u':
+                  r'/const staffUid = "[^"]+";\nconst secondStaffUid = "[^"]+";\nconst staffEmail = "[^"]+";\nconst secondStaffEmail = "[^"]+";/u',
+          }
+          for old, new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'one-time parser marker not found: {old}')
+              text = text.replace(old, new, 1)
+          path.write_text(text)
           PY
           node --check .github/private-auth-claims-once.mjs
 
