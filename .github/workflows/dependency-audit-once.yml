@@ -1,4 +1,4 @@
-name: One-time dependency audit
+name: One-time dependency hardening
 
 on:
   push:
@@ -8,33 +8,80 @@ on:
       - ".github/workflows/dependency-audit-once.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit:
+  harden:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Root dependency audit
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Apply compatible root audit fixes
         shell: bash
         run: |
-          npm ci --ignore-scripts
-          echo '=== ROOT_AUDIT_BEGIN ==='
-          npm audit --json || true
-          echo '=== ROOT_AUDIT_END ==='
+          npm audit fix --package-lock-only --ignore-scripts || true
 
-      - name: Android dependency audit
+      - name: Upgrade sharp and apply compatible Android audit fixes
+        working-directory: android-app
+        shell: bash
+        run: |
+          npm install --package-lock-only --ignore-scripts --save-dev --save-exact sharp@0.35.4
+          npm audit fix --package-lock-only --ignore-scripts || true
+
+      - name: Validate root dependencies and tests
+        shell: bash
+        run: |
+          npm ci
+          npm audit --audit-level=high
+          npm test
+
+      - name: Validate Android dependencies and sharp API
         working-directory: android-app
         shell: bash
         run: |
           npm ci --ignore-scripts
-          echo '=== ANDROID_AUDIT_BEGIN ==='
+          npm audit --audit-level=high
+          node --input-type=module <<'NODE'
+          import sharp from "sharp";
+          const metadata = await sharp("branding/icon.png").metadata();
+          if (!metadata.width || !metadata.height) throw new Error("sharp failed to read icon metadata");
+          const output = await sharp("branding/icon.png")
+            .resize(64, 64, { fit: "cover" })
+            .webp({ quality: 80 })
+            .toBuffer();
+          if (!output.length) throw new Error("sharp failed to render WebP output");
+          console.log(`sharp 0.35.4 smoke test passed: ${metadata.width}x${metadata.height}`);
+          NODE
+
+      - name: Show remaining audit findings
+        shell: bash
+        run: |
+          echo '=== ROOT_FINAL_AUDIT ==='
           npm audit --json || true
-          echo '=== ANDROID_AUDIT_END ==='
+          echo '=== ANDROID_FINAL_AUDIT ==='
+          (cd android-app && npm audit --json || true)
+
+      - name: Commit verified dependency hardening
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json android-app/package.json android-app/package-lock.json
+          git status --short
+          git diff --cached --quiet && exit 0
+          git commit -m "chore: harden dependency locks"
+          git push origin HEAD:main
