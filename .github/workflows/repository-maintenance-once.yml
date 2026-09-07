@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - ".github/workflows/repository-maintenance-once.yml"
+      - ".github/maintenance-testfix-20260907.mjs"
 
 permissions:
   contents: write
