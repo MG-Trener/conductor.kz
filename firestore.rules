@@ -13,11 +13,11 @@ service cloud.firestore {
     }
 
     function isModel(modelId) {
-      return modelId in ['DM30', 'DM60', 'DM60G', 'DM90', 'HOLI'];
+      return modelId in ['DM30', 'DM60', 'DM60G', 'DM60R1G', 'DM90', 'HOLI'];
     }
 
     function validProductId(productId) {
-      return productId.matches('^(DM30|DM60|DM60G|DM90|HOLI)_[A-Z0-9]+$');
+      return productId.matches('^(DM30|DM60|DM60G|DM60R1G|DM90|HOLI)_[A-Z0-9]+$');
     }
 
     function validProductState(data, productId) {

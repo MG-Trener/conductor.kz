@@ -208,7 +208,7 @@ function resilientSaleSubmit(event) {
 
 (async function loadWarehouseEnhancementsSafely() {
   try {
-    await import("./warehouse-enhancements-legacy.js?v=3");
+    await import("./warehouse-enhancements-legacy.js?v=4");
     const listener = capturedSaleSubmit || await Promise.race([
       capturedSaleSubmitPromise,
       delay(5000, null)

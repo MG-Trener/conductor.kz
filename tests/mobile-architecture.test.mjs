@@ -18,8 +18,8 @@ test("mobile app uses the compact stock UI entry points", async () => {
     read("mobile/push-notifications.js")
   ]);
 
-  assert.match(index, /app\.js\?v=105/);
-  assert.match(index, /bootstrap-104\.js\?v=2/);
+  assert.match(index, /app\.js\?v=106/);
+  assert.match(index, /bootstrap-104\.js\?v=3/);
   assert.match(index, /core-ui-105\.js/);
   assert.match(index, /version-history-105\.js/);
   assert.match(index, /startup-guard-104\.js/);
@@ -205,8 +205,8 @@ test("native updater accepts only the warehouse release and verifies SHA-256", a
 
 test("PWA cache contains current settings and UI sound assets", async () => {
   const sw = await read("mobile/sw.js");
-  assert.match(sw, /const CACHE = "conductor-mobile-v59"/);
-  for (const asset of ["release-103.css", "release-105.css?v=2", "app.js?v=105", "bootstrap-104.js?v=2", "core-ui-105.js?v=2", "version-history-105.js", "startup-guard-104.js", "ui-sounds.js?v=1"]) {
+  assert.match(sw, /const CACHE = "conductor-mobile-v60"/);
+  for (const asset of ["release-103.css", "release-105.css?v=2", "app.js?v=106", "bootstrap-104.js?v=3", "core-ui-105.js?v=2", "version-history-105.js?v=2", "startup-guard-104.js", "ui-sounds.js?v=1"]) {
     assert.ok(sw.includes(`./${asset}`), `${asset} must be cached`);
   }
   assert.match(sw, /fetch\(request, \{ cache: "no-store" \}\)/);

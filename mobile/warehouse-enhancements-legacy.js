@@ -13,7 +13,7 @@ const STAFF_NAMES = new Map([
   ["mihagavr@gmail.com", "Михаил"],
   ["a.kalashin@gmail.com", "Алексей"]
 ]);
-const SMOKE_MODELS = new Set(["DM30", "DM60", "DM60G", "DM90"]);
+const SMOKE_MODELS = new Set(["DM30", "DM60", "DM60G", "DM60R1G", "DM90"]);
 const HOLI_MODEL = "HOLI";
 const RESUME_KEY = "conductor.app.started";
 

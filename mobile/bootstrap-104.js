@@ -1,8 +1,8 @@
 import "./app-update.js?v=104";
 import "./analytics.js?v=104";
 import "./sales-history.js?v=105";
-import "./warehouse-enhancements.js?v=107";
-import "./inventory-state.js?v=105";
+import "./warehouse-enhancements.js?v=108";
+import "./inventory-state.js?v=106";
 import "./push-notifications.js?v=104";
 import "./firestore-error-help.js?v=104";
 import "./ui-sounds.js?v=1";

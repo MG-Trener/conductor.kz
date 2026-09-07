@@ -1,5 +1,14 @@
 const VERSIONS = [
   {
+    version: "1.0.16",
+    date: "07.09.2026",
+    changes: [
+      "Добавлен DM60R1G — дым для гендер-пати из белого в цвет; на сайте используется подготовленное изображение товара.",
+      "На складе добавлена карточка «DM60R1G (интрига)» с синим и розовым вариантами, модель также доступна в новой продаже.",
+      "Цена DM60R1G хранится в общем catalog и одинаково используется публичным сайтом, складом и продажами; стартовая цена — 4 000 ₸."
+    ]
+  },
+  {
     version: "1.0.15",
     date: "07.09.2026",
     changes: [
@@ -46,7 +55,7 @@ function renderCurrentVersionCard() {
 function patchCurrentVersionUi() {
   const button = document.getElementById("version-history-button");
   const copy = button?.querySelector(".version-history-btn-copy small");
-  if (copy) copy.textContent = "Актуальная версия: 1.0.15";
+  if (copy) copy.textContent = "Актуальная версия: 1.0.16";
 
   const root = document.getElementById("version-history-list");
   if (!root || root.querySelector('[data-current-version="1.0.15"]')) return;

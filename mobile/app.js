@@ -66,6 +66,13 @@ const MODELS = [
     ]
   },
   {
+    id: "DM60R1G", name: "DM60R1G (интрига)", price: 4000, lowStock: 2, sort: 27,
+    variants: [
+      ["BLUE", "Синий", "#258cff"],
+      ["PINK", "Розовый", "#ff6bab"]
+    ]
+  },
+  {
     id: "DM90", name: "Цветной дым DM90", price: 3500, lowStock: 2, sort: 30,
     variants: [
       ["ORANGE", "Оранжевый", "#ff8b2d"],

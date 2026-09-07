@@ -8,14 +8,14 @@ const write = (file, text) => fs.writeFileSync(file, text);
 function replaceOnce(text, before, after, label) {
   const count = text.split(before).length - 1;
   if (count !== 1) throw new Error(`${label}: expected 1 match, found ${count}`);
-  return text.replace(before, after);
+  return text.replace(before, () => after);
 }
 
 function replaceRegexOnce(text, regex, replacement, label) {
   const flags = regex.flags.includes("g") ? regex.flags : `${regex.flags}g`;
   const matches = [...text.matchAll(new RegExp(regex.source, flags))];
   if (matches.length !== 1) throw new Error(`${label}: expected 1 match, found ${matches.length}`);
-  return text.replace(regex, replacement);
+  return text.replace(regex, () => replacement);
 }
 
 function patch(file, fn) {
@@ -32,7 +32,7 @@ if (!imageParts.length) throw new Error("DM60R1G image chunks are missing");
 const imageBase64 = imageParts.map((name) => read(path.join(imagePartsDir, name)).trim()).join("");
 const imageBuffer = Buffer.from(imageBase64, "base64");
 const imageSha = crypto.createHash("sha256").update(imageBuffer).digest("hex");
-if (imageSha !== "a3588a456558b336235f98bc9046ff3cb34603aaeea824ed55b716b2f5763eb9") {
+if (imageSha !== "dad53a7914da1a20c56d3dba4d7146ed7a190fffa7c49ed0bd80f05da59687b6") {
   throw new Error(`Unexpected DM60R1G image SHA-256: ${imageSha}`);
 }
 fs.mkdirSync("assets/images", { recursive: true });
