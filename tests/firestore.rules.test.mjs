@@ -176,6 +176,7 @@ test("approved staff can create DM60G catalog and its two warehouse variants", a
       colorName,
       colorHex,
       name: `DM60G · ${colorName}`,
+      stock: 0,
       sort,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
@@ -210,6 +211,7 @@ test("approved staff can create DM60R1G catalog and its two warehouse variants",
       colorName,
       colorHex,
       name: `DM60R1G · ${colorName}`,
+      stock: 0,
       sort,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
@@ -300,6 +302,7 @@ test("staff can atomically save the catalog price, actual stock and its movement
     const movementRef = doc(db, "stockMovements", "movement-1");
     transaction.update(productRef, {
       stock: 6,
+      lastMovementId: "movement-1",
       stockInitialized: true,
       inventoryInitialized: true,
       lastInventoryAt: serverTimestamp(),
@@ -321,9 +324,9 @@ test("staff can atomically save the catalog price, actual stock and its movement
   }));
 });
 
-test("staff can initialize a zero balance without creating a zero-delta movement", async () => {
+test("inventory metadata can be initialized without creating a zero-delta movement", async () => {
   await assertSucceeds(updateDoc(doc(staffDb(), "products", "DM30_BLUE"), {
-    stock: 0,
+    stock: 4,
     stockInitialized: true,
     inventoryInitialized: true,
     lastInventoryAt: serverTimestamp(),
@@ -380,6 +383,7 @@ test("receipt transaction updates stock without tracking purchase cost", async (
   await assertSucceeds(runTransaction(db, async (transaction) => {
     transaction.update(doc(db, "products", "DM30_BLUE"), {
       stock: 7,
+      lastMovementId: "receipt-1",
       updatedAt: serverTimestamp(),
       updatedBy: staffUid,
       updatedByName: "Сотрудник"
@@ -395,13 +399,24 @@ test("receipt transaction updates stock without tracking purchase cost", async (
   }));
 });
 
-test("sale and cancellation paths remain allowed for the authenticated employee", async () => {
+test("sale and cancellation paths remain allowed only as linked atomic operations", async () => {
   const db = staffDb();
   const orderRef = doc(db, "orders", "order-1");
+  const cashRef = doc(db, "finance", "cash");
+  await assertSucceeds(setDoc(cashRef, {
+    balance: 5000,
+    initializedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+    updatedBy: staffUid,
+    updatedByName: "Сотрудник",
+    lastOperationType: "init",
+    lastOperationId: "initial"
+  }));
 
   await assertSucceeds(runTransaction(db, async (transaction) => {
     transaction.update(doc(db, "products", "DM30_BLUE"), {
       stock: 3,
+      lastMovementId: "sale-1",
       updatedAt: serverTimestamp(),
       updatedBy: staffUid,
       updatedByName: "Сотрудник"
@@ -410,7 +425,7 @@ test("sale and cancellation paths remain allowed for the authenticated employee"
       type: "sale",
       qtyDelta: -1,
       after: 3,
-      totalCost: 1000,
+      totalCost: 0,
       salePrice: 2500,
       orderId: "order-1",
       reason: ""
@@ -424,13 +439,22 @@ test("sale and cancellation paths remain allowed for the authenticated employee"
       createdAt: serverTimestamp(),
       createdAtClient: "2026-08-31T10:00:00.000Z",
       createdBy: staffUid,
-        createdByName: "Сотрудник"
+      createdByName: "Сотрудник"
+    });
+    transaction.update(cashRef, {
+      balance: 7500,
+      lastOperationType: "sale",
+      lastOperationId: "order-1",
+      updatedAt: serverTimestamp(),
+      updatedBy: staffUid,
+      updatedByName: "Сотрудник"
     });
   }));
 
   await assertSucceeds(runTransaction(db, async (transaction) => {
     transaction.update(doc(db, "products", "DM30_BLUE"), {
       stock: 4,
+      lastMovementId: "return-1",
       updatedAt: serverTimestamp(),
       updatedBy: staffUid,
       updatedByName: "Сотрудник"
@@ -440,7 +464,7 @@ test("sale and cancellation paths remain allowed for the authenticated employee"
       qtyDelta: 1,
       before: 3,
       after: 4,
-      totalCost: 1000,
+      totalCost: 0,
       orderId: "order-1",
       reason: "Отмена продажи"
     }));
@@ -450,7 +474,19 @@ test("sale and cancellation paths remain allowed for the authenticated employee"
       cancelledBy: staffUid,
       cancelledByName: "Сотрудник"
     });
+    transaction.update(cashRef, {
+      balance: 5000,
+      lastOperationType: "cancel_sale",
+      lastOperationId: "order-1",
+      updatedAt: serverTimestamp(),
+      updatedBy: staffUid,
+      updatedByName: "Сотрудник"
+    });
   }));
+
+  assert.equal((await getDoc(doc(db, "products", "DM30_BLUE"))).data().stock, 4);
+  assert.equal((await getDoc(cashRef)).data().balance, 5000);
+  assert.equal((await getDoc(orderRef)).data().status, "cancelled");
 });
 
 test("catalogue identity and forged audit identity cannot be changed", async () => {
@@ -475,8 +511,10 @@ test("catalogue identity and forged audit identity cannot be changed", async () 
   }));
 });
 
-test("movement journal rejects writes that do not match the resulting product stock", async () => {
-  await assertFails(setDoc(doc(staffDb(), "stockMovements", "fake-movement"), movement()));
+test("movement journal rejects forged audit identity", async () => {
+  await assertFails(setDoc(doc(staffDb(), "stockMovements", "fake-movement"), movement({
+    createdBy: secondStaffUid
+  })));
 });
 
 test("staff can create the cash balance and atomically record a valid withdrawal", async () => {
@@ -487,13 +525,17 @@ test("staff can create the cash balance and atomically record a valid withdrawal
     initializedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
     updatedBy: staffUid,
-    updatedByName: "Сотрудник"
+    updatedByName: "Сотрудник",
+    lastOperationType: "init",
+    lastOperationId: "initial"
   }));
 
   await assertSucceeds(runTransaction(db, async (transaction) => {
     await transaction.get(cashRef);
     transaction.update(cashRef, {
       balance: 3000,
+      lastOperationType: "withdrawal",
+      lastOperationId: "withdrawal-1",
       updatedAt: serverTimestamp(),
       updatedBy: staffUid,
         updatedByName: "Сотрудник"
@@ -534,6 +576,36 @@ test("cash withdrawals cannot exceed or diverge from the resulting cash balance"
     createdByName: "Сотрудник"
   }));
   await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), "finance", "cash")));
+});
+
+test("direct stock and cash rewrites are rejected even for warehouse staff", async () => {
+  const db = staffDb();
+  await assertFails(updateDoc(doc(db, "products", "DM30_BLUE"), {
+    stock: 2,
+    updatedAt: serverTimestamp(),
+    updatedBy: staffUid,
+    updatedByName: "Сотрудник"
+  }));
+
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "finance", "cash"), {
+      balance: 5000,
+      initializedAt: new Date("2026-09-01T00:00:00Z"),
+      updatedAt: new Date("2026-09-01T00:00:00Z"),
+      updatedBy: staffUid,
+      updatedByName: "Сотрудник",
+      lastOperationType: "init",
+      lastOperationId: "initial"
+    });
+  });
+  await assertFails(updateDoc(doc(db, "finance", "cash"), {
+    balance: 1,
+    lastOperationType: "withdrawal",
+    lastOperationId: "forged-withdrawal",
+    updatedAt: serverTimestamp(),
+    updatedBy: staffUid,
+    updatedByName: "Сотрудник"
+  }));
 });
 
 test("movement journal is immutable and unrelated collections stay closed", async () => {

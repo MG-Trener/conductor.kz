@@ -1,5 +1,14 @@
 const VERSIONS = [
   {
+    version: "1.1.4",
+    date: "07.09.2026",
+    changes: [
+      "Усилена целостность склада: изменение остатка принимается только вместе с новой неизменяемой записью движения.",
+      "Усилена целостность кассы: баланс меняется только атомарно с продажей, отменой продажи или выводом средств.",
+      "Исправлено расхождение схемы stockMovements между приложением, тестами и production Firestore Rules."
+    ]
+  },
+  {
     version: "1.1.3",
     date: "07.09.2026",
     changes: [
@@ -111,10 +120,10 @@ function renderCurrentVersionCard() {
 function patchCurrentVersionUi() {
   const button = document.getElementById("version-history-button");
   const copy = button?.querySelector(".version-history-btn-copy small");
-  if (copy) copy.textContent = "Актуальная версия: 1.1.3";
+  if (copy) copy.textContent = "Актуальная версия: 1.1.4";
 
   const root = document.getElementById("version-history-list");
-  if (!root || root.querySelector('[data-current-version="1.1.3"]')) return;
+  if (!root || root.querySelector('[data-current-version="1.1.4"]')) return;
   root.querySelectorAll(".version-history-card.latest").forEach((card) => card.classList.remove("latest"));
   root.querySelectorAll(".version-history-badge").forEach((badge) => badge.remove());
   root.insertAdjacentHTML("afterbegin", renderCurrentVersionCard());
