@@ -2,6 +2,7 @@ import "./app-update.js";
 import "./analytics.js";
 import "./sales-history.js";
 import "./warehouse-ui.js";
+import "./cash-movement-fix.js";
 import "./push-notifications.js";
 import "./firestore-error-help.js";
 import "./ui-sounds.js";
