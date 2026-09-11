@@ -1,0 +1,76 @@
+name: Patch legacy cash rules once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/patch-legacy-cash-rules-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Patch rules and add regression test
+        run: |
+          python .github/patch_legacy_cash_rules.py
+          git diff --check
+          grep -n "resetAt.*resetReason" firestore.rules
+          grep -n "legacy cash reset metadata" tests/firestore.rules.test.mjs
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Firestore rule regression tests
+        run: npm run test:rules
+
+      - name: Commit tested rules
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add firestore.rules tests/firestore.rules.test.mjs
+          git commit -m "fix: allow linked cash movement on legacy cash document"
+          git push origin HEAD:main
+
+      - name: Deploy production Firestore rules
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          FIREBASE_SERVICE_ACCOUNT_CONDUCTOR_REQUESTS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CONDUCTOR_REQUESTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${FIREBASE_SERVICE_ACCOUNT_CONDUCTOR_REQUESTS:-}" ]; then
+            printf '%s' "$FIREBASE_SERVICE_ACCOUNT_CONDUCTOR_REQUESTS" > /tmp/firebase-sa.json
+            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
+            npx firebase deploy --only firestore:rules --project conductor-requests --non-interactive
+          elif [ -n "${FIREBASE_SERVICE_ACCOUNT_JSON:-}" ]; then
+            printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > /tmp/firebase-sa.json
+            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
+            npx firebase deploy --only firestore:rules --project conductor-requests --non-interactive
+          elif [ -n "${FIREBASE_SERVICE_ACCOUNT:-}" ]; then
+            printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > /tmp/firebase-sa.json
+            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
+            npx firebase deploy --only firestore:rules --project conductor-requests --non-interactive
+          elif [ -n "${FIREBASE_TOKEN:-}" ]; then
+            npx firebase deploy --only firestore:rules --project conductor-requests --non-interactive --token "$FIREBASE_TOKEN"
+          else
+            echo 'No Firebase deployment credential is configured in GitHub Actions.' >&2
+            exit 2
+          fi
