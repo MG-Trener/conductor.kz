@@ -376,7 +376,7 @@ service cloud.firestore {
         && validCashState(request.resource.data)
         && request.resource.data.keys().hasOnly([
           'balance', 'initializedAt', 'updatedAt', 'updatedBy', 'updatedByName',
-          'lastOperationType', 'lastOperationId'
+          'lastOperationType', 'lastOperationId', 'resetAt', 'resetReason'
         ])
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'balance', 'updatedAt', 'updatedBy', 'updatedByName',

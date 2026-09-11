@@ -617,3 +617,58 @@ test("movement journal is immutable and unrelated collections stay closed", asyn
   await assertFails(updateDoc(doc(staffDb(), "stockMovements", "existing"), { reason: "Переписано" }));
   await assertFails(setDoc(doc(staffDb(), "private", "secret"), { exposed: true }));
 });
+
+
+test("legacy cash reset metadata can be preserved while saving linked manual sawmill", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "finance", "cash"), {
+      balance: 5000,
+      initializedAt: new Date("2026-08-31T00:00:00Z"),
+      resetAt: new Date("2026-09-01T00:00:00Z"),
+      resetReason: "legacy reset",
+      updatedAt: new Date("2026-09-01T00:00:00Z"),
+      updatedBy: staffUid,
+      updatedByName: "Сотрудник"
+    });
+  });
+
+  const db = staffDb();
+  const cashRef = doc(db, "finance", "cash");
+  const operationRef = doc(db, "orders", "cash-op-legacy-1");
+  await assertSucceeds(runTransaction(db, async (transaction) => {
+    const cashSnap = await transaction.get(cashRef);
+    const before = Number(cashSnap.data().balance || 0);
+    const amount = 1000;
+    const after = before - amount;
+    transaction.update(cashRef, {
+      balance: after,
+      lastOperationType: "cash_sawmill",
+      lastOperationId: "cash-op-legacy-1",
+      updatedAt: serverTimestamp(),
+      updatedBy: staffUid,
+      updatedByName: "Сотрудник"
+    });
+    transaction.set(operationRef, {
+      operationType: "cash_sawmill",
+      amount,
+      cashDelta: -amount,
+      before,
+      after,
+      items: [],
+      total: -amount,
+      note: "Проверка старой кассы",
+      status: "done",
+      source: "stock-app",
+      createdAt: serverTimestamp(),
+      createdAtClient: "2026-09-11T12:00:00.000Z",
+      createdBy: staffUid,
+      createdByName: "Сотрудник"
+    });
+  }));
+
+  const snapshot = await getDoc(cashRef);
+  assert.equal(snapshot.data().balance, 4000);
+  assert.equal(snapshot.data().resetReason, "legacy reset");
+  assert.equal(snapshot.data().lastOperationType, "cash_sawmill");
+  assert.equal(snapshot.data().lastOperationId, "cash-op-legacy-1");
+});
