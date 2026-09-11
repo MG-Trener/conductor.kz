@@ -32,13 +32,13 @@ jobs:
       - name: Capture Firestore rule test diagnostics
         run: |
           set +e
-          npm run test:rules > .github/hotfix-test.log 2>&1
+          npm run test:rules > .github/hotfix-test.txt 2>&1
           code=$?
-          echo "exit_code=$code" >> .github/hotfix-test.log
+          echo "exit_code=$code" >> .github/hotfix-test.txt
           git checkout -- firestore.rules
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/hotfix-test.log
+          git add .github/hotfix-test.txt
           git commit -m "ci: capture cash rules diagnostics"
           git push origin HEAD:main
           exit 0
