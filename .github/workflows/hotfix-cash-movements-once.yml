@@ -1,0 +1,167 @@
+name: Apply cash movement hotfix once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/hotfix-cash-movements-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  hotfix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Patch Firestore rules for linked manual cash movements
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('firestore.rules')
+          text = path.read_text()
+
+          marker = "    function orderMatchesCash(orderId, operationType) {\n"
+          if "function validCashOperationCreate(orderId, data)" not in text:
+              insert = r'''    function validCashOperationCreate(orderId, data) {
+      return data.keys().hasAll([
+          'operationType', 'amount', 'cashDelta', 'before', 'after', 'items',
+          'total', 'note', 'status', 'source', 'createdAt', 'createdAtClient',
+          'createdBy', 'createdByName'
+        ])
+        && data.keys().hasOnly([
+          'operationType', 'amount', 'cashDelta', 'before', 'after', 'items',
+          'total', 'note', 'status', 'source', 'createdAt', 'createdAtClient',
+          'createdBy', 'createdByName'
+        ])
+        && data.operationType in ['cash_deposit', 'cash_sawmill']
+        && data.amount is int
+        && data.amount > 0
+        && data.cashDelta is int
+        && data.cashDelta == (data.operationType == 'cash_deposit' ? data.amount : -data.amount)
+        && data.before is number
+        && data.before >= 0
+        && data.after is number
+        && data.after >= 0
+        && data.after == data.before + data.cashDelta
+        && data.items is list
+        && data.items.size() == 0
+        && data.total == data.cashDelta
+        && data.note is string
+        && data.note.size() <= 500
+        && data.status == 'done'
+        && data.source == 'stock-app'
+        && data.createdAt == request.time
+        && data.createdAtClient is string
+        && data.createdAtClient.size() <= 64
+        && data.createdBy == request.auth.uid
+        && data.createdByName is string
+        && data.createdByName.size() <= 80
+        && existsAfter(/databases/$(database)/documents/finance/cash)
+        && getAfter(/databases/$(database)/documents/finance/cash).data.balance == data.after
+        && getAfter(/databases/$(database)/documents/finance/cash).data.lastOperationType == data.operationType
+        && getAfter(/databases/$(database)/documents/finance/cash).data.lastOperationId == orderId
+        && getAfter(/databases/$(database)/documents/finance/cash).data.updatedBy == request.auth.uid
+        && getAfter(/databases/$(database)/documents/finance/cash).data.updatedAt == request.time;
+    }
+
+'''
+              if marker not in text:
+                  raise SystemExit('orderMatchesCash marker not found')
+              text = text.replace(marker, insert + marker, 1)
+
+          old = "      allow create: if isStaff() && validOrderCreate(request.resource.data);"
+          new = "      allow create: if isStaff()\n        && (validOrderCreate(request.resource.data)\n          || validCashOperationCreate(orderId, request.resource.data));"
+          if old in text:
+              text = text.replace(old, new, 1)
+          elif new not in text:
+              raise SystemExit('orders create rule marker not found')
+
+          old_types = "&& data.lastOperationType in ['init', 'sale', 'cancel_sale', 'withdrawal']"
+          new_types = "&& data.lastOperationType in ['init', 'sale', 'cancel_sale', 'withdrawal', 'cash_deposit', 'cash_sawmill']"
+          if old_types in text:
+              text = text.replace(old_types, new_types, 1)
+          elif new_types not in text:
+              raise SystemExit('cash operation type marker not found')
+
+          finance_marker = "    match /finance/{docId} {\n"
+          if "function cashMatchesManualMovement()" not in text:
+              insert = r'''    function cashMatchesManualMovement() {
+      let operation = getAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data))).data;
+      return cashOperationType(request.resource.data) in ['cash_deposit', 'cash_sawmill']
+        && operation.operationType == cashOperationType(request.resource.data)
+        && operation.createdAt == request.time
+        && operation.createdBy == request.auth.uid
+        && operation.before == resource.data.balance
+        && operation.after == request.resource.data.balance
+        && operation.cashDelta == request.resource.data.balance - resource.data.balance
+        && ((operation.operationType == 'cash_deposit' && operation.cashDelta > 0)
+          || (operation.operationType == 'cash_sawmill' && operation.cashDelta < 0));
+    }
+
+'''
+              if finance_marker not in text:
+                  raise SystemExit('finance marker not found')
+              text = text.replace(finance_marker, insert + finance_marker, 1)
+
+          old_matchers = "&& (cashMatchesSale() || cashMatchesCancellation() || cashMatchesWithdrawal());"
+          new_matchers = "&& (cashMatchesSale() || cashMatchesCancellation() || cashMatchesWithdrawal() || cashMatchesManualMovement());"
+          if old_matchers in text:
+              text = text.replace(old_matchers, new_matchers, 1)
+          elif new_matchers not in text:
+              raise SystemExit('cash matcher marker not found')
+
+          path.write_text(text)
+          PY
+
+          git diff --check
+          grep -n "validCashOperationCreate\|cashMatchesManualMovement\|cash_deposit" firestore.rules
+
+      - name: Install test/deploy dependencies
+        run: npm ci
+
+      - name: Run Firestore rule regression tests
+        run: npm run test:rules
+
+      - name: Commit fixed rules
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add firestore.rules
+          git commit -m "fix: allow linked cash deposit and sawmill"
+          git push origin HEAD:main
+
+      - name: Deploy production Firestore rules
+        env:
+          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          FIREBASE_SERVICE_ACCOUNT_CONDUCTOR_REQUESTS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CONDUCTOR_REQUESTS }}
+        run: |
+          set -euo pipefail
+          if [ -n "${FIREBASE_SERVICE_ACCOUNT_CONDUCTOR_REQUESTS:-}" ]; then
+            printf '%s' "$FIREBASE_SERVICE_ACCOUNT_CONDUCTOR_REQUESTS" > /tmp/firebase-sa.json
+            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
+            npx firebase deploy --only firestore:rules --project conductor-requests --non-interactive
+          elif [ -n "${FIREBASE_SERVICE_ACCOUNT_JSON:-}" ]; then
+            printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > /tmp/firebase-sa.json
+            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
+            npx firebase deploy --only firestore:rules --project conductor-requests --non-interactive
+          elif [ -n "${FIREBASE_SERVICE_ACCOUNT:-}" ]; then
+            printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > /tmp/firebase-sa.json
+            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
+            npx firebase deploy --only firestore:rules --project conductor-requests --non-interactive
+          elif [ -n "${FIREBASE_TOKEN:-}" ]; then
+            npx firebase deploy --only firestore:rules --project conductor-requests --non-interactive --token "$FIREBASE_TOKEN"
+          else
+            echo 'No Firebase deployment credential is configured in GitHub Actions.' >&2
+            exit 2
+          fi
