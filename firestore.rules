@@ -164,6 +164,49 @@ service cloud.firestore {
         && data.note.size() <= 500;
     }
 
+    function validCashOperationCreate(orderId, data) {
+      return data.keys().hasAll([
+          'operationType', 'amount', 'cashDelta', 'before', 'after', 'items',
+          'total', 'note', 'status', 'source', 'createdAt', 'createdAtClient',
+          'createdBy', 'createdByName'
+        ])
+        && data.keys().hasOnly([
+          'operationType', 'amount', 'cashDelta', 'before', 'after', 'items',
+          'total', 'note', 'status', 'source', 'createdAt', 'createdAtClient',
+          'createdBy', 'createdByName'
+        ])
+        && data.operationType in ['cash_deposit', 'cash_sawmill']
+        && data.amount is int
+        && data.amount > 0
+        && data.cashDelta is int
+        && ((data.operationType == 'cash_deposit' && data.cashDelta == data.amount)
+          || (data.operationType == 'cash_sawmill' && data.cashDelta == -data.amount))
+        && data.before is number
+        && data.before >= 0
+        && data.after is number
+        && data.after >= 0
+        && data.after == data.before + data.cashDelta
+        && data.items is list
+        && data.items.size() == 0
+        && data.total == data.cashDelta
+        && data.note is string
+        && data.note.size() <= 500
+        && data.status == 'done'
+        && data.source == 'stock-app'
+        && data.createdAt == request.time
+        && data.createdAtClient is string
+        && data.createdAtClient.size() <= 64
+        && data.createdBy == request.auth.uid
+        && data.createdByName is string
+        && data.createdByName.size() <= 80
+        && existsAfter(/databases/$(database)/documents/finance/cash)
+        && getAfter(/databases/$(database)/documents/finance/cash).data.balance == data.after
+        && getAfter(/databases/$(database)/documents/finance/cash).data.lastOperationType == data.operationType
+        && getAfter(/databases/$(database)/documents/finance/cash).data.lastOperationId == orderId
+        && getAfter(/databases/$(database)/documents/finance/cash).data.updatedBy == request.auth.uid
+        && getAfter(/databases/$(database)/documents/finance/cash).data.updatedAt == request.time;
+    }
+
     function orderMatchesCash(orderId, operationType) {
       return existsAfter(/databases/$(database)/documents/finance/cash)
         && getAfter(/databases/$(database)/documents/finance/cash).data.lastOperationType == operationType
@@ -186,7 +229,9 @@ service cloud.firestore {
 
     match /orders/{orderId} {
       allow read: if isStaff();
-      allow create: if isStaff() && validOrderCreate(request.resource.data);
+      allow create: if isStaff()
+        && (validOrderCreate(request.resource.data)
+          || validCashOperationCreate(orderId, request.resource.data));
       allow update: if isStaff() && validOrderCancel(orderId);
       allow delete: if false;
     }
@@ -269,7 +314,7 @@ service cloud.firestore {
         && data.updatedByName is string
         && data.updatedByName.size() <= 80
         && data.lastOperationType is string
-        && data.lastOperationType in ['init', 'sale', 'cancel_sale', 'withdrawal']
+        && data.lastOperationType in ['init', 'sale', 'cancel_sale', 'withdrawal', 'cash_deposit', 'cash_sawmill']
         && validOperationId(data.lastOperationId);
     }
 
@@ -301,6 +346,19 @@ service cloud.firestore {
         && request.resource.data.balance == resource.data.balance - withdrawal.amount;
     }
 
+    function cashMatchesManualMovement() {
+      let operation = getAfter(/databases/$(database)/documents/orders/$(cashOperationId(request.resource.data))).data;
+      return cashOperationType(request.resource.data) in ['cash_deposit', 'cash_sawmill']
+        && operation.operationType == cashOperationType(request.resource.data)
+        && operation.createdAt == request.time
+        && operation.createdBy == request.auth.uid
+        && operation.before == resource.data.balance
+        && operation.after == request.resource.data.balance
+        && operation.cashDelta == request.resource.data.balance - resource.data.balance
+        && ((operation.operationType == 'cash_deposit' && operation.cashDelta > 0)
+          || (operation.operationType == 'cash_sawmill' && operation.cashDelta < 0));
+    }
+
     match /finance/{docId} {
       allow read: if isStaff() && docId == 'cash';
       allow create: if isStaff()
@@ -327,7 +385,7 @@ service cloud.firestore {
         && request.resource.data.balance != resource.data.balance
         && (cashOperationId(request.resource.data) != cashOperationId(resource.data)
           || cashOperationType(request.resource.data) != cashOperationType(resource.data))
-        && (cashMatchesSale() || cashMatchesCancellation() || cashMatchesWithdrawal());
+        && (cashMatchesSale() || cashMatchesCancellation() || cashMatchesWithdrawal() || cashMatchesManualMovement());
       allow delete: if false;
     }
 
