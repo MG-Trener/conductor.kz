@@ -1,5 +1,14 @@
 const VERSIONS = [
   {
+    version: "1.1.5",
+    date: "11.09.2026",
+    changes: [
+      "Исправлено движение денег: «Пополнение» и «Пилорама» снова сохраняются для обоих разрешённых аккаунтов.",
+      "Клиент теперь связывает изменение баланса с отдельной атомарной операцией кассы, как требуют усиленные Firestore Rules.",
+      "Production Firestore Rules обновлены и проверены тестами; прямое неподтверждённое изменение баланса по-прежнему запрещено."
+    ]
+  },
+  {
     version: "1.1.4",
     date: "07.09.2026",
     changes: [
@@ -120,10 +129,10 @@ function renderCurrentVersionCard() {
 function patchCurrentVersionUi() {
   const button = document.getElementById("version-history-button");
   const copy = button?.querySelector(".version-history-btn-copy small");
-  if (copy) copy.textContent = "Актуальная версия: 1.1.4";
+  if (copy) copy.textContent = "Актуальная версия: 1.1.5";
 
   const root = document.getElementById("version-history-list");
-  if (!root || root.querySelector('[data-current-version="1.1.4"]')) return;
+  if (!root || root.querySelector('[data-current-version="1.1.5"]')) return;
   root.querySelectorAll(".version-history-card.latest").forEach((card) => card.classList.remove("latest"));
   root.querySelectorAll(".version-history-badge").forEach((badge) => badge.remove());
   root.insertAdjacentHTML("afterbegin", renderCurrentVersionCard());
