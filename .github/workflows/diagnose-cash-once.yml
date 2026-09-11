@@ -1,0 +1,75 @@
+name: Diagnose production cash once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-cash-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install Firebase Admin
+        run: npm install --no-save firebase-admin@13
+
+      - name: Inspect production cash document schema
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          FIREBASE_SERVICE_ACCOUNT_CONDUCTOR_REQUESTS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CONDUCTOR_REQUESTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SA="${FIREBASE_SERVICE_ACCOUNT_CONDUCTOR_REQUESTS:-${FIREBASE_SERVICE_ACCOUNT_JSON:-${FIREBASE_SERVICE_ACCOUNT:-}}}"
+          if [ -z "$SA" ]; then
+            echo 'No service account secret is configured.' >&2
+            exit 2
+          fi
+          printf '%s' "$SA" > /tmp/firebase-sa.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
+          node --input-type=module <<'NODE' > /tmp/cash-diagnostic.json
+          import { initializeApp, applicationDefault } from 'firebase-admin/app';
+          import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+          import { getAuth } from 'firebase-admin/auth';
+
+          initializeApp({ credential: applicationDefault(), projectId: 'conductor-requests' });
+          const db = getFirestore();
+          const snap = await db.doc('finance/cash').get();
+          const allowed = new Set(['balance','initializedAt','updatedAt','updatedBy','updatedByName','lastOperationType','lastOperationId']);
+          const typeOf = (value) => value instanceof Timestamp ? 'timestamp' : Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value;
+          const data = snap.exists ? snap.data() : {};
+          const keys = Object.keys(data).sort();
+          const users = await getAuth().listUsers(1000);
+          const staffCount = users.users.filter((u) => u.customClaims?.warehouseStaff === true).length;
+          const result = {
+            exists: snap.exists,
+            keys,
+            types: Object.fromEntries(keys.map((key) => [key, typeOf(data[key])])),
+            extraKeys: keys.filter((key) => !allowed.has(key)),
+            missingCoreKeys: ['balance','updatedAt','updatedBy','updatedByName','lastOperationType','lastOperationId'].filter((key) => !keys.includes(key)),
+            balanceIsFiniteNumber: typeof data.balance === 'number' && Number.isFinite(data.balance),
+            balanceNonNegative: typeof data.balance === 'number' && data.balance >= 0,
+            lastOperationTypeIsString: typeof data.lastOperationType === 'string',
+            lastOperationIdIsString: typeof data.lastOperationId === 'string',
+            warehouseStaffClaimCount: staffCount
+          };
+          console.log(JSON.stringify(result, null, 2));
+          NODE
+
+      - name: Upload diagnostic artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cash-diagnostic
+          path: /tmp/cash-diagnostic.json
+          if-no-files-found: error
+          retention-days: 1
