@@ -21,49 +21,24 @@ jobs:
         with:
           node-version: 22
 
-      - name: Patch Firestore rules
+      - name: Patch Firestore rules candidate
         run: |
           python .github/hotfix_cash_movements.py
           git diff --check
-          grep -n "validCashOperationCreate\|cashMatchesManualMovement\|cash_deposit" firestore.rules
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run Firestore rule regression tests
-        run: npm run test:rules
-
-      - name: Commit fixed rules
+      - name: Capture Firestore rule test diagnostics
         run: |
+          set +e
+          npm run test:rules > .github/hotfix-test.log 2>&1
+          code=$?
+          echo "exit_code=$code" >> .github/hotfix-test.log
+          git checkout -- firestore.rules
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add firestore.rules
-          git commit -m "fix: allow linked cash deposit and sawmill"
+          git add .github/hotfix-test.log
+          git commit -m "ci: capture cash rules diagnostics"
           git push origin HEAD:main
-
-      - name: Deploy production Firestore rules
-        env:
-          FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-          FIREBASE_SERVICE_ACCOUNT_CONDUCTOR_REQUESTS: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CONDUCTOR_REQUESTS }}
-        run: |
-          set -euo pipefail
-          if [ -n "${FIREBASE_SERVICE_ACCOUNT_CONDUCTOR_REQUESTS:-}" ]; then
-            printf '%s' "$FIREBASE_SERVICE_ACCOUNT_CONDUCTOR_REQUESTS" > /tmp/firebase-sa.json
-            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
-            npx firebase deploy --only firestore:rules --project conductor-requests --non-interactive
-          elif [ -n "${FIREBASE_SERVICE_ACCOUNT_JSON:-}" ]; then
-            printf '%s' "$FIREBASE_SERVICE_ACCOUNT_JSON" > /tmp/firebase-sa.json
-            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
-            npx firebase deploy --only firestore:rules --project conductor-requests --non-interactive
-          elif [ -n "${FIREBASE_SERVICE_ACCOUNT:-}" ]; then
-            printf '%s' "$FIREBASE_SERVICE_ACCOUNT" > /tmp/firebase-sa.json
-            export GOOGLE_APPLICATION_CREDENTIALS=/tmp/firebase-sa.json
-            npx firebase deploy --only firestore:rules --project conductor-requests --non-interactive
-          elif [ -n "${FIREBASE_TOKEN:-}" ]; then
-            npx firebase deploy --only firestore:rules --project conductor-requests --non-interactive --token "$FIREBASE_TOKEN"
-          else
-            echo 'No Firebase deployment credential is configured in GitHub Actions.' >&2
-            exit 2
-          fi
+          exit 0
